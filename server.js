@@ -492,6 +492,238 @@ app.use('/api/', (req, res, next) => {
   next()
 })
 
+// ===== VISITOR ANALYTICS SYSTEM =====
+// Tracks page visits — stores NO raw IPs (hashed session only)
+
+const _visitorsFile = './data/dz_visitors.json'
+const _visitorsStore = { visits: /** @type {Array} */ ([]), knownSessions: new Set(), _dirty: false }
+const _VA_MAX_VISITS = 10000
+const _VA_MAX_SESSIONS = 5000
+
+// Simple deterministic hash (no crypto import needed)
+function _vaHash(str) {
+  let h = 5381
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i)
+  return (h >>> 0).toString(36)
+}
+
+// City → Algerian Wilaya mapping
+const _DZ_CITY_TO_WILAYA = {
+  algiers:'الجزائر', alger:'الجزائر', 'el djazair':'الجزائر',
+  oran:'وهران', wahran:'وهران',
+  constantine:'قسنطينة', qacentina:'قسنطينة',
+  annaba:'عنابة',
+  blida:'البليدة',
+  batna:'باتنة',
+  djelfa:'الجلفة',
+  setif:'سطيف', sétif:'سطيف', 'sÃ©tif':'سطيف',
+  'sidi bel abbes':'سيدي بلعباس', 'sidi-bel-abbes':'سيدي بلعباس',
+  biskra:'بسكرة',
+  tebessa:'تبسة', tébessa:'تبسة',
+  'el oued':'الوادي', eloued:'الوادي',
+  skikda:'سكيكدة',
+  tiaret:'تيارت',
+  bejaia:'بجاية', béjaïa:'بجاية', bejaia:'بجاية',
+  tlemcen:'تلمسان',
+  ouargla:'ورقلة',
+  bouira:'البويرة',
+  'tizi ouzou':'تيزي وزو', 'tizi-ouzou':'تيزي وزو',
+  medea:'المدية', médéa:'المدية',
+  mostaganem:'مستغانم',
+  msila:'المسيلة', 'mila':'ميلة',
+  mascara:'معسكر',
+  relizane:'غليزان',
+  'el tarf':'الطارف',
+  jijel:'جيجل',
+  saida:'سعيدة', saïda:'سعيدة',
+  guelma:'قالمة',
+  'souk ahras':'سوق أهراس',
+  tipaza:'تيبازة',
+  'ain defla':'عين الدفلى',
+  naama:'النعامة', naâma:'النعامة',
+  'ain temouchent':'عين تموشنت',
+  ghardaia:'غرداية', ghardaïa:'غرداية',
+  bechar:'بشار', béchar:'بشار',
+  adrar:'أدرار',
+  tamanrasset:'تمنراست',
+  illizi:'إليزي',
+  tindouf:'تندوف',
+  laghouat:'الأغواط',
+  'el bayadh':'البيض',
+  'oum el bouaghi':'أم البواقي',
+  khenchela:'خنشلة',
+  chlef:'الشلف',
+  boumerdes:'بومرداس', boumerdès:'بومرداس',
+}
+
+function _vaGetWilaya(city) {
+  if (!city) return null
+  try {
+    const c = decodeURIComponent(city).toLowerCase().trim()
+    for (const [key, wil] of Object.entries(_DZ_CITY_TO_WILAYA)) {
+      if (c === key || c.includes(key) || key.includes(c)) return wil
+    }
+    return city.slice(0, 20)
+  } catch { return null }
+}
+
+function _vaGetDevice(ua = '') {
+  if (/mobile|android|iphone|ipad/i.test(ua)) return 'mobile'
+  if (/tablet/i.test(ua)) return 'tablet'
+  return 'desktop'
+}
+
+// Load persisted visitor data
+;(async () => {
+  try {
+    const { readFileSync } = await import('fs')
+    const saved = JSON.parse(readFileSync(_visitorsFile, 'utf8'))
+    _visitorsStore.visits = Array.isArray(saved.visits) ? saved.visits : []
+    _visitorsStore.knownSessions = new Set(Array.isArray(saved.knownSessions) ? saved.knownSessions : [])
+  } catch {}
+})()
+
+// Periodic flush to disk
+setInterval(async () => {
+  if (!_visitorsStore._dirty) return
+  try {
+    const { writeFileSync, mkdirSync } = await import('fs')
+    mkdirSync('./data', { recursive: true })
+    writeFileSync(_visitorsFile, JSON.stringify({
+      visits: _visitorsStore.visits,
+      knownSessions: [..._visitorsStore.knownSessions].slice(-_VA_MAX_SESSIONS),
+    }))
+    _visitorsStore._dirty = false
+  } catch (e) { console.warn('[VA] flush error:', e.message) }
+}, 60_000)
+
+// Visitor tracking middleware — runs on page loads (not API/assets)
+app.use((req, res, next) => {
+  if (
+    req.path.startsWith('/api/') ||
+    req.path.startsWith('/ws/') ||
+    req.path.includes('.') ||
+    req.method !== 'GET'
+  ) return next()
+  try {
+    const rawIp = (req.headers['x-forwarded-for']?.split(',')[0]?.trim())
+      || req.headers['x-real-ip']
+      || req.socket?.remoteAddress
+      || 'anon'
+    const ua = (req.headers['user-agent'] || '').slice(0, 200)
+    const sessionHash = _vaHash(rawIp + ua)
+    const isNew = !_visitorsStore.knownSessions.has(sessionHash)
+    if (isNew) _visitorsStore.knownSessions.add(sessionHash)
+
+    // Geo from Vercel/Cloudflare edge headers (no external API needed)
+    const country = (
+      req.headers['x-vercel-ip-country'] ||
+      req.headers['cf-ipcountry'] ||
+      ''
+    ).toUpperCase().slice(0, 3) || 'UNKNOWN'
+
+    const city = (
+      req.headers['x-vercel-ip-city'] ||
+      req.headers['cf-ipcity'] ||
+      ''
+    ).slice(0, 60)
+
+    const wilaya = country === 'DZ' ? _vaGetWilaya(city) : null
+
+    let referrer = 'direct'
+    try {
+      const ref = req.headers['referer'] || ''
+      if (ref) referrer = new URL(ref).hostname.replace(/^www\./, '').slice(0, 40)
+    } catch {}
+
+    _visitorsStore.visits.push({
+      ts: Date.now(),
+      session_hash: sessionHash,
+      country,
+      wilaya: wilaya || undefined,
+      city: city || undefined,
+      is_new: isNew,
+      device_type: _vaGetDevice(ua),
+      referrer,
+    })
+    if (_visitorsStore.visits.length > _VA_MAX_VISITS) {
+      _visitorsStore.visits = _visitorsStore.visits.slice(-(_VA_MAX_VISITS - 1000))
+    }
+    _visitorsStore._dirty = true
+  } catch {}
+  next()
+})
+
+// ─── Visitor analytics aggregation helper ────────────────────────────────────
+function _vaComputeStats(period) {
+  const now = Date.now()
+  const DAY = 86_400_000
+
+  function periodStart(p) {
+    if (p === 'today') { const d = new Date(); d.setHours(0,0,0,0); return d.getTime() }
+    if (p === 'yesterday') { const d = new Date(); d.setHours(0,0,0,0); return d.getTime() - DAY }
+    if (p === 'week') {
+      const d = new Date(); d.setHours(0,0,0,0)
+      const wd = d.getDay(); return d.getTime() - (wd === 0 ? 6 : wd - 1) * DAY
+    }
+    if (p === 'last7days')  return now - 7  * DAY
+    if (p === 'month')  { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.getTime() }
+    if (p === 'last30days') return now - 30 * DAY
+    if (p === 'last90days') return now - 90 * DAY
+    return now - DAY
+  }
+
+  const since = periodStart(period)
+  const until = period === 'yesterday' ? since + DAY : now
+  const prevDuration = until - since
+
+  const filtered  = _visitorsStore.visits.filter(v => v.ts >= since && v.ts < until)
+  const prevSlice = _visitorsStore.visits.filter(v => v.ts >= (since - prevDuration) && v.ts < since)
+
+  const uniqueHashes    = new Set(filtered.map(v => v.session_hash))
+  const prevUniqueCount = new Set(prevSlice.map(v => v.session_hash)).size
+  const newVisitors     = filtered.filter(v => v.is_new).length
+  const activeVisitors  = _visitorsStore.visits.filter(v => v.ts >= now - 5 * 60_000).length
+
+  // Wilayas
+  const wilayaMap = {}
+  filtered.filter(v => v.country === 'DZ' && v.wilaya).forEach(v => {
+    wilayaMap[v.wilaya] = (wilayaMap[v.wilaya] || 0) + 1
+  })
+  const wilayas = Object.entries(wilayaMap)
+    .sort((a, b) => b[1] - a[1]).slice(0, 15)
+    .map(([name, count]) => ({ name, count }))
+
+  // Countries
+  const countryMap = {}
+  filtered.filter(v => v.country && v.country !== 'UNKNOWN').forEach(v => {
+    countryMap[v.country] = (countryMap[v.country] || 0) + 1
+  })
+  const countries = Object.entries(countryMap)
+    .sort((a, b) => b[1] - a[1]).slice(0, 20)
+    .map(([code, count]) => ({ code, count }))
+
+  // Comparison
+  const currentUnique = uniqueHashes.size
+  let comparison = null
+  if (prevUniqueCount > 0) {
+    const pct = +((currentUnique - prevUniqueCount) / prevUniqueCount * 100).toFixed(1)
+    comparison = { pct, direction: pct >= 0 ? 'up' : 'down' }
+  }
+
+  return {
+    period,
+    totalVisits: filtered.length,
+    uniqueVisitors: currentUnique,
+    newVisitors,
+    returningVisitors: filtered.length - newVisitors,
+    activeVisitors,
+    wilayas,
+    countries,
+    comparison,
+  }
+}
+
 // 4) robots.txt — politely ask all bots to stay away from /api/
 app.get('/robots.txt', (_req, res) => {
   res.type('text/plain').send([
@@ -15987,6 +16219,42 @@ function pruneDiskSessions() {
 }
 setInterval(pruneDiskSessions, 6 * 60 * 60 * 1000) // every 6h
 
+// ===== VISITOR ANALYTICS INTENT DETECTION =====
+function detectVisitorAnalyticsIntent(text) {
+  const t = text.toLowerCase().trim()
+  // Arabic, Darija, French patterns for visitor/analytics questions
+  const patterns = [
+    /كم.*زائر|عدد.*زائر|زوار|زيارات|زار.*اليوم|زار.*الأسبوع|زار.*الشهر/,
+    /كم.*دخل.*موقع|كم.*شخص.*دخل|من.*دخل|كم.*واحد.*دخل/,
+    /إحصائيات.*زوار|إحصاء.*زوار|إحصائيات.*الموقع/,
+    /من.*ولايات|أي.*ولايات|الولايات.*زيار|ولاية.*زيار/,
+    /زوار.*ولايات|ولايات.*جزائر.*زوار/,
+    /زوار.*دول|دول.*زوار|زوار.*خارج|هل.*زوار.*دول/,
+    /أكثر.*ولاية|ولاية.*أكثر|أكثر.*دولة|دولة.*أكثر/,
+    /قارن.*أسبوع|هذا الأسبوع.*الأسبوع الماضي|مقارنة.*زوار/,
+    /visitors|analytics.*dz|dz.*analytics/,
+    /آخر.*[0-9]+.*يوم.*زائر|زائر.*آخر.*[0-9]+.*يوم/,
+    /كم.*زار.*dz|كم.*دخل.*dz.?agent/i,
+    /عدد الزيارات|الزيارات اليوم|الزيارات هذا/,
+    /traffic.*dz|dz.*traffic/i,
+    /visiteurs|combien.*visiteurs/i,
+  ]
+  return patterns.some(p => p.test(t))
+}
+
+// Extract analytics period from message
+function _vaExtractPeriod(text) {
+  const t = text.toLowerCase()
+  if (/أمس|yesterday|hier/.test(t)) return 'yesterday'
+  if (/آخر\s*7|7\s*أيام|أسبوع.*أخير|last.?7/.test(t)) return 'last7days'
+  if (/آخر\s*30|30\s*يوم|last.?30/.test(t)) return 'last30days'
+  if (/آخر\s*90|90\s*يوم|ثلاثة أشهر|last.?90/.test(t)) return 'last90days'
+  if (/هذا الأسبوع|الأسبوع الحالي|this week/.test(t)) return 'week'
+  if (/هذا الشهر|الشهر الحالي|this month/.test(t)) return 'month'
+  if (/اليوم|aujourd|today/.test(t)) return 'today'
+  return 'today'
+}
+
 // ===== DZ AGENT API ROUTE =====
 app.post('/api/dz-agent-chat', async (req, res) => {
   const _isRetry   = req.body.isRetry === true
@@ -16072,6 +16340,24 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           model: 'download-guardian',
         })
       }
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // 📊 VISITOR ANALYTICS GUARDIAN — يعترض أسئلة الزوار قبل الـ LLM
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    const _vaRaw = [...messages].reverse().find(m => m?.role === 'user')?.content?.trim() || ''
+    if (detectVisitorAnalyticsIntent(_vaRaw)) {
+      const _vaPeriod = _vaExtractPeriod(_vaRaw)
+      const _vaStats  = _vaComputeStats(_vaPeriod)
+      console.log(`[VisitorAnalytics] 📊 period=${_vaPeriod} visits=${_vaStats.totalVisits}`)
+      return res.status(200).json({
+        richType: 'visitor-analytics',
+        content: '',
+        analyticsData: _vaStats,
+        model: 'visitor-analytics',
+      })
     }
   }
 
@@ -26034,6 +26320,19 @@ app.get('/api/analytics/summary', (req, res) => {
   const { _dirty, events, ...summary } = _analyticsData
   const recent = events.slice(-50)
   res.json({ ...summary, recentEvents: recent })
+})
+
+// ─── Visitor Analytics API ────────────────────────────────────────────────────
+app.get('/api/analytics/visitors', (req, res) => {
+  try {
+    const period = ['today','yesterday','week','last7days','month','last30days','last90days']
+      .includes(req.query.period) ? req.query.period : 'today'
+    const stats = _vaComputeStats(period)
+    res.json(stats)
+  } catch (e) {
+    console.error('[VA] /api/analytics/visitors error:', e.message)
+    res.status(500).json({ error: 'Analytics error' })
+  }
 })
 
 // ===== DZ AGENT GITHUB API ROUTES =====

@@ -32,6 +32,7 @@ import SmartRepoSuggestion from './SmartRepoSuggestion'
 import GitHubLoadingIndicator from './GitHubLoadingIndicator'
 import TaskPlanPanel from './TaskPlanPanel'
 import type { TaskPlan } from './TaskPlanPanel'
+import VisitorAnalyticsCard from './VisitorAnalyticsCard'
 import { trackFeatureUsage, withRetry } from '../utils/dzMemory'
 import AgentModeBar, { type AgentModeState } from './AgentModeBar'
 import { CurrencyWidget, type CurrencyWidgetData } from './CurrencyWidget'
@@ -367,6 +368,7 @@ type RichType =
   | 'health-analysis'
   | 'weather-card'
   | 'media-download'
+  | 'visitor-analytics'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -633,6 +635,7 @@ interface DZMessage {
   dirs?: DirLink[]
   doctorMeta?: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; hasGps?: boolean; cached?: boolean; byName?: boolean; queryName?: string }
   dua?: string
+  visitorAnalyticsData?: { period: string }
   thinkingTrace?: ThinkingTraceRole[]
   reactSteps?: import('./GitHubReActPanel').ReActStep[]
   // GitHub Agent
@@ -7957,6 +7960,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         return
       }
 
+      // ── Visitor Analytics — بطاقة إحصائيات الزوار ────────────────────────
+      if (data.richType === 'visitor-analytics' && data.analyticsData) {
+        addAssistantMessage({
+          content: '',
+          richType: 'visitor-analytics',
+          visitorAnalyticsData: data.analyticsData as { period: string },
+          model: data.model as string | undefined,
+        })
+        return
+      }
+
       // ── Confirmation Gate — يطلب تأكيداً قبل العمليات التنفيذية الحساسة ──
       if (data._needsConfirmation && data.confirmationData) {
         const cd = data.confirmationData as {
@@ -8938,6 +8952,10 @@ ${rows}
                           </div>
                         )
                       })()}
+                      {msg.richType === 'visitor-analytics' && msg.visitorAnalyticsData && (
+                        <VisitorAnalyticsCard initialPeriod={(msg.visitorAnalyticsData as { period: string }).period} />
+                      )}
+
                       {msg.richType === 'map' && (msg.mapHtml || msg.mapMeta) && (
                         (msg.mapMeta as Record<string, unknown>)?.needsGps
                           ? <GpsNearbyCard meta={msg.mapMeta as Record<string, unknown>} />

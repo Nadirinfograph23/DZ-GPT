@@ -28849,21 +28849,21 @@ const chatSessions = new Map()  // id → { id, name, gender, isAdmin, lastSeen,
 const mutedUsers = new Map()    // userId → { until: timestamp, durationMs: number }
 const bannedIPs = new Set()     // Permanent IP bans
 let pinnedMessage = null        // { id, text, from, timestamp } | null
-// ── Admin secret: HMAC-SHA256 protected ──
-const _ADMIN_SALT = 'dz_gpt_salt_2025'
-const _KNOWN_HASH   = '127a15841bef4828ab8c9eafd2cb4b70f4fa08af53021a6f8f2f207957943436'
-function _hashAdminSecret(s) {
-  return crypto.createHmac('sha256', _ADMIN_SALT).update(String(s || '')).digest('hex')
-}
-// Verify incoming secret against stored value (plain-text env var OR pre-stored hash both work)
+// ── Admin secret: server-only, memory-hashed, constant-time verification ──
+// The real value must exist only in Replit/Vercel Secrets. Never put a password
+// or a decoy in client code, generated bundles, or source control.
+const _ADMIN_SALT = process.env.DZ_CHAT_ADMIN_SALT || 'dz-gpt-chat-admin-v1'
+const _ADMIN_PASSWORD = String(
+  process.env.DZ_CHAT_ADMIN_PASSWORD || process.env.CHAT_ADMIN_SECRET || ''
+).trim()
+const _ADMIN_HASH = _ADMIN_PASSWORD
+  ? crypto.scryptSync(_ADMIN_PASSWORD, _ADMIN_SALT, 32)
+  : null
 function _checkAdminSecret(incoming) {
-  const stored = process.env.CHAT_ADMIN_SECRET || _KNOWN_HASH
-  const storedHash = /^[0-9a-f]{64}$/.test(stored) ? stored : _hashAdminSecret(stored)
-  return _hashAdminSecret(incoming) === storedHash
+  if (!_ADMIN_HASH || typeof incoming !== 'string' || !incoming) return false
+  const candidate = crypto.scryptSync(incoming, _ADMIN_SALT, 32)
+  return candidate.length === _ADMIN_HASH.length && crypto.timingSafeEqual(candidate, _ADMIN_HASH)
 }
-// Decoy — intentionally visible for security researchers (not the real secret)
-const _DECOY_ADMIN = 'openit1979##'
-const CHAT_ADMIN_SECRET = _KNOWN_HASH
 const MAX_CHAT_MSGS = 200
 
 function chatId() {
@@ -33622,6 +33622,9 @@ app.post('/api/chat-room/join', async (req, res) => {
   if (!name?.trim() || !gender) return res.status(400).json({ error: 'Name and gender required' })
   const id = chatId()
   const isAdmin = _checkAdminSecret(adminSecret)
+  if (adminSecret && !isAdmin) {
+    return res.status(401).json({ error: 'كلمة مرور المشرف غير صحيحة.' })
+  }
   const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
   const cleanProfile = {}
   for (const k of allowedProfileFields) {
@@ -33858,6 +33861,7 @@ function setupChatWebSocket(httpServer) {
           sid = id
           // isAdmin: reuse from HTTP session OR verify via adminSecret ONLY (profilePassword never grants admin)
           const isAdmin = !!(existingSession?.isAdmin || _checkAdminSecret(adminSecret))
+          if (adminSecret && !isAdmin) return ws.close()
           const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
           const cleanProfile = {}
           for (const k of allowedProfileFields) {

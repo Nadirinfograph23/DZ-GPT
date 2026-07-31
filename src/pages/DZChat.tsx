@@ -383,11 +383,6 @@ export default function DZChat() {
           const avatarKey = 'dzchat-av-' + name.trim().toLowerCase()
           const av = localStorage.getItem(avatarKey)
           if (av && av.startsWith('data:image')) savedAvatarRef.current = av
-          // load saved password (lightly obfuscated)
-          try {
-            const rawPw = localStorage.getItem('dzchat-pw-' + name.trim().toLowerCase())
-            if (rawPw) setEntryPassword(atob(rawPw))
-          } catch {}
         }
         if (gender === 'male' || gender === 'female') setEntryGender(gender)
       }
@@ -534,6 +529,12 @@ export default function DZChat() {
       }
     } else if (data.type === 'app_update') {
       import('../utils/versionChecker').then(m => m.triggerUpdateBanner?.())
+      window.dispatchEvent(new CustomEvent('dz:task-complete', {
+        detail: {
+          title: '🚀 تحديث جديد في DZ GPT',
+          body: String(data.message || 'تم إصدار تحديث جديد للتطبيق.'),
+        },
+      }))
     }
   }, [addMessages])
 
@@ -562,13 +563,11 @@ export default function DZChat() {
 
     ws.onopen = () => {
       wsConnectedRef.current = true
-      const savedSecret = user.isAdmin ? (sessionStorage.getItem('dzc_admin_secret') || '') : ''
       ws.send(JSON.stringify({
         type: 'join',
         name: user.name,
         gender: user.gender,
         sessionId: user.sessionId,
-        adminSecret: savedSecret,
         status: 'online',
         room: currentRoomRef.current,
         profile: user.avatar ? { avatar: user.avatar } : undefined,
@@ -622,8 +621,6 @@ export default function DZChat() {
     }
   }, [addMessages, handleServerEvent, startPolling, stopPolling])
 
-  const ADMIN_SECRET = 'openit1979##'
-
   const handleEnterChat = async () => {
     if (!entryName.trim()) { setEntryError('يرجى إدخال اسمك.'); return }
     if (!entryGender) { setEntryError('يرجى اختيار الجنس.'); return }
@@ -638,33 +635,20 @@ export default function DZChat() {
         return
       }
 
-      // Validate admin password client-side
-      if (entryIsAdmin && pw !== ADMIN_SECRET) {
-        setEntryError('كلمة مرور المشرف غير صحيحة.')
-        setEntryLoading(false)
-        return
-      }
-
       const body: Record<string, string> = { name: trimmedName, gender: entryGender }
 
-      // Only send adminSecret when admin checkbox is checked — server grants admin ONLY via adminSecret
-      body.profilePassword = pw
+      // The server is the only place that can validate admin access.
       if (entryIsAdmin) {
         body.adminSecret = pw
-        sessionStorage.setItem('dzc_admin_secret', pw)
       } else {
         body.adminSecret = ''
-        sessionStorage.removeItem('dzc_admin_secret')
       }
 
       // Always save avatar to localStorage (persists even after logout)
-      const pwKey = 'dzchat-pw-' + trimmedName.toLowerCase()
       if (entrySaveProfile) {
         localStorage.setItem('dzchat-saved-profile', JSON.stringify({ name: trimmedName, gender: entryGender }))
-        try { localStorage.setItem(pwKey, btoa(pw)) } catch {}
       } else {
         localStorage.removeItem('dzchat-saved-profile')
-        localStorage.removeItem(pwKey)
         // Note: avatar is intentionally kept (never removed on logout)
       }
 

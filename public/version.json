@@ -2,7 +2,7 @@
   "commit": "a3ed0344ecea0a5eeace8094d653233d5dfb1942",
   "commitShort": "a3ed0344",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "decoy: تغيير كلمة التمويه إلى openit1979##",
+  "message": "security: admin credentials are server-side secrets",
   "deployedAt": "2026-07-31T03:52:59.266315Z",
   "deployedBy": "scripts/deploy.py"
 }

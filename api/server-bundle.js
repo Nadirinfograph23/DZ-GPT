@@ -76669,7 +76669,7 @@ var chatSessions = /* @__PURE__ */ new Map();
 var mutedUsers = /* @__PURE__ */ new Map();
 var bannedIPs = /* @__PURE__ */ new Set();
 var pinnedMessage = null;
-var CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || "openit1979##";
+var CHAT_ADMIN_SECRET = process.env.DZ_CHAT_ADMIN_PASSWORD || process.env.CHAT_ADMIN_SECRET || "";
 var MAX_CHAT_MSGS = 200;
 function chatId() {
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36);

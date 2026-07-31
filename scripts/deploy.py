@@ -15,11 +15,12 @@ DZ-GPT — سكريبت النشر المثالي للملفات الكبيرة
   python3 scripts/deploy.py "feat: أضفت Y" src/pages/X.tsx lib/y.js
 """
 
-import sys, os, json, base64, urllib.request, urllib.error
+import sys, os, json, base64, time, urllib.request, urllib.error
 
 # ── Config ────────────────────────────────────────────────────────────────────
 TOKEN      = os.environ.get('TOKEN_GITHUB', '') or os.environ.get('GITHUB_TOKEN', '')
 VERCEL_TOK = os.environ.get('TOKEN_VERCEL', '') or os.environ.get('VERCEL_TOKEN', '')
+CHAT_ADMIN = os.environ.get('DZ_CHAT_ADMIN_PASSWORD', '')
 REPO       = 'Nadirinfograph23/DZ-GPT'
 BRANCH     = 'devin/1774405518-init-dz-gpt'
 VERCEL_HOOK = 'https://api.vercel.com/v1/integrations/deploy/prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5/ul5gBfG4Af'
@@ -154,6 +155,62 @@ def trigger_vercel(commit_sha=None):
         return None
 
 
+def notify_connected_users(message):
+    """Notify currently connected DZ Chat users after a successful deployment."""
+    if not CHAT_ADMIN:
+        print('⚠️  DZ_CHAT_ADMIN_PASSWORD غير موجود — تخطي إشعار المستخدمين')
+        return False
+    body = json.dumps({'message': message}).encode('utf-8')
+    req = urllib.request.Request(
+        'https://dz-gpt.vercel.app/api/broadcast-update',
+        data=body,
+        headers={
+            'Content-Type': 'application/json',
+            'X-Admin-Secret': CHAT_ADMIN,
+            'User-Agent': 'DZ-Agent/1.0',
+        },
+        method='POST',
+    )
+    try:
+        response = json.loads(urllib.request.urlopen(req, timeout=20).read().decode('utf-8'))
+        print(f"   🔔 إشعار المستخدمين: {response.get('sent', 0)} متصل")
+        return bool(response.get('success'))
+    except Exception as e:
+        print(f'⚠️  إشعار المستخدمين فشل: {e}')
+        return False
+
+
+def wait_for_vercel(deployment_id, timeout=300):
+    """Wait until the deployment requested from the exact Git commit is live."""
+    if not deployment_id or not VERCEL_TOK:
+        return False
+    deadline = time.time() + timeout
+    url = f'https://api.vercel.com/v13/deployments/{deployment_id}'
+    while time.time() < deadline:
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    'Authorization': f'Bearer {VERCEL_TOK}',
+                    'User-Agent': 'DZ-Agent/1.0',
+                },
+            )
+            deployment = json.loads(urllib.request.urlopen(req, timeout=20).read().decode('utf-8'))
+            state = deployment.get('readyState') or deployment.get('state') or ''
+            if state == 'READY':
+                print('   ✅ Vercel: الإصدار الجديد أصبح جاهزاً')
+                return True
+            if state in {'ERROR', 'CANCELED', 'CANCELLED'}:
+                print(f'   ❌ Vercel: فشل النشر ({state})')
+                return False
+            print(f'   ⏳ Vercel: الحالة {state or "قيد المعالجة"}...')
+        except Exception as e:
+            print(f'   ⚠️  تعذّر فحص حالة Vercel: {e}')
+        time.sleep(10)
+    print('   ⚠️  انتهت مهلة انتظار Vercel — لم يُرسل إشعار المستخدمين')
+    return False
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def deploy(commit_msg, files):
     if not TOKEN:
@@ -250,6 +307,8 @@ def deploy(commit_msg, files):
     if job_id:
         print(f'✓ job: {job_id}')
         print(f'   https://dz-gpt.vercel.app ← يتحدث خلال ~2 دقيقة')
+        if wait_for_vercel(job_id):
+            notify_connected_users(f'تم نشر تحديث جديد من الفرع {BRANCH} في DZ GPT 🚀')
     else:
         print('⚠️  تحقق يدوياً من Vercel')
 

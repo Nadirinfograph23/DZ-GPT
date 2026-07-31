@@ -1,8 +1,8 @@
 {
-  "commit": "76478a21fc9915105afce0106d8a27b402778983",
-  "commitShort": "76478a21",
+  "commit": "3b1c8740162475c6479c51b058b85a4a78870fcc",
+  "commitShort": "3b1c8740",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix(dz-tube): add ytdl-core Node.js fallback — works on Vercel without subprocess; fixes HTTP 500 on serverless",
-  "deployedAt": "2026-07-30T21:10:00.416642Z",
+  "message": "feat(analytics): نظام VISITOR_ANALYTICS كامل — تتبع زوار، API، Intent، بطاقة عصرية",
+  "deployedAt": "2026-07-31T00:43:38.566453Z",
   "deployedBy": "scripts/deploy.py"
 }

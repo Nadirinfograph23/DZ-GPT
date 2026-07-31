@@ -1,8 +1,8 @@
 {
-  "commit": "bc55bdee2432fb7e17a11b99e6ef78224e140789",
-  "commitShort": "bc55bdee",
+  "commit": "bbd0b0bc26c442ed362287c2e63e764056c73949",
+  "commitShort": "bbd0b0bc",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix(analytics): إصلاح تتبع الزوار على Vercel — endpoint مستقل + استدعاء من الفرونتاند عند كل تحميل صفحة",
-  "deployedAt": "2026-07-31T01:08:58.891423Z",
+  "message": "feat(guards): ردود ثابتة لفلسطين/إسرائيل/الدين تتخطى LLM — عاصمة فلسطين القدس، إسرائيل ليست دولة، حماية الإسلام",
+  "deployedAt": "2026-07-31T01:32:11.165225Z",
   "deployedBy": "scripts/deploy.py"
 }

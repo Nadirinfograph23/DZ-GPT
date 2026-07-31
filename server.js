@@ -26322,6 +26322,65 @@ app.get('/api/analytics/summary', (req, res) => {
   res.json({ ...summary, recentEvents: recent })
 })
 
+// ─── Track Visit Endpoint — يُستدعى من الفرونتاند عند كل تحميل صفحة ────────────
+// يعمل على Vercel لأن الفرونتاند يستدعيه بنفسه (لا يعتمد على Express middleware)
+app.post('/api/analytics/track-visit', (req, res) => {
+  try {
+    const { path: visitPath, referrer: clientReferrer, device } = req.body || {}
+    const rawIp = (req.headers['x-forwarded-for']?.split(',')[0]?.trim())
+      || req.headers['x-real-ip']
+      || req.socket?.remoteAddress
+      || 'anon'
+    const ua = (req.headers['user-agent'] || '').slice(0, 200)
+    const sessionHash = _vaHash(rawIp + ua)
+    const isNew = !_visitorsStore.knownSessions.has(sessionHash)
+    if (isNew) _visitorsStore.knownSessions.add(sessionHash)
+
+    const country = (
+      req.headers['x-vercel-ip-country'] ||
+      req.headers['cf-ipcountry'] ||
+      ''
+    ).toUpperCase().slice(0, 3) || 'UNKNOWN'
+
+    const city = (
+      req.headers['x-vercel-ip-city'] ||
+      req.headers['cf-ipcity'] ||
+      ''
+    ).slice(0, 60)
+
+    const wilaya = country === 'DZ' ? _vaGetWilaya(city) : null
+
+    let referrer = clientReferrer || 'direct'
+    if (!clientReferrer || clientReferrer === 'direct') {
+      try {
+        const ref = req.headers['referer'] || ''
+        if (ref) referrer = new URL(ref).hostname.replace(/^www\./, '').slice(0, 40)
+      } catch {}
+    }
+
+    _visitorsStore.visits.push({
+      ts: Date.now(),
+      session_hash: sessionHash,
+      country,
+      wilaya: wilaya || undefined,
+      city: city || undefined,
+      is_new: isNew,
+      device_type: device || _vaGetDevice(ua),
+      referrer,
+      path: (visitPath || '/').slice(0, 60),
+    })
+    if (_visitorsStore.visits.length > _VA_MAX_VISITS) {
+      _visitorsStore.visits = _visitorsStore.visits.slice(-(_VA_MAX_VISITS - 1000))
+    }
+    _visitorsStore._dirty = true
+    console.log(`[VA] visit tracked — country=${country} wilaya=${wilaya||'—'} new=${isNew} session=${sessionHash}`)
+    res.json({ ok: true, isNew })
+  } catch (e) {
+    console.warn('[VA] track-visit error:', e.message)
+    res.json({ ok: false })
+  }
+})
+
 // ─── Visitor Analytics API ────────────────────────────────────────────────────
 app.get('/api/analytics/visitors', (req, res) => {
   try {

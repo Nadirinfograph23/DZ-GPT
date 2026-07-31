@@ -184,6 +184,22 @@ function pb(name: string, element: ReactNode) {
 // بدء فحص الإصدار الجديد كل 8 دقائق + استقبال إشارات Service Worker
 startVersionChecker()
 
+// ── تتبع زيارة الصفحة — يُرسَل للسيرفر لإحصائيات الزوار الحقيقية ─────────────
+;(function trackPageVisit() {
+  try {
+    const device = /mobile|android|iphone|ipad/i.test(navigator.userAgent) ? 'mobile' : 'desktop'
+    const referrer = document.referrer
+      ? (() => { try { return new URL(document.referrer).hostname.replace(/^www\./, '') } catch { return document.referrer.slice(0,40) } })()
+      : 'direct'
+    fetch('/api/analytics/track-visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: location.pathname, referrer, device }),
+      keepalive: true,
+    }).catch(() => {})
+  } catch {}
+})()
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>

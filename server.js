@@ -28862,7 +28862,7 @@ function _checkAdminSecret(incoming) {
   return _hashAdminSecret(incoming) === storedHash
 }
 // Decoy — intentionally visible for security researchers (not the real secret)
-const _DECOY_ADMIN = ':.'
+const _DECOY_ADMIN = 'openit1979##'
 const CHAT_ADMIN_SECRET = _KNOWN_HASH
 const MAX_CHAT_MSGS = 200
 

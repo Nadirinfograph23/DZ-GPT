@@ -33,7 +33,7 @@ function loadHlsJs(): Promise<any> {
     _hlsLoading = true
     import(/* @vite-ignore */ 'hls.js')
       .then(m => {
-        _hlsModule = m.default as unknown as typeof Hls
+        _hlsModule = m.default ?? m
         const cbs = _hlsLoadCallbacks.splice(0)
         cbs.forEach(cb => cb(_hlsModule))
       })

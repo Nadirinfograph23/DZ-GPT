@@ -384,7 +384,8 @@ function App() {
         const page = await pdf.getPage(i)
         const content = await page.getTextContent()
         const pageText = content.items
-          .map((item) => ('str' in item ? item.str : ''))
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((item: any) => ('str' in item ? item.str : ''))
           .join(' ')
         if (pageText.trim()) {
           textParts.push(pageText)

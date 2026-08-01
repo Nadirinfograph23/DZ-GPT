@@ -4916,6 +4916,46 @@ app.get('/api/link-preview', async (req, res) => {
   } catch { res.json({ title: '', description: '', image: '', url }) }
 })
 
+// ===== ADMIN BROADCAST: SSE STREAM (عالمي — يشمل جميع صفحات الموقع) =====
+const _notifSseClients = new Set()
+
+app.get('/api/notifications/stream', (req, res) => {
+  res.set({
+    'Content-Type':      'text/event-stream',
+    'Cache-Control':     'no-cache',
+    'Connection':        'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+  res.flushHeaders()
+  _notifSseClients.add(res)
+
+  // إرسال آخر إعلان فعّال فور الاتصال (لمن فتح الصفحة بعد الإذاعة)
+  if (_siteAnnouncement && Date.now() - _siteAnnouncement.timestamp < _PENDING_BROADCASTS_TTL) {
+    try {
+      res.write(`data: ${JSON.stringify({ type: 'admin_broadcast', ..._siteAnnouncement })}\n\n`)
+    } catch {}
+  }
+
+  const ping = setInterval(() => {
+    try { res.write(':ping\n\n') }
+    catch { clearInterval(ping); _notifSseClients.delete(res) }
+  }, 25_000)
+
+  req.on('close', () => {
+    clearInterval(ping)
+    _notifSseClients.delete(res)
+  })
+})
+
+function pushNotifToAll(notif) {
+  const payload = `data: ${JSON.stringify({ type: 'admin_broadcast', ...notif })}\n\n`
+  for (const res of _notifSseClients) {
+    try { res.write(payload) }
+    catch { _notifSseClients.delete(res) }
+  }
+  console.log(`[Notif] 📣 Broadcast pushed to ${_notifSseClients.size} SSE client(s): ${String(notif.text || '').slice(0, 60)}`)
+}
+
 // ===== BREAKING NEWS: SSE STREAM =====
 const _breakingSseClients = new Set()
 
@@ -34268,11 +34308,13 @@ app.post('/api/chat-room/admin', async (req, res) => {
       link: msgLink, linkText: msgLinkText,
     })
     broadcastChat({ type: 'message', msg: broadcastMsg })
-    _pushPendingBroadcast({
+    const _rNotifPayload = {
       id: broadcastMsg.id, text: broadcastMsg.text,
       from: broadcastMsg.from, timestamp: broadcastMsg.timestamp,
       link: msgLink || null, linkText: msgLinkText || null,
-    })
+    }
+    pushNotifToAll(_rNotifPayload)
+    _pushPendingBroadcast(_rNotifPayload)
     if (req.body.scope === 'site') {
       _siteAnnouncement = {
         id: broadcastMsg.id, text: broadcastMsg.text,
@@ -34495,15 +34537,15 @@ function setupChatWebSocket(httpServer) {
               link: msgLink, linkText: msgLinkText,
             })
             broadcastChat({ type: 'message', msg: broadcastMsg })
-            // ── أضف لطابور الإشعارات المعلّقة (للمستخدمين الغائبين) ─────────
-            _pushPendingBroadcast({
-              id: broadcastMsg.id,
-              text: broadcastMsg.text,
-              from: broadcastMsg.from,
-              timestamp: broadcastMsg.timestamp,
-              link: msgLink || null,
-              linkText: msgLinkText || null,
-            })
+            // ── SSE عالمي: يصل لجميع صفحات الموقع فوراً ──────────────────────
+            const _notifPayload = {
+              id: broadcastMsg.id, text: broadcastMsg.text,
+              from: broadcastMsg.from, timestamp: broadcastMsg.timestamp,
+              link: msgLink || null, linkText: msgLinkText || null,
+            }
+            pushNotifToAll(_notifPayload)
+            // ── طابور الإشعارات المعلّقة (للمستخدمين الغائبين تماماً) ────────
+            _pushPendingBroadcast(_notifPayload)
             // إذا scope = site → تخزين كإعلان عام لجميع زوار الموقع
             if (data.scope === 'site') {
               _siteAnnouncement = {

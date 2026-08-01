@@ -173,6 +173,40 @@ export default function DZNotifications({ theme }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // مرة واحدة عند التحميل فقط — يكفي لعرض الفائت
 
+  // ── SSE: Admin Broadcast — عالمي، يشمل جميع صفحات الموقع ──────────────────
+  useEffect(() => {
+    let es: EventSource | null = null
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    const LS_KEY = 'dz_pending_notif_ts'
+    const seenBroadcasts = new Set<string>()
+
+    function connect() {
+      es = new EventSource('/api/notifications/stream')
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data)
+          if (data.type === 'admin_broadcast' && data.id && data.text) {
+            if (seenBroadcasts.has(data.id)) return
+            seenBroadcasts.add(data.id)
+            // تحديث نقطة المرجع لمنع التكرار من طابور المعلّقات
+            try {
+              const cur = parseInt(localStorage.getItem(LS_KEY) || '0', 10)
+              if (data.timestamp > cur) localStorage.setItem(LS_KEY, String(data.timestamp))
+            } catch {}
+            addNotif({ type: 'task', title: `📢 إذاعة من ${data.from || 'المشرف'}`, body: String(data.text).slice(0, 120) })
+            browserPush(`📢 إذاعة من ${data.from || 'المشرف'}`, String(data.text).slice(0, 120))
+          }
+        } catch {}
+      }
+      es.onerror = () => {
+        es?.close()
+        retryTimer = setTimeout(connect, 15_000)
+      }
+    }
+    connect()
+    return () => { es?.close(); if (retryTimer) clearTimeout(retryTimer) }
+  }, [addNotif, browserPush])
+
   // ── SSE: Breaking News ──────────────────────────────────────────────────────
   useEffect(() => {
     let es: EventSource | null = null

@@ -1,8 +1,8 @@
 {
-  "commit": "cc93996c55a232b92ab7e98850406f6b8527b19e",
-  "commitShort": "cc93996c",
+  "commit": "82db2a24b010c6b9dddec6e7f675c1536c7b9c9a",
+  "commitShort": "82db2a24",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: حذف زر Terminal من AgentModeBar وتنظيف الكود",
-  "deployedAt": "2026-08-01T13:21:48.907303Z",
+  "message": "fix: محاذاة النص المتحرك إلى اليمين في شريط DZ Agent",
+  "deployedAt": "2026-08-01T13:24:15.971742Z",
   "deployedBy": "scripts/deploy.py"
 }

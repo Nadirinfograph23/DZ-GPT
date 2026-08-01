@@ -36493,6 +36493,100 @@ app.post('/api/dz-media/providers/generate', express.json({ limit: '2mb' }), asy
   }
 })
 
+// ── AI DZ img PRO — Smart Pinterest AI Image Search ──────────────────────────
+// POST /api/dz-media/ai-img-pro/search
+// بحث ذكي متعدد الاستعلامات في Pinterest عن صور AI — بدون توليد — بدون مفتاح
+{
+  const _aiProCache = new Map()   // key → { images, ts }
+  const _CACHE_TTL  = 12 * 60 * 1000  // 12 دقيقة
+
+  const FILTER_KW = {
+    'Portrait':         'portrait face closeup AI art',
+    'Landscape':        'landscape scenery wide shot digital art',
+    'Anime':            'anime manga illustration art',
+    'Realistic':        'hyperrealistic photorealistic AI',
+    'Painting':         'oil painting digital painting art',
+    'Fantasy':          'fantasy magical epic art',
+    'Sci-Fi':           'sci-fi futuristic cyberpunk art',
+    'Architecture':     'architecture building concept design',
+    'Logo':             'logo brand minimal design',
+    'Character Design': 'character design concept sheet AI',
+    'Vehicle':          'vehicle car concept design art',
+    'Nature':           'nature landscape organic art',
+    'Algeria':          'Algeria Algerian art illustration',
+    'Historical':       'historical ancient civilization art',
+    'Islamic Art':      'Islamic art geometric calligraphy',
+    'Minimal':          'minimalist clean simple design',
+  }
+
+  app.post('/api/dz-media/ai-img-pro/search', express.json({ limit: '1mb' }), async (req, res) => {
+    const { prompt = '', page = 0, filter = '' } = req.body
+    const rawPrompt = String(prompt).trim().slice(0, 300)
+    if (!rawPrompt) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
+
+    const PAGE_SIZE = 24
+    const pg        = Math.max(0, Number(page) || 0)
+    const cacheKey  = `${rawPrompt}::${filter}`.toLowerCase().slice(0, 200)
+
+    // ─── Cache hit: return next page ────────────────────────────────────────
+    const cached = _aiProCache.get(cacheKey)
+    if (cached && Date.now() - cached.ts < _CACHE_TTL) {
+      const slice   = cached.images.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
+      const hasMore = cached.images.length > (pg + 1) * PAGE_SIZE
+      console.log(`[ai-img-pro] CACHE HIT page=${pg} total=${cached.images.length} returning=${slice.length}`)
+      return res.json({ ok: true, images: slice, total: cached.images.length, page: pg, hasMore, prompt: rawPrompt })
+    }
+
+    try {
+      const { searchPinterest } = await import('./lib/image-search/index.js')
+      const filterKw = filter ? (FILTER_KW[filter] || filter) : ''
+      const base     = filterKw ? `${rawPrompt} ${filterKw}` : rawPrompt
+
+      // 5 استعلامات ذكية تستهدف صور AI
+      const queries = [
+        `${base} AI Art`,
+        `${base} Midjourney`,
+        `${base} concept art digital painting`,
+        `${base} stable diffusion art`,
+        `${base} hyperrealistic illustration`,
+      ]
+
+      console.log(`[ai-img-pro] Searching "${rawPrompt.slice(0,60)}" filter="${filter}" queries=${queries.length}`)
+
+      // بحث متوازٍ في Pinterest بكل الاستعلامات
+      const allResults = await Promise.allSettled(queries.map(q => searchPinterest(q, 25)))
+
+      // دمج وحذف المكررات
+      const seen   = new Set()
+      const merged = []
+      for (const r of allResults) {
+        if (r.status !== 'fulfilled') continue
+        for (const img of r.value) {
+          if (!img?.url || seen.has(img.url)) continue
+          seen.add(img.url)
+          merged.push({ ...img, source: 'Pinterest' })
+        }
+      }
+
+      // حفظ في Cache
+      _aiProCache.set(cacheKey, { images: merged, ts: Date.now() })
+      if (_aiProCache.size > 80) {
+        const oldest = [..._aiProCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0]
+        if (oldest) _aiProCache.delete(oldest[0])
+      }
+
+      const slice   = merged.slice(0, PAGE_SIZE)
+      const hasMore = merged.length > PAGE_SIZE
+      console.log(`[ai-img-pro] ✅ total=${merged.length} returning=${slice.length}`)
+      return res.json({ ok: true, images: slice, total: merged.length, page: 0, hasMore, prompt: rawPrompt })
+
+    } catch (e) {
+      console.error('[ai-img-pro]', e.message)
+      return res.status(500).json({ ok: false, error: e.message })
+    }
+  })
+}
+
 // ===== DARIJA BENCHMARK — /api/darija-benchmark =====
 // اختبار شامل للطبقة اللغوية: كشف الدارجة + التوجيه + منع الهلوسة + الهوية
 app.get('/api/darija-benchmark', async (req, res) => {

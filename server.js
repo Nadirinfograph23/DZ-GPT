@@ -1249,20 +1249,59 @@ function isSourceIdentityQuestion(msg) {
   return SOURCE_IDENTITY_PATTERNS.some(p => q.includes(p.toLowerCase()))
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// 🤝 DZ GREETING GUARD — ردود تحية بالدارجة الجزائرية (عشوائية وعفوية)
+// يعترض رسائل التحية البحتة ويُعيد رداً دارجاً مختلفاً في كل مرة
+// ══════════════════════════════════════════════════════════════════════════════
+const DZ_GREETING_RESPONSES = [
+  'سلام صافا شوية؟ 😄',
+  'سلام صديقي مرحبا بيك 🤝',
+  'صباح النور خو 🌞',
+  'سلام صديقي، كشما سحقيت؟ نساعدوك 💪',
+  'أهلا بصاحبي! راك بخير إن شاء الله؟',
+  'سلام العزيز الغالي 🇩🇿',
+  'مرحبا بيك العزيز، واش خدمة؟',
+  'وعليكم السلام صاحبي، كيفاش راك؟',
+  'يا هلا يا مرحبا! واش نقدر نعاونك؟ 😊',
+  'سلام سلام! مرحبا بيك في DZ Agent 🤖🇩🇿',
+  'أهلن وسهلن، واش في بالك؟',
+  'وعليكم السلام، نورت المكان! 💚',
+  'صباح الخير خويا، كيفاش حالك؟ ☀️',
+  'مرحبا بيك صاحبي، DZ Agent حاضر! 🚀',
+  'يسعد صباحك! واش نبداو بيه؟ 😊',
+]
+
+const DZ_GREETING_PATTERN = /^[\s!؟?🙂😊🤝👋]*(?:(?:السلام عليكم|وعليكم السلام|سلام عليكم|سلام|أهلا وسهلا|أهلاً وسهلاً|أهلا|أهلاً|مرحبا|مرحباً|هلا|هلاو|يسلمو|يسلموا|هاي|هاو|صباح الخير|صباح النور|صباح الورد|مساء الخير|مساء النور|بونجور|بوجور|بون سوار|هاي|hi|hello|hey|salam|wech rak|wach rak|labas|واش راك|كيفاش|كيف حالك|كيف الحال|كيفك)[\s!؟?🙂😊🤝👋,،]*)+$/i
+
+function isGreetingMessage(msg) {
+  if (typeof msg !== 'string') return false
+  const clean = msg.trim()
+  if (clean.length > 80) return false   // التحية دائماً قصيرة
+  return DZ_GREETING_PATTERN.test(clean)
+}
+
+function applyGreetingGuard(msg) {
+  if (!isGreetingMessage(msg)) return null
+  const reply = DZ_GREETING_RESPONSES[Math.floor(Math.random() * DZ_GREETING_RESPONSES.length)]
+  return { content: reply, model: 'greeting-guard', agent: 'dz_greeting', source: 'hardcoded', intent: 'GREETING' }
+}
+
 // 🛡️ applyStaticGuards — حارس موحّد يُطبَّق على كل نقاط الدخول قبل LLM
 // يعيد { content } عند التطابق، أو null إذا لم يُطابق شيئاً.
-// الترتيب صارم: SOURCE_IDENTITY → الله → الجزائر → فلسطين/الإسلام → سب إسرائيل → عاصمة إسرائيل → عاصمة فلسطين → الدين
+// الترتيب صارم: GREETING → SOURCE_IDENTITY → الله → الجزائر → فلسطين/الإسلام → سب إسرائيل → عاصمة إسرائيل → عاصمة فلسطين → الدين
 // ══════════════════════════════════════════════════════════════════════════════
 function applyStaticGuards(msg) {
   if (typeof msg !== 'string' || !msg.trim()) return null
-  if (isSourceIdentityQuestion(msg))    return FIXED_DZ_AGENT_SOURCE_RESPONSE
-  if (isGodOrRabInsult(msg))            return GOD_INSULT_RESPONSE
-  if (isAlgeriaInsult(msg))             return ALGERIA_DEFENSE_RESPONSE
-  if (isPalestineOrIslamInsult(msg))    return PALESTINE_DEFENSE_RESPONSE
-  if (isIsraelCurseRequest(msg))        return ISRAEL_CURSE_RESPONSE
-  if (isIsraelCapitalQuestion(msg))     return ISRAEL_NOT_STATE_RESPONSE
-  if (isPalestineCapitalQuestion(msg))  return PALESTINE_CAPITAL_RESPONSE
-  if (isReligionQuestion(msg))          return RELIGION_RESPONSE
+  const _greet = applyGreetingGuard(msg)
+  if (_greet)                             return _greet
+  if (isSourceIdentityQuestion(msg))      return FIXED_DZ_AGENT_SOURCE_RESPONSE
+  if (isGodOrRabInsult(msg))              return GOD_INSULT_RESPONSE
+  if (isAlgeriaInsult(msg))               return ALGERIA_DEFENSE_RESPONSE
+  if (isPalestineOrIslamInsult(msg))      return PALESTINE_DEFENSE_RESPONSE
+  if (isIsraelCurseRequest(msg))          return ISRAEL_CURSE_RESPONSE
+  if (isIsraelCapitalQuestion(msg))       return ISRAEL_NOT_STATE_RESPONSE
+  if (isPalestineCapitalQuestion(msg))    return PALESTINE_CAPITAL_RESPONSE
+  if (isReligionQuestion(msg))            return RELIGION_RESPONSE
   return null
 }
 

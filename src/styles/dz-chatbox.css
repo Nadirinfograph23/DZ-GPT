@@ -674,6 +674,36 @@
   border-color: rgba(96, 165, 250, 0.3);
 }
 
+/* Screenshot button in bottom input bar */
+.dz-input-screenshot-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: transparent;
+  border: 1px solid rgba(129, 140, 248, 0.15);
+  color: #818cf8;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+  padding: 0;
+}
+.dz-input-screenshot-btn:hover {
+  color: #a5b4fc;
+  background: rgba(129, 140, 248, 0.08);
+  border-color: rgba(129, 140, 248, 0.35);
+}
+.dz-input-screenshot-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.dz-input-screenshot-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
 /* Disclaimer */
 .dz-disclaimer {
   font-size: 0.68rem;

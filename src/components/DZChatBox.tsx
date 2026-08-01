@@ -10370,6 +10370,19 @@ ${rows}
             >
               <Globe size={15} />
             </button>
+            {messages.length > 0 && (
+              <button
+                className={`dz-input-screenshot-btn${screenshotLoading ? ' dz-screenshot-btn--loading' : ''}`}
+                onClick={screenshotChat}
+                title="📸 تصوير المحادثة كاملة وتحميلها"
+                disabled={screenshotLoading}
+              >
+                {screenshotLoading
+                  ? <Loader2 size={15} className="dz-screenshot-spin" />
+                  : <span className="dz-input-screenshot-emoji">📸</span>
+                }
+              </button>
+            )}
             <VoicePanel
               onInterim={(t) => setInput(t)}
               onTranscript={(t) => {

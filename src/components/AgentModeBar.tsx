@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Code2, Github, ChevronDown, ChevronUp, Terminal, GitBranch, CheckCircle2, Loader2, X, AlertTriangle, Plus, FolderOpen, Globe, ExternalLink } from 'lucide-react'
+import { Code2, Github, ChevronDown, ChevronUp, GitBranch, CheckCircle2, Loader2, X, AlertTriangle, Plus, FolderOpen, Globe, ExternalLink } from 'lucide-react'
 import '../styles/agent-mode-bar.css'
 
 export interface AgentModeState {
@@ -21,35 +21,12 @@ interface AgentModeBarProps {
   onClose?: () => void
 }
 
-const SLASH_COMMANDS = [
-  { cmd: '/read',    desc: 'اقرأ محتوى ملف',                  example: '/read src/App.tsx' },
-  { cmd: '/edit',    desc: 'عدّل ملف بتعليمة (يطلب تأكيد)',   example: '/edit server.js أضف route جديد' },
-  { cmd: '/ls',      desc: 'اعرض ملفات مجلد',                 example: '/ls src/' },
-  { cmd: '/tree',    desc: 'شجرة كاملة لهيكل المستودع',        example: '/tree src/' },
-  { cmd: '/grep',    desc: 'ابحث عن نص داخل ملفات المستودع',   example: '/grep useState src/' },
-  { cmd: '/find',    desc: 'ابحث عن ملف بالاسم أو النوع',     example: '/find *.config.js' },
-  { cmd: '/history', desc: 'عرض آخر commits للمستودع',         example: '/history 15' },
-  { cmd: '/diff',    desc: 'الفرق الحقيقي بين فرعين',         example: '/diff main feature/login' },
-  { cmd: '/issues',  desc: 'إدارة GitHub Issues (عرض/إضافة/إغلاق)', example: '/issues new خطأ في login' },
-  { cmd: '/actions', desc: 'حالة GitHub Actions (CI/CD)',      example: '/actions' },
-  { cmd: '/release', desc: 'أنشئ إصداراً جديداً',              example: '/release v1.2.0 ميزات جديدة' },
-  { cmd: '/review',  desc: 'مراجعة AI لـ Pull Request',        example: '/review 7' },
-  { cmd: '/delete',  desc: 'احذف ملفاً من المستودع (يطلب تأكيد)', example: '/delete src/old.tsx' },
-  { cmd: '/commit',  desc: 'احفظ التغييرات مع رسالة',         example: '/commit "fix: إصلاح bug الطقس"' },
-  { cmd: '/pr',      desc: 'أنشئ Pull Request',                example: '/pr "feat: dark mode"' },
-  { cmd: '/scan',    desc: 'افحص الكود عن أخطاء وثغرات',       example: '/scan' },
-  { cmd: '/suggest', desc: 'اقترح تحسينات للكود',              example: '/suggest' },
-  { cmd: '/deploy',  desc: 'انشر على GitHub Pages',            example: '/deploy' },
-  { cmd: '/repos',   desc: 'اقترح مستودعات GitHub مفيدة',      example: '/repos ai' },
-  { cmd: '/memory',  desc: 'ذاكرة المشروع (حفظ/عرض/تحديث)',   example: '/memory save ملاحظاتي' },
-]
 
 export default function AgentModeBar({ state, onChange, githubUser, onCommandSelect, clientGithubToken, onClose }: AgentModeBarProps) {
   const [expanded, setExpanded]         = useState(false)
   const [repos, setRepos]               = useState<Repo[]>([])
   const [loadingRepos, setLoadingRepos] = useState(false)
   const [repoError, setRepoError]       = useState('')
-  const [showCmds, setShowCmds]         = useState(false)
   const [confirmDeactivate, setConfirmDeactivate] = useState(false)
 
   // Deploy panel state
@@ -77,7 +54,6 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
 
   const doDeactivate = useCallback(() => {
     setConfirmDeactivate(false)
-    setShowCmds(false)
     setExpanded(false)
     setWorkspaceReady(false)
     setWorkspaceTab('select')
@@ -220,12 +196,6 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
     }
   }, [state.selectedRepo, state.githubToken, clientGithubToken, deploying])
 
-  const handleCommandClick = (example: string) => {
-    if (onCommandSelect) {
-      onCommandSelect(example)
-      setShowCmds(false)
-    }
-  }
 
   return (
     <div className={`amb-wrap ${state.active ? 'amb-wrap--active' : ''}`}>
@@ -281,14 +251,6 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
               {loadingRepos && <Loader2 size={12} className="amb-spin" />}
             </div>
 
-            {/* Commands help */}
-            <button
-              className={`amb-cmds-btn ${showCmds ? 'amb-cmds-btn--on' : ''}`}
-              onClick={() => setShowCmds(v => !v)}
-              title="أوامر الوكيل"
-            >
-              <Terminal size={12} />
-            </button>
 
             {/* Deploy to GitHub Pages */}
             {state.selectedRepo && (
@@ -328,34 +290,6 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
         )}
       </div>
 
-      {/* ── Commands sheet ── */}
-      {state.active && showCmds && (
-        <div className="amb-cmds-sheet">
-          <div className="amb-cmds-header">
-            <Terminal size={13} />
-            <span>أوامر الوكيل المتاحة — انقر لإدراج الأمر</span>
-            <button onClick={() => setShowCmds(false)}><X size={12} /></button>
-          </div>
-          <div className="amb-cmds-list">
-            {SLASH_COMMANDS.map(c => (
-              <div
-                key={c.cmd}
-                className="amb-cmd-row amb-cmd-row--clickable"
-                onClick={() => handleCommandClick(c.example)}
-                title={`انقر لإدراج: ${c.example}`}
-              >
-                <code className="amb-cmd-code">{c.cmd}</code>
-                <span className="amb-cmd-desc">{c.desc}</span>
-                <code className="amb-cmd-ex">{c.example}</code>
-                <span className="amb-cmd-insert-hint">← انقر</span>
-              </div>
-            ))}
-          </div>
-          <div className="amb-cmds-tip">
-            💡 يمكنك أيضاً الكتابة بالطبيعي — الوكيل يفهم الدارجة والعربية والإنجليزية
-          </div>
-        </div>
-      )}
 
       {/* ── Deploy Panel ── */}
       {state.active && deployOpen && (

@@ -8964,6 +8964,16 @@ ${rows}
                               </div>
                             )}
 
+                            {/* Open full health tool */}
+                            <div className="dz-health-card__tool-cta">
+                              <button
+                                className="dz-health-card__tool-btn"
+                                onClick={() => { window.location.href = '/tools?tool=health' }}
+                              >
+                                🏥 فتح وكيل الصحة الكامل ← بحث أطباء · CNAS · استشارة موسّعة
+                              </button>
+                            </div>
+
                             {/* Disclaimer */}
                             <div className="dz-health-card__disclaimer">
                               ⚕️ {h.disclaimer}

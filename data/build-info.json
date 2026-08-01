@@ -1,8 +1,8 @@
 {
-  "commit": "c57f50128cb045b6a81bfe36fbe68937f45028f3",
-  "commitShort": "c57f5012",
+  "commit": "54596c77aa633b87f2ae54b1c2eb5be5afc7c944",
+  "commitShort": "54596c77",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح إشعارات المشرف — CHAT_ADMIN_SECRET + scope site + تأخير 8ث + SSE فوري",
-  "deployedAt": "2026-08-01T12:30:01.813152Z",
+  "message": "feat: استبدال زر مسح الإشعارات بأيقونة سلة مهملات",
+  "deployedAt": "2026-08-01T12:37:07.883767Z",
   "deployedBy": "scripts/deploy.py"
 }

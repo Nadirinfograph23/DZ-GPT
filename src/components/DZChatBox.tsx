@@ -13,6 +13,7 @@ import {
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
   Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Layers,
   Globe, ThumbsUp, ThumbsDown, Hammer, Trash2, X, Volume2, Square, Flag,
+  Camera,
 } from 'lucide-react'
 import BugReportModal from './BugReportModal'
 import ReactMarkdown from 'react-markdown'
@@ -4405,6 +4406,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [input, setInput] = useState('')
   const [showFindDialog, setShowFindDialog] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [screenshotLoading, setScreenshotLoading] = useState(false)
   const [isAdvancedCloneLoading, setIsAdvancedCloneLoading] = useState(false)
   const [cloneProgress, setCloneProgress] = useState<CloneProgressState | null>(null)
   const [renderKey] = useState(0)
@@ -8336,6 +8338,51 @@ ${rows}
     win.onload = () => setTimeout(() => { try { win.print() } catch {} }, 400)
   }, [messages])
 
+  // Feature D — Capture full chat conversation as PNG and auto-download
+  const screenshotChat = useCallback(async () => {
+    const container = messagesContainerRef.current
+    if (!container || messages.length === 0 || screenshotLoading) return
+    setScreenshotLoading(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      // Save original styles
+      const origOverflow = container.style.overflow
+      const origMaxHeight = container.style.maxHeight
+      const origHeight = container.style.height
+      // Expand container to full scroll height so html2canvas captures everything
+      container.style.overflow = 'visible'
+      container.style.maxHeight = 'none'
+      container.style.height = container.scrollHeight + 'px'
+      const canvas = await html2canvas(container, {
+        backgroundColor: '#0b0d17',
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        scale: window.devicePixelRatio || 1,
+        width: container.offsetWidth,
+        height: container.scrollHeight,
+        windowWidth: container.offsetWidth,
+        windowHeight: container.scrollHeight,
+        scrollX: 0,
+        scrollY: 0,
+      })
+      // Restore original styles
+      container.style.overflow = origOverflow
+      container.style.maxHeight = origMaxHeight
+      container.style.height = origHeight
+      // Download
+      const dateStr = new Date().toISOString().slice(0, 10)
+      const link = document.createElement('a')
+      link.download = `dz-agent-${dateStr}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    } catch (err) {
+      console.error('[Screenshot]', err)
+    } finally {
+      setScreenshotLoading(false)
+    }
+  }, [messages, screenshotLoading])
+
   const regenerate = useCallback(async () => {
     if (messages.length < 2 || isLoading) return
     const withoutLast = messages.slice(0, -1)
@@ -8486,6 +8533,19 @@ ${rows}
           {messages.length > 0 && (
             <button className="gh-log-toggle" onClick={exportAsMarkdown} title="تصدير المحادثة PDF">
               <Download size={13} />
+            </button>
+          )}
+          {messages.length > 0 && (
+            <button
+              className={`gh-log-toggle dz-screenshot-btn${screenshotLoading ? ' dz-screenshot-btn--loading' : ''}`}
+              onClick={screenshotChat}
+              title="تصوير المحادثة كاملة وتحميلها"
+              disabled={screenshotLoading}
+            >
+              {screenshotLoading
+                ? <Loader2 size={13} className="dz-screenshot-spin" />
+                : <Camera size={13} />
+              }
             </button>
           )}
           <button className="gh-log-toggle" onClick={() => window.open('/stats', '_blank')} title="إحصاءاتك">

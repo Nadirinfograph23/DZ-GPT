@@ -37,9 +37,17 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* RTL context: flex-start = visually right (near Bot icon) */
+  padding-right: 0.5rem;
+}
+
+.dz-ticker-item {
   white-space: nowrap;
-  text-align: right;
-  direction: rtl;
+  overflow: hidden;
+  font-size: 0.72rem;
+  color: #64748b;
 }
 
 .dz-toolbar-actions {

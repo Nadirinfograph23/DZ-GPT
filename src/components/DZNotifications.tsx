@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Bell, X, ExternalLink, TrendingUp, TrendingDown, Newspaper, AlertTriangle, CheckCircle2, BellOff } from 'lucide-react'
+import { Bell, X, ExternalLink, TrendingUp, TrendingDown, Newspaper, AlertTriangle, CheckCircle2, BellOff, Trash2 } from 'lucide-react'
 import '../styles/dz-notifications.css'
 
 export interface DZNotif {
@@ -371,7 +371,14 @@ export default function DZNotifications({ theme }: Props) {
             </span>
             <div className="dzn-panel-actions">
               {notifs.length > 0 && (
-                <button className="dzn-panel-clear" onClick={() => setNotifs([])}>مسح الكل</button>
+                <button
+                  className="dzn-panel-trash"
+                  onClick={() => setNotifs([])}
+                  title="مسح جميع الإشعارات"
+                  aria-label="مسح جميع الإشعارات"
+                >
+                  <Trash2 size={14} />
+                </button>
               )}
               <button className="dzn-panel-close" onClick={() => setPanelOpen(false)}>
                 <X size={15} />

@@ -261,18 +261,23 @@
   flex-shrink: 0;
   margin-right: auto;
 }
-.dzn-panel-clear {
-  font-size: 11px;
-  color: #475569;
+.dzn-panel-trash {
   background: none;
   border: none;
+  color: #475569;
   cursor: pointer;
-  padding: 3px 7px;
-  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border-radius: 7px;
   transition: color .15s, background .15s;
-  white-space: nowrap;
+  flex-shrink: 0;
 }
-.dzn-panel-clear:hover { color: #94a3b8; background: rgba(255,255,255,.05); }
+.dzn-panel-trash:hover {
+  color: #ef4444;
+  background: rgba(239,68,68,.1);
+}
 .dzn-panel-close {
   background: none;
   border: none;

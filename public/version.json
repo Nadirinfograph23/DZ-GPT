@@ -1,8 +1,8 @@
 {
-  "commit": "1ab091e53fc587169233c6fe25d0709a4abc0595",
-  "commitShort": "1ab091e5",
+  "commit": "682143711ba677ad88cfd44447bf01dc3f8f4c45",
+  "commitShort": "68214371",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: استبدال إيموجي 📸 بأيقونة Camera من Lucide في الشريط السفلي",
-  "deployedAt": "2026-08-01T13:09:57.287467Z",
+  "message": "fix: حذف زر action log وتوسيع مساحة النص المتحرك في شريط DZ Agent",
+  "deployedAt": "2026-08-01T13:16:11.849968Z",
   "deployedBy": "scripts/deploy.py"
 }

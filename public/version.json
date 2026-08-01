@@ -1,8 +1,8 @@
 {
-  "commit": "982423c11241a6f7fa62fb75833d5923857da514",
-  "commitShort": "982423c1",
+  "commit": "540e315e45b6cba91af902963bf83f2564424c64",
+  "commitShort": "540e315e",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: site-wide announcement broadcast — admin in DZ Chat can notify all website visitors with link buttons",
-  "deployedAt": "2026-08-01T10:00:38.375542Z",
+  "message": "fix: إصلاح إذاعة المشرف + طابور الإشعارات للمستخدمين الغائبين",
+  "deployedAt": "2026-08-01T10:37:57.782867Z",
   "deployedBy": "scripts/deploy.py"
 }

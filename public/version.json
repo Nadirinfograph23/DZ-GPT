@@ -1,8 +1,8 @@
 {
-  "commit": "972457c1fb09e080a6834315c40121da756f46dc",
-  "commitShort": "972457c1",
+  "commit": "a4f393edf8df4247cf1b8b5ba8069f179ec3f245",
+  "commitShort": "a4f393ed",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: add AI DZ img PRO — Pinterest AI image search inside DZ Media Studio",
-  "deployedAt": "2026-08-01T02:12:19.198420Z",
+  "message": "fix: health capability query — وكيل الصحة يرد على أسئلة القدرات بدل 'لا أملك'",
+  "deployedAt": "2026-08-01T08:48:38.589000Z",
   "deployedBy": "scripts/deploy.py"
 }

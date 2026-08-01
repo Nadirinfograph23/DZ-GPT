@@ -1,8 +1,8 @@
 {
-  "commit": "cb0180f6fb297664bbb5ddc73748ad40ab0d4178",
-  "commitShort": "cb0180f6",
+  "commit": "23d70286610db6895238de9528ae4f6cee23748b",
+  "commitShort": "23d70286",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: إضافة زر 📸 تصوير المحادثة في الشريط السفلي لـ DZ Agent",
-  "deployedAt": "2026-08-01T12:58:10.538886Z",
+  "message": "fix: إصلاح package-lock.json — استبدال روابط Replit المحلية بـ registry.npmjs.org لإصلاح Vercel build",
+  "deployedAt": "2026-08-01T13:00:19.687747Z",
   "deployedBy": "scripts/deploy.py"
 }

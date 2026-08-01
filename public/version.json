@@ -1,8 +1,8 @@
 {
-  "commit": "f71952c71d18c7d67be6e0b56636b1ee0fe73e48",
-  "commitShort": "f71952c7",
+  "commit": "0b1283e4fdd2d4353bdb7bca8902f0ed6f3841ff",
+  "commitShort": "0b1283e4",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: SSE عالمي للإذاعة — يصل لجميع صفحات الموقع فوراً بدون WebSocket",
-  "deployedAt": "2026-08-01T11:18:26.942491Z",
+  "message": "fix: global admin broadcast toast — fix SSE not reaching all pages, add AdminBroadcastToast global component, fix link passing in DZNotifications, add /api/admin/broadcast endpoint",
+  "deployedAt": "2026-08-01T11:44:10.393806Z",
   "deployedBy": "scripts/deploy.py"
 }

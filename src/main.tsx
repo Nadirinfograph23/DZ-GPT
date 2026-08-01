@@ -51,6 +51,7 @@ function PageLoader() {
   )
 }
 import { startVersionChecker } from './utils/versionChecker.ts'
+import { startBroadcastListener } from './utils/broadcastBanner.ts'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import { RadioPlayerProvider } from './context/RadioPlayerContext.tsx'
 import { DownloadProvider } from './context/DownloadContext.tsx'
@@ -59,7 +60,6 @@ import RadioMiniPlayer from './components/RadioMiniPlayer.tsx'
 import QuickNav from './components/QuickNav.tsx'
 import GlobalRobot from './components/GlobalRobot.tsx'
 import SiteAnnouncement from './components/SiteAnnouncement.tsx'
-import AdminBroadcastToast from './components/AdminBroadcastToast.tsx'
 import './styles/radio-mini-player.css'
 
 const HIDE_MINIPLAYER_ROUTES = ['/web-builder']
@@ -185,6 +185,8 @@ function pb(name: string, element: ReactNode) {
 
 // بدء فحص الإصدار الجديد كل 8 دقائق + استقبال إشارات Service Worker
 startVersionChecker()
+// بدء الاستماع لإذاعات المشرف — vanilla JS مباشر على DOM (مثل versionChecker)
+startBroadcastListener()
 
 // ── تتبع زيارة الصفحة — يُرسَل للسيرفر لإحصائيات الزوار الحقيقية ─────────────
 ;(function trackPageVisit() {
@@ -242,7 +244,6 @@ createRoot(document.getElementById('root')!).render(
           <QuickNav />
           <GlobalRobot />
           <SiteAnnouncement />
-          <AdminBroadcastToast />
           </RadioPlayerProvider>
           </DownloadProvider>
         </MiniPlayerProvider>

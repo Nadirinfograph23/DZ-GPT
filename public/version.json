@@ -1,8 +1,8 @@
 {
-  "commit": "c4eacfca0fbddaea78c6cf73fc448f7e6f432a3e",
-  "commitShort": "c4eacfca",
+  "commit": "17a738e58a4749c9d061a44df2b290e2f9a96190",
+  "commitShort": "17a738e5",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح TypeScript - إزالة مرجع Hls المتبقي وإضافة declarations لـ pdfjs-dist و hls.js",
-  "deployedAt": "2026-08-01T00:44:34.794648Z",
+  "message": "fix: إصلاح توجيه الأسئلة الطبية — guard للاستعلامات الوجودية + زر فتح وكيل الصحة + patterns جديدة",
+  "deployedAt": "2026-08-01T00:55:25.861767Z",
   "deployedBy": "scripts/deploy.py"
 }

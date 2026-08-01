@@ -1,8 +1,8 @@
 {
-  "commit": "82db2a24b010c6b9dddec6e7f675c1536c7b9c9a",
-  "commitShort": "82db2a24",
+  "commit": "7a2ba2b8af7d1e95c9fedf758f17588c3d301a37",
+  "commitShort": "7a2ba2b8",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: محاذاة النص المتحرك إلى اليمين في شريط DZ Agent",
-  "deployedAt": "2026-08-01T13:24:15.971742Z",
+  "message": "fix: محاذاة النص المتحرك من اليمين بجانب أيقونة الوكيل",
+  "deployedAt": "2026-08-01T13:31:09.752747Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1,8 +1,8 @@
 {
-  "commit": "cb9118581f05840809a0234aeab37ec35998e938",
-  "commitShort": "cb911858",
+  "commit": "1d7313b9db6f1af02c1fe9da02aebd5da825c86b",
+  "commitShort": "1d7313b9",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: عكس اتجاه النص المتحرك في الشريط العلوي — RTL بدل LTR",
-  "deployedAt": "2026-08-01T14:45:20.147602Z",
+  "message": "feat: حارس التحية الجزائرية — ردود دارجة عشوائية تتجاوز LLM",
+  "deployedAt": "2026-08-01T14:48:56.207923Z",
   "deployedBy": "scripts/deploy.py"
 }

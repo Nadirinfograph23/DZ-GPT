@@ -345,8 +345,11 @@ export default function DZChat() {
   const lastTypingSentRef = useRef<number>(0)
 
   // Broadcast modal state
-  const [showBroadcast, setShowBroadcast] = useState(false)
-  const [broadcastText, setBroadcastText] = useState('')
+  const [showBroadcast, setShowBroadcast]     = useState(false)
+  const [broadcastText, setBroadcastText]     = useState('')
+  const [broadcastLink, setBroadcastLink]     = useState('')
+  const [broadcastLinkText, setBroadcastLinkText] = useState('')
+  const [broadcastScope, setBroadcastScope]   = useState<'chat' | 'site'>('chat')
   const [broadcastSending, setBroadcastSending] = useState(false)
 
   // Copy feedback state per message
@@ -945,12 +948,21 @@ export default function DZChat() {
   }
 
   const adminBroadcast = async () => {
-    const text = broadcastText.trim()
+    const text     = broadcastText.trim()
+    const link     = broadcastLink.trim()
+    const linkText = broadcastLinkText.trim()
     if (!text || !sessionIdRef.current) return
     setBroadcastSending(true)
     try {
+      const payload = {
+        type: 'admin', action: 'broadcast',
+        text,
+        scope: broadcastScope,
+        ...(link ? { link } : {}),
+        ...(linkText ? { linkText } : {}),
+      }
       if (wsRef.current?.readyState === 1) {
-        wsRef.current.send(JSON.stringify({ type: 'admin', action: 'broadcast', text }))
+        wsRef.current.send(JSON.stringify(payload))
       } else {
         await fetch('/api/chat-room/admin', {
           method: 'POST',
@@ -959,6 +971,9 @@ export default function DZChat() {
         })
       }
       setBroadcastText('')
+      setBroadcastLink('')
+      setBroadcastLinkText('')
+      setBroadcastScope('chat')
       setShowBroadcast(false)
     } catch {}
     setBroadcastSending(false)
@@ -1655,34 +1670,82 @@ export default function DZChat() {
 
       {/* ===== BROADCAST MODAL ===== */}
       {showBroadcast && (
-        <div className="dzc-broadcast-overlay" onClick={() => { setShowBroadcast(false); setBroadcastText('') }}>
+        <div className="dzc-broadcast-overlay" onClick={() => { setShowBroadcast(false); setBroadcastText(''); setBroadcastLink(''); setBroadcastLinkText(''); setBroadcastScope('chat') }}>
           <div className="dzc-broadcast-modal" onClick={e => e.stopPropagation()}>
             <div className="dzc-broadcast-modal-header">
               <Megaphone size={18} className="dzc-broadcast-modal-icon" />
-              <span>إذاعة رسالة للجميع</span>
-              <button className="dzc-broadcast-modal-close" onClick={() => { setShowBroadcast(false); setBroadcastText('') }}>
+              <span>إذاعة رسالة</span>
+              <button className="dzc-broadcast-modal-close" onClick={() => { setShowBroadcast(false); setBroadcastText(''); setBroadcastLink(''); setBroadcastLinkText(''); setBroadcastScope('chat') }}>
                 <X size={14} />
               </button>
             </div>
-            <p className="dzc-broadcast-modal-hint">ستظهر رسالتك كإعلان بارز لجميع المستخدمين في الدردشة.</p>
+
+            {/* Scope selector */}
+            <div className="dzc-broadcast-scope">
+              <button
+                className={`dzc-broadcast-scope-btn ${broadcastScope === 'chat' ? 'active' : ''}`}
+                onClick={() => setBroadcastScope('chat')}
+              >
+                💬 الشات فقط
+              </button>
+              <button
+                className={`dzc-broadcast-scope-btn ${broadcastScope === 'site' ? 'active site' : ''}`}
+                onClick={() => setBroadcastScope('site')}
+              >
+                🌐 جميع زوار الموقع
+              </button>
+            </div>
+
+            <p className="dzc-broadcast-modal-hint">
+              {broadcastScope === 'site'
+                ? '⚡ ستظهر كبانر إشعار في أعلى الموقع لجميع الزوار — بما فيهم من هم خارج الشات.'
+                : 'ستظهر رسالتك كإعلان بارز لجميع المستخدمين في الدردشة.'}
+            </p>
+
             <textarea
               className="dzc-broadcast-textarea"
               placeholder="اكتب إعلانك هنا..."
               value={broadcastText}
               onChange={e => setBroadcastText(e.target.value)}
-              maxLength={300}
-              rows={4}
+              maxLength={500}
+              rows={3}
               autoFocus
             />
+
+            {/* Optional link */}
+            <div className="dzc-broadcast-link-row">
+              <Globe size={13} className="dzc-broadcast-link-icon" />
+              <input
+                className="dzc-broadcast-link-input"
+                type="url"
+                placeholder="رابط اختياري (https://...)"
+                value={broadcastLink}
+                onChange={e => setBroadcastLink(e.target.value)}
+              />
+            </div>
+
+            {broadcastLink.trim() && (
+              <div className="dzc-broadcast-linktext-row">
+                <input
+                  className="dzc-broadcast-link-input"
+                  type="text"
+                  placeholder="نص زر الرابط (مثال: اذهب للصفحة)"
+                  value={broadcastLinkText}
+                  onChange={e => setBroadcastLinkText(e.target.value)}
+                  maxLength={60}
+                />
+              </div>
+            )}
+
             <div className="dzc-broadcast-modal-footer">
-              <span className="dzc-broadcast-char-count">{broadcastText.length}/300</span>
+              <span className="dzc-broadcast-char-count">{broadcastText.length}/500</span>
               <button
                 className="dzc-broadcast-send-btn"
                 onClick={adminBroadcast}
                 disabled={!broadcastText.trim() || broadcastSending}
               >
                 {broadcastSending ? <Loader2 size={14} className="dzc-spin" /> : <Megaphone size={14} />}
-                إرسال الإذاعة
+                إرسال
               </button>
             </div>
           </div>

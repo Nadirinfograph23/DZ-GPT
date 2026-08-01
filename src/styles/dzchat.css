@@ -2091,6 +2091,64 @@
 .dzc-broadcast-send-btn:hover:not(:disabled) { opacity: 0.9; transform: scale(1.02); }
 .dzc-broadcast-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ── Broadcast scope selector ─────────────────────────────────────── */
+.dzc-broadcast-scope {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.dzc-broadcast-scope-btn {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid #2a2a2a;
+  background: #0d0d0d;
+  color: #64748b;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.dzc-broadcast-scope-btn.active {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.08);
+  color: #f59e0b;
+  font-weight: 600;
+}
+.dzc-broadcast-scope-btn.active.site {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.08);
+  color: #a78bfa;
+}
+
+/* ── Broadcast link inputs ────────────────────────────────────────── */
+.dzc-broadcast-link-row,
+.dzc-broadcast-linktext-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.dzc-broadcast-link-icon {
+  color: #475569;
+  flex-shrink: 0;
+}
+.dzc-broadcast-link-input {
+  flex: 1;
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 12.5px;
+  font-family: inherit;
+  padding: 8px 10px;
+  outline: none;
+  direction: ltr;
+  transition: border-color 0.2s;
+}
+.dzc-broadcast-link-input:focus { border-color: rgba(139, 92, 246, 0.4); }
+.dzc-broadcast-link-input::placeholder { color: #334455; }
+
 /* ===== CONTEXT MENU ADDITIONS ===== */
 .dzc-context-separator {
   height: 1px;

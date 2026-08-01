@@ -5104,6 +5104,21 @@ app.post('/api/broadcast-update', (req, res) => {
   res.json({ success: true, sent: count, message: msg })
 })
 
+// ===== SITE-WIDE ANNOUNCEMENT — للزوار الكلي =====
+// GET /api/site-announcement — polling عام بدون مصادقة
+app.get('/api/site-announcement', (req, res) => {
+  res.json({ announcement: _siteAnnouncement })
+})
+
+// DELETE /api/site-announcement — المشرف يمسح الإعلان
+app.delete('/api/site-announcement', (req, res) => {
+  const secret = req.headers['x-admin-secret'] || req.query?.secret || req.body?.secret || ''
+  if (!_checkAdminSecret(secret)) return res.status(403).json({ error: 'غير مصرح' })
+  _siteAnnouncement = null
+  console.log('[SiteAnnounce] Announcement cleared by admin')
+  res.json({ success: true })
+})
+
 // ===== OWNER: COMMAND ENDPOINT =====
 app.post('/api/owner/command', async (req, res) => {
   const { message, githubToken } = req.body || {}
@@ -29262,6 +29277,8 @@ function _checkAdminSecret(incoming) {
   return candidate.length === _ADMIN_HASH.length && crypto.timingSafeEqual(candidate, _ADMIN_HASH)
 }
 const MAX_CHAT_MSGS = 200
+// ── Site-wide announcement store (in-memory, survives until cleared or server restart) ──
+let _siteAnnouncement = null  // { id, text, link, linkText, timestamp, from }
 
 function chatId() {
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36)
@@ -34423,12 +34440,27 @@ function setupChatWebSocket(httpServer) {
             await dbSetPinned(null)
             broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
           } else if (data.action === 'broadcast' && data.text) {
+            const msgLink     = data.link     ? String(data.link).slice(0, 500)     : undefined
+            const msgLinkText = data.linkText ? String(data.linkText).slice(0, 100) : undefined
             const broadcastMsg = pushChatMsg({
               id: chatId(), from: session.name, fromId: session.id,
               gender: session.gender, text: String(data.text).slice(0, 500),
               timestamp: Date.now(), isAdmin: true, isBroadcast: true,
+              link: msgLink, linkText: msgLinkText,
             })
             broadcastChat({ type: 'message', msg: broadcastMsg })
+            // إذا scope = site → تخزين كإعلان عام لجميع زوار الموقع
+            if (data.scope === 'site') {
+              _siteAnnouncement = {
+                id: broadcastMsg.id,
+                text: String(data.text).slice(0, 500),
+                link: msgLink || null,
+                linkText: msgLinkText || null,
+                timestamp: Date.now(),
+                from: session.name,
+              }
+              console.log(`[SiteAnnounce] ✅ New announcement from ${session.name}: ${_siteAnnouncement.text.slice(0, 60)}`)
+            }
           }
         }
       } catch (err) { console.error('[WS:Chat]', err.message) }

@@ -143,6 +143,36 @@ export default function DZNotifications({ theme }: Props) {
     return () => window.removeEventListener('dz:task-complete', onTaskComplete)
   }, [addNotif, browserPush])
 
+  // ── Offline broadcast queue — إشعارات المشرف الفائتة للمستخدمين الغائبين ───
+  useEffect(() => {
+    const LS_KEY = 'dz_pending_notif_ts'
+    async function checkPending() {
+      try {
+        const res = await fetch('/api/pending-notifications', { cache: 'no-store' })
+        if (!res.ok) return
+        const data = await res.json()
+        const notifs: Array<{ id: string; text: string; from: string; timestamp: number; link?: string | null }> =
+          data.notifications || []
+        if (!notifs.length) return
+        // أظهر فقط الإشعارات التي نُشرت بعد آخر زيارة
+        const lastTs = parseInt(localStorage.getItem(LS_KEY) || '0', 10)
+        const fresh = notifs.filter(n => n.timestamp > lastTs)
+        // حفّظ أحدث timestamp كنقطة مرجعية للزيارة القادمة
+        const newest = notifs.reduce((m, n) => Math.max(m, n.timestamp), 0)
+        if (newest > lastTs) localStorage.setItem(LS_KEY, String(newest))
+        // أظهر كل إشعار جديد بتأخير بسيط لتجنب التكديس الفوري
+        fresh.forEach((n, i) => {
+          setTimeout(() => {
+            addNotif({ type: 'task', title: `📢 إذاعة من ${n.from}`, body: n.text })
+            browserPush(`📢 إذاعة من ${n.from}`, n.text)
+          }, i * 1200)
+        })
+      } catch {}
+    }
+    checkPending()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // مرة واحدة عند التحميل فقط — يكفي لعرض الفائت
+
   // ── SSE: Breaking News ──────────────────────────────────────────────────────
   useEffect(() => {
     let es: EventSource | null = null

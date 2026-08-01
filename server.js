@@ -5105,6 +5105,13 @@ app.post('/api/broadcast-update', (req, res) => {
 })
 
 // ===== SITE-WIDE ANNOUNCEMENT — للزوار الكلي =====
+// GET /api/pending-notifications — طابور الإشعارات للمستخدمين الغائبين
+app.get('/api/pending-notifications', (req, res) => {
+  const now = Date.now()
+  const fresh = _pendingBroadcasts.filter(b => now - b.timestamp < _PENDING_BROADCASTS_TTL)
+  res.json({ notifications: fresh })
+})
+
 // GET /api/site-announcement — polling عام بدون مصادقة
 app.get('/api/site-announcement', (req, res) => {
   res.json({ announcement: _siteAnnouncement })
@@ -29280,6 +29287,21 @@ const MAX_CHAT_MSGS = 200
 // ── Site-wide announcement store (in-memory, survives until cleared or server restart) ──
 let _siteAnnouncement = null  // { id, text, link, linkText, timestamp, from }
 
+// ── Pending Broadcasts Queue — للمستخدمين الغائبين (طابور الإشعارات) ───────
+const _pendingBroadcasts = []        // [{id, text, from, timestamp, link, linkText}]
+const _PENDING_BROADCASTS_TTL = 24 * 60 * 60 * 1000  // 24 ساعة
+const _PENDING_BROADCASTS_MAX = 20
+
+function _pushPendingBroadcast(b) {
+  const now = Date.now()
+  // حذف المنتهية الصلاحية
+  while (_pendingBroadcasts.length > 0 && now - _pendingBroadcasts[0].timestamp > _PENDING_BROADCASTS_TTL) {
+    _pendingBroadcasts.shift()
+  }
+  _pendingBroadcasts.push(b)
+  if (_pendingBroadcasts.length > _PENDING_BROADCASTS_MAX) _pendingBroadcasts.shift()
+}
+
 function chatId() {
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36)
 }
@@ -34234,6 +34256,30 @@ app.post('/api/chat-room/admin', async (req, res) => {
     pinnedMessage = null
     await dbSetPinned(null)
     broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
+  } else if (action === 'broadcast' && req.body.text) {
+    // REST fallback — إذا انقطع WS للمشرف
+    const msgLink     = req.body.link     ? String(req.body.link).slice(0, 500)     : undefined
+    const msgLinkText = req.body.linkText ? String(req.body.linkText).slice(0, 100) : undefined
+    const broadcastMsg = pushChatMsg({
+      id: chatId(), from: session.name, fromId: session.id,
+      gender: session.gender || 'male',
+      text: String(req.body.text).slice(0, 500),
+      timestamp: Date.now(), isAdmin: true, isBroadcast: true,
+      link: msgLink, linkText: msgLinkText,
+    })
+    broadcastChat({ type: 'message', msg: broadcastMsg })
+    _pushPendingBroadcast({
+      id: broadcastMsg.id, text: broadcastMsg.text,
+      from: broadcastMsg.from, timestamp: broadcastMsg.timestamp,
+      link: msgLink || null, linkText: msgLinkText || null,
+    })
+    if (req.body.scope === 'site') {
+      _siteAnnouncement = {
+        id: broadcastMsg.id, text: broadcastMsg.text,
+        link: msgLink || null, linkText: msgLinkText || null,
+        timestamp: Date.now(), from: session.name,
+      }
+    }
   }
   res.json({ ok: true })
 })
@@ -34449,6 +34495,15 @@ function setupChatWebSocket(httpServer) {
               link: msgLink, linkText: msgLinkText,
             })
             broadcastChat({ type: 'message', msg: broadcastMsg })
+            // ── أضف لطابور الإشعارات المعلّقة (للمستخدمين الغائبين) ─────────
+            _pushPendingBroadcast({
+              id: broadcastMsg.id,
+              text: broadcastMsg.text,
+              from: broadcastMsg.from,
+              timestamp: broadcastMsg.timestamp,
+              link: msgLink || null,
+              linkText: msgLinkText || null,
+            })
             // إذا scope = site → تخزين كإعلان عام لجميع زوار الموقع
             if (data.scope === 'site') {
               _siteAnnouncement = {
@@ -34469,7 +34524,9 @@ function setupChatWebSocket(httpServer) {
       if (sid) {
         const session = chatSessions.get(sid)
         if (session) {
-          chatSessions.delete(sid)
+          // ── لا نحذف الـ session — فقط نفصل الـ ws ليحتفظ المشرف بصلاحياته عند إعادة الاتصال ──
+          session.ws = null
+          session.lastSeen = Date.now()
           const leaveMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: `${session.name} غادر الدردشة`, timestamp: Date.now(), isSystem: true })
           broadcastChat({ type: 'message', msg: leaveMsg })
           broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
@@ -34480,6 +34537,17 @@ function setupChatWebSocket(httpServer) {
     ws.on('error', () => {})
   })
   console.log('[WS:Chat] Chat WebSocket server ready on /ws/chat')
+
+  // ── تنظيف الـ sessions القديمة (بدون ws + lastSeen > 5 دقائق) ──────────────
+  setInterval(() => {
+    const STALE_MS = 5 * 60 * 1000
+    const now = Date.now()
+    for (const [id, s] of chatSessions.entries()) {
+      if (!s.ws && (now - s.lastSeen) > STALE_MS) {
+        chatSessions.delete(id)
+      }
+    }
+  }, 60_000)
 }
 
 // ── Live Score Auto-Refresh — broadcasts in-progress match scores every 3 min ─

@@ -1,8 +1,8 @@
 {
-  "commit": "0b1283e4fdd2d4353bdb7bca8902f0ed6f3841ff",
-  "commitShort": "0b1283e4",
+  "commit": "8bb90c7b983371fbeba710113c42b9d3d03bac83",
+  "commitShort": "8bb90c7b",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: global admin broadcast toast — fix SSE not reaching all pages, add AdminBroadcastToast global component, fix link passing in DZNotifications, add /api/admin/broadcast endpoint",
-  "deployedAt": "2026-08-01T11:44:10.393806Z",
+  "message": "fix: replace React broadcast toast with vanilla JS DOM banner — instant display like versionChecker, fixes admin not seeing own broadcasts",
+  "deployedAt": "2026-08-01T11:56:27.770599Z",
   "deployedBy": "scripts/deploy.py"
 }

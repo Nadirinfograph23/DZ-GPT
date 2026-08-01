@@ -1,8 +1,8 @@
 {
-  "commit": "17a738e58a4749c9d061a44df2b290e2f9a96190",
-  "commitShort": "17a738e5",
+  "commit": "972457c1fb09e080a6834315c40121da756f46dc",
+  "commitShort": "972457c1",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح توجيه الأسئلة الطبية — guard للاستعلامات الوجودية + زر فتح وكيل الصحة + patterns جديدة",
-  "deployedAt": "2026-08-01T00:55:25.861767Z",
+  "message": "feat: add AI DZ img PRO — Pinterest AI image search inside DZ Media Studio",
+  "deployedAt": "2026-08-01T02:12:19.198420Z",
   "deployedBy": "scripts/deploy.py"
 }

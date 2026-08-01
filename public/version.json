@@ -1,8 +1,8 @@
 {
-  "commit": "8fb50bc7fee0ab0f5febd8602a9054f440c6e6b3",
-  "commitShort": "8fb50bc7",
+  "commit": "cb0180f6fb297664bbb5ddc73748ad40ab0d4178",
+  "commitShort": "cb0180f6",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "chore: إضافة html2canvas للتبعيات (لقطة شاشة المحادثة)",
-  "deployedAt": "2026-08-01T12:47:18.811344Z",
+  "message": "feat: إضافة زر 📸 تصوير المحادثة في الشريط السفلي لـ DZ Agent",
+  "deployedAt": "2026-08-01T12:58:10.538886Z",
   "deployedBy": "scripts/deploy.py"
 }

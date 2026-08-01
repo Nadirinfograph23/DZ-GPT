@@ -255,7 +255,8 @@ function connectSSE() {
           const cur = parseInt(localStorage.getItem(PENDING_TS) || '0', 10)
           if (data.timestamp > cur) localStorage.setItem(PENDING_TS, String(data.timestamp))
         } catch {}
-        showBroadcastBanner(data)
+        // تأخير 8 ثوانٍ قبل العرض (كرسالة التحديث التلقائي)
+        setTimeout(() => showBroadcastBanner(data), 8_000)
       }
     } catch {}
   }

@@ -12,18 +12,30 @@ interface Announcement {
   from: string
 }
 
-const POLL_INTERVAL = 30_000  // 30s
+const POLL_INTERVAL = 30_000  // 30s — احتياطي فقط، SSE هو المسار الأساسي
 
 export default function SiteAnnouncement() {
   const [ann, setAnn]         = useState<Announcement | null>(null)
   const [visible, setVisible] = useState(false)
   const [entering, setEntering] = useState(false)
   const dismissedRef           = useRef<string | null>(null)
+  const showTimerRef           = useRef<ReturnType<typeof setTimeout> | null>(null)
   const navigate               = useNavigate()
 
   // Initialise dismissed list from sessionStorage
   useEffect(() => {
     dismissedRef.current = sessionStorage.getItem('dz_ann_dismissed') || null
+  }, [])
+
+  const showAnn = useCallback((a: Announcement) => {
+    if (dismissedRef.current === a.id) return
+    setAnn(prev => {
+      if (!prev || prev.id !== a.id) {
+        setTimeout(() => setEntering(true), 50)
+      }
+      return a
+    })
+    setVisible(true)
   }, [])
 
   const fetchAnn = useCallback(async () => {
@@ -33,24 +45,55 @@ export default function SiteAnnouncement() {
       const data = await res.json()
       const a: Announcement | null = data.announcement
       if (!a) { setAnn(null); setVisible(false); return }
-      // Already dismissed this session?
-      if (dismissedRef.current === a.id) return
-      setAnn(prev => {
-        // Only animate-in if it's a new announcement
-        if (!prev || prev.id !== a.id) {
-          setTimeout(() => setEntering(true), 50)
-        }
-        return a
-      })
-      setVisible(true)
+      showAnn(a)
     } catch {}
-  }, [])
+  }, [showAnn])
 
+  // ── Polling احتياطي ────────────────────────────────────────────────────────
   useEffect(() => {
     fetchAnn()
     const id = setInterval(fetchAnn, POLL_INTERVAL)
     return () => clearInterval(id)
   }, [fetchAnn])
+
+  // ── SSE: استقبال فوري مع تأخير 8 ثوانٍ ───────────────────────────────────
+  useEffect(() => {
+    let es: EventSource | null = null
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+    function connect() {
+      es = new EventSource('/api/notifications/stream')
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data)
+          if (data.type === 'admin_broadcast' && data.id && data.text) {
+            const a: Announcement = {
+              id:        data.id,
+              text:      data.text,
+              from:      data.from || 'المشرف',
+              timestamp: data.timestamp || Date.now(),
+              link:      data.link   || null,
+              linkText:  data.linkText || null,
+            }
+            // تأخير 8 ثوانٍ ثم عرض (نفس نمط رسالة التحديث)
+            if (showTimerRef.current) clearTimeout(showTimerRef.current)
+            showTimerRef.current = setTimeout(() => showAnn(a), 8_000)
+          }
+        } catch {}
+      }
+      es.onerror = () => {
+        es?.close()
+        retryTimer = setTimeout(connect, 15_000)
+      }
+    }
+
+    connect()
+    return () => {
+      es?.close()
+      if (retryTimer) clearTimeout(retryTimer)
+      if (showTimerRef.current) clearTimeout(showTimerRef.current)
+    }
+  }, [showAnn])
 
   const dismiss = () => {
     if (ann) {

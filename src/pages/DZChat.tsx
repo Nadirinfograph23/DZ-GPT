@@ -349,7 +349,7 @@ export default function DZChat() {
   const [broadcastText, setBroadcastText]     = useState('')
   const [broadcastLink, setBroadcastLink]     = useState('')
   const [broadcastLinkText, setBroadcastLinkText] = useState('')
-  const [broadcastScope, setBroadcastScope]   = useState<'chat' | 'site'>('chat')
+  const [broadcastScope, setBroadcastScope]   = useState<'chat' | 'site'>('site')
   const [broadcastSending, setBroadcastSending] = useState(false)
 
   // Copy feedback state per message
@@ -983,7 +983,14 @@ export default function DZChat() {
         await fetch('/api/chat-room/admin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: sessionIdRef.current, action: 'broadcast', text }),
+          body: JSON.stringify({
+            sessionId: sessionIdRef.current,
+            action: 'broadcast',
+            text,
+            scope: broadcastScope,
+            ...(link ? { link } : {}),
+            ...(linkText ? { linkText } : {}),
+          }),
         })
       }
       setBroadcastText('')

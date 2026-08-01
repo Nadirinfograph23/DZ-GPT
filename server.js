@@ -34368,12 +34368,11 @@ app.post('/api/chat-room/admin', async (req, res) => {
     }
     pushNotifToAll(_rNotifPayload)
     _pushPendingBroadcast(_rNotifPayload)
-    if (req.body.scope === 'site') {
-      _siteAnnouncement = {
-        id: broadcastMsg.id, text: broadcastMsg.text,
-        link: msgLink || null, linkText: msgLinkText || null,
-        timestamp: Date.now(), from: session.name,
-      }
+    // تخزين كإعلان عام دائماً (يصل لجميع زوار الموقع عبر /api/site-announcement)
+    _siteAnnouncement = {
+      id: broadcastMsg.id, text: broadcastMsg.text,
+      link: msgLink || null, linkText: msgLinkText || null,
+      timestamp: Date.now(), from: session.name,
     }
   }
   res.json({ ok: true })
@@ -34599,18 +34598,16 @@ function setupChatWebSocket(httpServer) {
             pushNotifToAll(_notifPayload)
             // ── طابور الإشعارات المعلّقة (للمستخدمين الغائبين تماماً) ────────
             _pushPendingBroadcast(_notifPayload)
-            // إذا scope = site → تخزين كإعلان عام لجميع زوار الموقع
-            if (data.scope === 'site') {
-              _siteAnnouncement = {
-                id: broadcastMsg.id,
-                text: String(data.text).slice(0, 500),
-                link: msgLink || null,
-                linkText: msgLinkText || null,
-                timestamp: Date.now(),
-                from: session.name,
-              }
-              console.log(`[SiteAnnounce] ✅ New announcement from ${session.name}: ${_siteAnnouncement.text.slice(0, 60)}`)
+            // تخزين كإعلان عام دائماً (يصل لجميع زوار الموقع عبر /api/site-announcement)
+            _siteAnnouncement = {
+              id: broadcastMsg.id,
+              text: String(data.text).slice(0, 500),
+              link: msgLink || null,
+              linkText: msgLinkText || null,
+              timestamp: Date.now(),
+              from: session.name,
             }
+            console.log(`[SiteAnnounce] ✅ New announcement from ${session.name}: ${_siteAnnouncement.text.slice(0, 60)}`)
           }
         }
       } catch (err) { console.error('[WS:Chat]', err.message) }

@@ -1,8 +1,8 @@
 {
-  "commit": "8bb90c7b983371fbeba710113c42b9d3d03bac83",
-  "commitShort": "8bb90c7b",
+  "commit": "c57f50128cb045b6a81bfe36fbe68937f45028f3",
+  "commitShort": "c57f5012",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: replace React broadcast toast with vanilla JS DOM banner — instant display like versionChecker, fixes admin not seeing own broadcasts",
-  "deployedAt": "2026-08-01T11:56:27.770599Z",
+  "message": "fix: إصلاح إشعارات المشرف — CHAT_ADMIN_SECRET + scope site + تأخير 8ث + SSE فوري",
+  "deployedAt": "2026-08-01T12:30:01.813152Z",
   "deployedBy": "scripts/deploy.py"
 }

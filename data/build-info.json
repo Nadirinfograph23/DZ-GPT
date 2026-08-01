@@ -1,8 +1,8 @@
 {
-  "commit": "f411f74aed2d0af7f5c457aad50fef2df935b661",
-  "commitShort": "f411f74a",
+  "commit": "f71952c71d18c7d67be6e0b56636b1ee0fe73e48",
+  "commitShort": "f71952c7",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إطلاق dz:task-complete عند استقبال الإذاعة — إشعار toast للمرسل والمستقبلين",
-  "deployedAt": "2026-08-01T11:03:28.589778Z",
+  "message": "fix: SSE عالمي للإذاعة — يصل لجميع صفحات الموقع فوراً بدون WebSocket",
+  "deployedAt": "2026-08-01T11:18:26.942491Z",
   "deployedBy": "scripts/deploy.py"
 }

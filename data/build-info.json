@@ -1,8 +1,8 @@
 {
-  "commit": "d29ff244eeb676b24f18774e6c4e78d579ba7806",
-  "commitShort": "d29ff244",
+  "commit": "cb9118581f05840809a0234aeab37ec35998e938",
+  "commitShort": "cb911858",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: النص المتحرك من اليمين إلى اليسار مع محاذاة عربية صحيحة",
-  "deployedAt": "2026-08-01T13:36:32.380925Z",
+  "message": "fix: عكس اتجاه النص المتحرك في الشريط العلوي — RTL بدل LTR",
+  "deployedAt": "2026-08-01T14:45:20.147602Z",
   "deployedBy": "scripts/deploy.py"
 }

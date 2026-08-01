@@ -1,8 +1,8 @@
 {
-  "commit": "23d70286610db6895238de9528ae4f6cee23748b",
-  "commitShort": "23d70286",
+  "commit": "1ab091e53fc587169233c6fe25d0709a4abc0595",
+  "commitShort": "1ab091e5",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح package-lock.json — استبدال روابط Replit المحلية بـ registry.npmjs.org لإصلاح Vercel build",
-  "deployedAt": "2026-08-01T13:00:19.687747Z",
+  "message": "fix: استبدال إيموجي 📸 بأيقونة Camera من Lucide في الشريط السفلي",
+  "deployedAt": "2026-08-01T13:09:57.287467Z",
   "deployedBy": "scripts/deploy.py"
 }

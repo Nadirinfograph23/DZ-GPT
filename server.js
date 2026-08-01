@@ -5166,6 +5166,59 @@ app.delete('/api/site-announcement', (req, res) => {
   res.json({ success: true })
 })
 
+// POST /api/admin/broadcast/test — اختبار سريع (dev فقط — لا يعمل في production)
+if (process.env.NODE_ENV !== 'production') {
+  app.post('/api/admin/broadcast/test', (req, res) => {
+    const text     = String(req.body?.text || '🧪 رسالة اختبار من المشرف — البانر يعمل بشكل صحيح ✅').slice(0, 500)
+    const link     = req.body?.link     ? String(req.body.link).slice(0, 500)     : null
+    const linkText = req.body?.linkText ? String(req.body.linkText).slice(0, 100) : null
+    const from     = String(req.body?.from || 'مشرف الاختبار').slice(0, 30)
+    const id  = `test_${Date.now()}`
+    const ts  = Date.now()
+    const payload = { id, text, from, timestamp: ts, link, linkText }
+    pushNotifToAll(payload)
+    _pushPendingBroadcast(payload)
+    console.log(`[TestBroadcast] 📣 Sent to ${_notifSseClients.size} SSE client(s): "${text.slice(0, 60)}"`)
+    res.json({ ok: true, id, sent: _notifSseClients.size })
+  })
+}
+
+// POST /api/admin/broadcast — إذاعة رسالة مباشرة لجميع زوار الموقع عبر SSE
+// لا تحتاج session الشات — فقط admin secret
+app.post('/api/admin/broadcast', (req, res) => {
+  const secret = req.headers['x-admin-secret'] || req.body?.secret || ''
+  if (!_checkAdminSecret(secret)) return res.status(403).json({ error: 'غير مصرح' })
+  const text     = String(req.body?.text || '').trim().slice(0, 500)
+  const link     = req.body?.link     ? String(req.body.link).slice(0, 500)     : null
+  const linkText = req.body?.linkText ? String(req.body.linkText).slice(0, 100) : null
+  const from     = String(req.body?.from || 'المشرف').slice(0, 30)
+  const scope    = req.body?.scope || 'site'  // 'site' | 'chat'
+  if (!text) return res.status(400).json({ error: 'نص الرسالة مطلوب' })
+  const id  = `bcast_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  const ts  = Date.now()
+  const payload = { id, text, from, timestamp: ts, link, linkText }
+  // SSE لجميع الزوار
+  pushNotifToAll(payload)
+  // طابور الإشعارات المعلّقة
+  _pushPendingBroadcast(payload)
+  // إذاعة في غرفة الشات أيضاً
+  try {
+    const chatMsg = pushChatMsg({
+      id: chatId(), from, fromId: 'admin', gender: 'male',
+      text, timestamp: ts, isAdmin: true, isBroadcast: true,
+      link: link || undefined, linkText: linkText || undefined,
+    })
+    broadcastChat({ type: 'message', msg: chatMsg })
+  } catch {}
+  // تخزين كإعلان عام إذا scope = site
+  if (scope === 'site') {
+    _siteAnnouncement = { id, text, link, linkText, timestamp: ts, from }
+    console.log(`[AdminBroadcast] ✅ site announcement: "${text.slice(0, 60)}"`)
+  }
+  console.log(`[AdminBroadcast] 📣 Pushed to ${_notifSseClients.size} SSE client(s): "${text.slice(0, 60)}"`)
+  res.json({ ok: true, id, sent: _notifSseClients.size, scope })
+})
+
 // ===== OWNER: COMMAND ENDPOINT =====
 app.post('/api/owner/command', async (req, res) => {
   const { message, githubToken } = req.body || {}

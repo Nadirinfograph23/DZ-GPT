@@ -59,6 +59,7 @@ import RadioMiniPlayer from './components/RadioMiniPlayer.tsx'
 import QuickNav from './components/QuickNav.tsx'
 import GlobalRobot from './components/GlobalRobot.tsx'
 import SiteAnnouncement from './components/SiteAnnouncement.tsx'
+import AdminBroadcastToast from './components/AdminBroadcastToast.tsx'
 import './styles/radio-mini-player.css'
 
 const HIDE_MINIPLAYER_ROUTES = ['/web-builder']
@@ -241,6 +242,7 @@ createRoot(document.getElementById('root')!).render(
           <QuickNav />
           <GlobalRobot />
           <SiteAnnouncement />
+          <AdminBroadcastToast />
           </RadioPlayerProvider>
           </DownloadProvider>
         </MiniPlayerProvider>

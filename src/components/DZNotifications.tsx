@@ -8,6 +8,7 @@ export interface DZNotif {
   title: string
   body: string
   link?: string
+  linkText?: string
   source?: string
   time: number
   read: boolean
@@ -163,7 +164,7 @@ export default function DZNotifications({ theme }: Props) {
         // أظهر كل إشعار جديد بتأخير بسيط لتجنب التكديس الفوري
         fresh.forEach((n, i) => {
           setTimeout(() => {
-            addNotif({ type: 'task', title: `📢 إذاعة من ${n.from}`, body: n.text })
+            addNotif({ type: 'task', title: `📢 إذاعة من ${n.from}`, body: n.text, link: (n as any).link || undefined, linkText: (n as any).linkText || undefined })
             browserPush(`📢 إذاعة من ${n.from}`, n.text)
           }, i * 1200)
         })
@@ -193,7 +194,7 @@ export default function DZNotifications({ theme }: Props) {
               const cur = parseInt(localStorage.getItem(LS_KEY) || '0', 10)
               if (data.timestamp > cur) localStorage.setItem(LS_KEY, String(data.timestamp))
             } catch {}
-            addNotif({ type: 'task', title: `📢 إذاعة من ${data.from || 'المشرف'}`, body: String(data.text).slice(0, 120) })
+            addNotif({ type: 'task', title: `📢 إذاعة من ${data.from || 'المشرف'}`, body: String(data.text).slice(0, 120), link: data.link || undefined, linkText: data.linkText || undefined })
             browserPush(`📢 إذاعة من ${data.from || 'المشرف'}`, String(data.text).slice(0, 120))
           }
         } catch {}

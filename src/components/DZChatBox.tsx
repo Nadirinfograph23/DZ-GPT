@@ -8344,32 +8344,116 @@ ${rows}
     if (!container || messages.length === 0 || screenshotLoading) return
     setScreenshotLoading(true)
     try {
+      // ── 1. Pre-load Arabic font so html2canvas finds it in the canvas context ──
+      const arabicFont = new FontFace(
+        'NotoNaskhArabic',
+        "url('/fonts/noto-naskh-arabic-400.ttf') format('truetype')",
+        { weight: '400', style: 'normal' }
+      )
+      const arabicFontBold = new FontFace(
+        'NotoNaskhArabic',
+        "url('/fonts/noto-naskh-arabic-700.ttf') format('truetype')",
+        { weight: '700', style: 'normal' }
+      )
+      await Promise.allSettled([arabicFont.load(), arabicFontBold.load()])
+        .then(results => results.forEach(r => {
+          if (r.status === 'fulfilled') document.fonts.add(r.value)
+        }))
+      await document.fonts.ready
+
       const html2canvas = (await import('html2canvas')).default
       // Save original styles
-      const origOverflow = container.style.overflow
+      const origOverflow  = container.style.overflow
       const origMaxHeight = container.style.maxHeight
-      const origHeight = container.style.height
+      const origHeight    = container.style.height
       // Expand container to full scroll height so html2canvas captures everything
-      container.style.overflow = 'visible'
+      container.style.overflow  = 'visible'
       container.style.maxHeight = 'none'
-      container.style.height = container.scrollHeight + 'px'
+      container.style.height    = container.scrollHeight + 'px'
+
+      const docWidth = document.documentElement.offsetWidth
+
       const canvas = await html2canvas(container, {
         backgroundColor: '#0b0d17',
         useCORS: true,
         allowTaint: true,
         logging: false,
-        scale: window.devicePixelRatio || 1,
+        // Use 2× fixed scale — devicePixelRatio on high-DPI phones can exceed 3
+        // and causes rendering glitches with Arabic ligatures
+        scale: Math.min(window.devicePixelRatio || 2, 2),
         width: container.offsetWidth,
         height: container.scrollHeight,
-        windowWidth: container.offsetWidth,
+        // Use full document width — prevents text reflow / wrapping changes
+        // that scatter Arabic letters when windowWidth < real layout width
+        windowWidth: docWidth,
         windowHeight: container.scrollHeight,
-        scrollX: 0,
-        scrollY: 0,
+        scrollX: -window.scrollX,
+        scrollY: -window.scrollY,
+        onclone(clonedDoc) {
+          // ── Fix Arabic rendering in the cloned document ──────────────────
+          // html2canvas renders the clone in an offscreen iframe; without explicit
+          // font & bidi fixes the Arabic shaping engine falls back to isolated
+          // letter forms, making characters appear scattered/reversed.
+          const ARABIC_FONT = "'NotoNaskhArabic', 'Noto Naskh Arabic', 'Cairo', 'Amiri', Arial, sans-serif"
+
+          // Inject @font-face + global Arabic fixes into the clone
+          const style = clonedDoc.createElement('style')
+          style.textContent = `
+            @font-face {
+              font-family: 'NotoNaskhArabic';
+              src: url('/fonts/noto-naskh-arabic-400.ttf') format('truetype');
+              font-weight: 400;
+            }
+            @font-face {
+              font-family: 'NotoNaskhArabic';
+              src: url('/fonts/noto-naskh-arabic-700.ttf') format('truetype');
+              font-weight: 700;
+            }
+            /* Override the global unicode-bidi:plaintext that breaks Arabic shaping */
+            * { unicode-bidi: normal !important; }
+            /* RTL Arabic text containers */
+            .dz-message-text,
+            .dz-message-text p,
+            .dz-message-text li,
+            .dz-message-text span,
+            .dz-message-text h1,
+            .dz-message-text h2,
+            .dz-message-text h3,
+            .dz-message-text blockquote,
+            .dz-message-text td,
+            .dz-message-text th {
+              font-family: ${ARABIC_FONT} !important;
+              unicode-bidi: embed !important;
+              direction: rtl !important;
+              text-rendering: optimizeLegibility !important;
+              -webkit-font-smoothing: antialiased !important;
+              letter-spacing: 0 !important;
+            }
+            /* User message bubbles */
+            .dz-message--user .dz-message-text {
+              font-family: ${ARABIC_FONT} !important;
+              unicode-bidi: embed !important;
+              direction: rtl !important;
+              letter-spacing: 0 !important;
+            }
+          `
+          clonedDoc.head.appendChild(style)
+
+          // Also force font on every visible text node wrapper via inline style
+          const textEls = clonedDoc.querySelectorAll<HTMLElement>(
+            '.dz-message-text, .dz-message-text *, .dz-ticker-item'
+          )
+          textEls.forEach(el => {
+            el.style.fontFamily = ARABIC_FONT
+            el.style.letterSpacing = '0'
+            el.style.unicodeBidi = 'embed'
+          })
+        },
       })
       // Restore original styles
-      container.style.overflow = origOverflow
+      container.style.overflow  = origOverflow
       container.style.maxHeight = origMaxHeight
-      container.style.height = origHeight
+      container.style.height    = origHeight
       // Download
       const dateStr = new Date().toISOString().slice(0, 10)
       const link = document.createElement('a')
@@ -8378,6 +8462,13 @@ ${rows}
       link.click()
     } catch (err) {
       console.error('[Screenshot]', err)
+      // Ensure container is restored on error
+      const container2 = messagesContainerRef.current
+      if (container2) {
+        container2.style.overflow  = ''
+        container2.style.maxHeight = ''
+        container2.style.height    = ''
+      }
     } finally {
       setScreenshotLoading(false)
     }

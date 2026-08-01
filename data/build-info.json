@@ -1,8 +1,8 @@
 {
-  "commit": "682143711ba677ad88cfd44447bf01dc3f8f4c45",
-  "commitShort": "68214371",
+  "commit": "cc93996c55a232b92ab7e98850406f6b8527b19e",
+  "commitShort": "cc93996c",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: حذف زر action log وتوسيع مساحة النص المتحرك في شريط DZ Agent",
-  "deployedAt": "2026-08-01T13:16:11.849968Z",
+  "message": "fix: حذف زر Terminal من AgentModeBar وتنظيف الكود",
+  "deployedAt": "2026-08-01T13:21:48.907303Z",
   "deployedBy": "scripts/deploy.py"
 }

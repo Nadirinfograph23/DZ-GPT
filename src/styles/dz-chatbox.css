@@ -40,6 +40,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-start; /* RTL context: flex-start = visually right (near Bot icon) */
+  direction: rtl;
   padding-right: 0.5rem;
 }
 
@@ -48,6 +49,8 @@
   overflow: hidden;
   font-size: 0.72rem;
   color: #64748b;
+  direction: rtl;
+  unicode-bidi: embed;
 }
 
 .dz-toolbar-actions {

@@ -10379,7 +10379,7 @@ ${rows}
               >
                 {screenshotLoading
                   ? <Loader2 size={15} className="dz-screenshot-spin" />
-                  : <span className="dz-input-screenshot-emoji">📸</span>
+                  : <Camera size={15} />
                 }
               </button>
             )}

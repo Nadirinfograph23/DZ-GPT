@@ -38,6 +38,8 @@
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
+  text-align: right;
+  direction: rtl;
 }
 
 .dz-toolbar-actions {

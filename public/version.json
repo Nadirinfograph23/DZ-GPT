@@ -1,8 +1,8 @@
 {
-  "commit": "540e315e45b6cba91af902963bf83f2564424c64",
-  "commitShort": "540e315e",
+  "commit": "f411f74aed2d0af7f5c457aad50fef2df935b661",
+  "commitShort": "f411f74a",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح إذاعة المشرف + طابور الإشعارات للمستخدمين الغائبين",
-  "deployedAt": "2026-08-01T10:37:57.782867Z",
+  "message": "fix: إطلاق dz:task-complete عند استقبال الإذاعة — إشعار toast للمرسل والمستقبلين",
+  "deployedAt": "2026-08-01T11:03:28.589778Z",
   "deployedBy": "scripts/deploy.py"
 }

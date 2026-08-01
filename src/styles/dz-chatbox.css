@@ -31,7 +31,14 @@
 }
 .dz-gh-bar::-webkit-scrollbar { display: none; }
 
-.dz-toolbar-spacer { flex: 1; }
+.dz-toolbar-spacer { display: none; }
+
+.dz-ticker-wrap {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
 
 .dz-toolbar-actions {
   display: flex;

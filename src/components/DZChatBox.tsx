@@ -8554,10 +8554,6 @@ ${rows}
           <button className="gh-log-toggle gh-tools-btn" onClick={() => window.open('/tools', '_blank')} title="أدوات ذكية">
             <Wrench size={13} />
           </button>
-          <button className={`gh-log-toggle ${showLog ? 'active' : ''}`} onClick={() => setShowLog(!showLog)} title="سجل الإجراءات">
-            <Terminal size={13} />
-            {actionLog.length > 0 && <span className="dz-log-badge">{actionLog.length}</span>}
-          </button>
           {/* Clear button — far right */}
           {messages.length > 0 && (
             <>

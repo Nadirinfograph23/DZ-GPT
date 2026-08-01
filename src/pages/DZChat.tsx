@@ -460,6 +460,22 @@ export default function DZChat() {
         ) {
           playDMSound()
         }
+        // ── إشعار الإذاعة: يُطلق dz:task-complete لجميع المتصلين ──────────
+        if (msg.isBroadcast) {
+          window.dispatchEvent(new CustomEvent('dz:task-complete', {
+            detail: {
+              title: `📢 إذاعة من ${msg.from}`,
+              body: String(msg.text || '').slice(0, 120),
+            },
+          }))
+          // تحديث nقطة المرجع لمنع إعادة الإشعار من طابور المعلّقات
+          try {
+            const cur = parseInt(localStorage.getItem('dz_pending_notif_ts') || '0', 10)
+            if (msg.timestamp > cur) {
+              localStorage.setItem('dz_pending_notif_ts', String(msg.timestamp))
+            }
+          } catch {}
+        }
       }
     } else if (data.type === 'profileUpdate') {
       const { userId, avatar } = data as { userId: string; avatar?: string | null }

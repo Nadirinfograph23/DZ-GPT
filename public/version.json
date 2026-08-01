@@ -1,8 +1,8 @@
 {
-  "commit": "fe44b75fdded7b19da3f69c45b2ec05e96295ee0",
-  "commitShort": "fe44b75f",
+  "commit": "c4eacfca0fbddaea78c6cf73fc448f7e6f432a3e",
+  "commitShort": "c4eacfca",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: أدوات DZ Agent - اعتراض صحيح لاستعلامات الأدوات مع شبكة أزرار تفاعلية",
-  "deployedAt": "2026-07-31T18:40:05.815809Z",
+  "message": "fix: إصلاح TypeScript - إزالة مرجع Hls المتبقي وإضافة declarations لـ pdfjs-dist و hls.js",
+  "deployedAt": "2026-08-01T00:44:34.794648Z",
   "deployedBy": "scripts/deploy.py"
 }

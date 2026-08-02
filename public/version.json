@@ -1,8 +1,8 @@
 {
-  "commit": "d550464c7c4bd2a27081378440afedfaafc6ac12",
-  "commitShort": "d550464c",
+  "commit": "5503dda73f16206dcfe693b2caa7421315bb286a",
+  "commitShort": "5503dda7",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: مهام 3 — كشف الوظائف+LinkedIn+Indeed، إصلاح ترجمة الصور، نظام الحِكم الجزائرية",
-  "deployedAt": "2026-08-02T15:17:06.006332Z",
+  "message": "fix: bypass jobs queries from toolRedirect+capabilityKB — إصلاح اعتراض طلبات الوظائف",
+  "deployedAt": "2026-08-02T15:27:35.017230Z",
   "deployedBy": "scripts/deploy.py"
 }

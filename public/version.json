@@ -1,8 +1,8 @@
 {
-  "commit": "ab9ac1e08827d9e208e231d17f995e292e616b27",
-  "commitShort": "ab9ac1e0",
+  "commit": "ce4f3cf746ef387b4eb2cac03877dfd33a0abd09",
+  "commitShort": "ce4f3cf7",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح بحث الصور — تطبيع الهمزة + شهداء الثورة في القاموس + حل الترجمة الجزئية",
-  "deployedAt": "2026-08-02T02:14:17.970707Z",
+  "message": "feat: محرك بحث الوظائف — 11 موقع جزائري (ANEM + Emploitic + Annexe + Tawdif + Jobs4DZ + DzJob + Ouedkniss + LinkedIn + Indeed)",
+  "deployedAt": "2026-08-02T02:22:04.796287Z",
   "deployedBy": "scripts/deploy.py"
 }

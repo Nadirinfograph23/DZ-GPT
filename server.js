@@ -249,7 +249,8 @@ import { isComplexBuildTask, buildWebsiteMultiTask, buildCodeMultiTask } from '.
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE, DEVELOPER_LOCK_LAYER, ADVANCED_INJECTION_GUARD, SERVICES_GUIDE_LAYER, SPORTS_AGENT_ORCHESTRATOR_POLICY } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import { getDZKBContext } from './lib/dz-kb/index.js'
-import { isJobsQuery, buildJobsSearchQueries, DZ_JOBS_SYSTEM_LAYER, formatJobsSearchContext } from './lib/dz-jobs-intent.js'
+import { isJobsQuery, buildJobsSearchQueries, classifyJobQuery, DZ_JOBS_SYSTEM_LAYER, formatJobsSearchContext } from './lib/dz-jobs-intent.js'
+import { searchDZJobsAllSources } from './lib/dz-jobs-scraper.js'
 import { isTimeSensitiveQuery, detectTimeSensitiveIntent, buildEventSearchQuery } from './lib/dz-event-intent.js'
 import {
   detectPresidentYearQuery, detectPMYearQuery,
@@ -25955,27 +25956,39 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const _isJobsQuery = isJobsQuery(lastUserMessage)
   if (_isJobsQuery) {
     try {
-      console.log('[DZ-Jobs] Jobs/Concours intent detected — starting live search')
+      console.log('[DZ-Jobs] Jobs/Concours intent detected — starting live search (11 sources)')
       const jobsQueries = buildJobsSearchQueries(lastUserMessage)
-      console.log(`[DZ-Jobs] Queries: ${jobsQueries.map(q => `"${q.slice(0,50)}"`).join(' | ')}`)
-      // بحث متوازٍ في أول استعلامين للسرعة
-      const [r1, r2] = await Promise.allSettled([
+      const { isConcours, isPrivate } = classifyJobQuery(lastUserMessage)
+      console.log(`[DZ-Jobs] Queries: ${jobsQueries.map(q => `"${q.slice(0,50)}"`).join(' | ')} | isConcours=${isConcours} isPrivate=${isPrivate}`)
+
+      // ── بحث متوازٍ: SearXNG (عام) + Direct Scrapers (11 موقع) ──────────
+      const [searxR1, searxR2, scrapedResults] = await Promise.allSettled([
         searchSearXNG(jobsQueries[0], { categories: 'general', language: 'ar', maxResults: 6, timeoutMs: 8000 }),
-        jobsQueries[1] ? searchSearXNG(jobsQueries[1], { categories: 'general', language: 'fr', maxResults: 5, timeoutMs: 7000 }) : Promise.resolve([]),
+        jobsQueries[1]
+          ? searchSearXNG(jobsQueries[1], { categories: 'general', language: 'fr', maxResults: 5, timeoutMs: 7000 })
+          : Promise.resolve([]),
+        searchDZJobsAllSources(lastUserMessage, { isConcours, isPrivate }),
       ])
-      const combined = [
-        ...(r1.status === 'fulfilled' && r1.value ? r1.value : []),
-        ...(r2.status === 'fulfilled' && r2.value ? r2.value : []),
+
+      const fromSearX = [
+        ...(searxR1.status === 'fulfilled' && searxR1.value ? searxR1.value : []),
+        ...(searxR2.status === 'fulfilled' && searxR2.value ? searxR2.value : []),
       ]
+      const fromScrapers = scrapedResults.status === 'fulfilled' ? (scrapedResults.value || []) : []
+
+      // دمج: المصادر المباشرة أولاً (أكثر دقة) ثم نتائج SearXNG
+      const combined = [...fromScrapers, ...fromSearX]
+
       // إزالة التكرار بالـ URL
       const seen = new Set()
       const unique = combined.filter(r => {
-        const key = (r.url || r.title || '').toLowerCase()
+        const key = (r.url || r.title || '').toLowerCase().slice(0, 120)
         if (seen.has(key)) return false
         seen.add(key)
         return true
       })
-      console.log(`[DZ-Jobs] Combined unique results: ${unique.length}`)
+
+      console.log(`[DZ-Jobs] Results: scrapers=${fromScrapers.length} searx=${fromSearX.length} unique=${unique.length}`)
       _jobsSystemLayer = DZ_JOBS_SYSTEM_LAYER
       _jobsSearchContext = formatJobsSearchContext(unique, lastUserMessage)
     } catch (jobsErr) {

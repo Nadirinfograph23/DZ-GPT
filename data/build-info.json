@@ -1,8 +1,8 @@
 {
-  "commit": "b71a846f30b5450b518eb53c6b491c74daf57a6e",
-  "commitShort": "b71a846f",
+  "commit": "0e6981ee5abfcd1164435922168633e9bfcfea8d",
+  "commitShort": "0e6981ee",
   "branch": "devin/1774405518-init-dz-gpt",
   "message": "fix: IMAGE_SEARCH intent — صور نادرة/تاريخية تذهب لـ Pinterest+Wikimedia لا للأخبار",
-  "deployedAt": "2026-08-02T01:44:21.629693Z",
+  "deployedAt": "2026-08-02T01:46:26.023437Z",
   "deployedBy": "scripts/deploy.py"
 }

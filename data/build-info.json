@@ -1,8 +1,8 @@
 {
-  "commit": "b14a7dcac142eaf614de6f108198350be9061e2a",
-  "commitShort": "b14a7dca",
+  "commit": "7ae4a67052703a483a416f289f9810d879c89c52",
+  "commitShort": "7ae4a670",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح DZ Jobs Intent — تفعيل البحث الحي للوظائف والمسابقات، منع LLM من الإجابة من ذاكرته الداخلية، إضافة كلمات الدارجة، تعزيز NON_MAP_REGEXES وإصلاح isDirectFactualQuestion",
-  "deployedAt": "2026-08-02T01:12:01.667050Z",
+  "message": "fix: JOBS_CONCOURS intent — DZ Agent يبحث في مصادر التوظيف بدلاً من LLM",
+  "deployedAt": "2026-08-02T01:37:45.790509Z",
   "deployedBy": "scripts/deploy.py"
 }

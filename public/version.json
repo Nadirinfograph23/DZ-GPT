@@ -1,8 +1,8 @@
 {
-  "commit": "7ae4a67052703a483a416f289f9810d879c89c52",
-  "commitShort": "7ae4a670",
+  "commit": "b71a846f30b5450b518eb53c6b491c74daf57a6e",
+  "commitShort": "b71a846f",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: JOBS_CONCOURS intent — DZ Agent يبحث في مصادر التوظيف بدلاً من LLM",
-  "deployedAt": "2026-08-02T01:37:45.790509Z",
+  "message": "fix: IMAGE_SEARCH intent — صور نادرة/تاريخية تذهب لـ Pinterest+Wikimedia لا للأخبار",
+  "deployedAt": "2026-08-02T01:44:21.629693Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1,8 +1,8 @@
 {
-  "commit": "ce4f3cf746ef387b4eb2cac03877dfd33a0abd09",
-  "commitShort": "ce4f3cf7",
+  "commit": "d550464c7c4bd2a27081378440afedfaafc6ac12",
+  "commitShort": "d550464c",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: محرك بحث الوظائف — 11 موقع جزائري (ANEM + Emploitic + Annexe + Tawdif + Jobs4DZ + DzJob + Ouedkniss + LinkedIn + Indeed)",
-  "deployedAt": "2026-08-02T02:22:04.796287Z",
+  "message": "feat: مهام 3 — كشف الوظائف+LinkedIn+Indeed، إصلاح ترجمة الصور، نظام الحِكم الجزائرية",
+  "deployedAt": "2026-08-02T15:17:06.006332Z",
   "deployedBy": "scripts/deploy.py"
 }

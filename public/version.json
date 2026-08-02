@@ -1,8 +1,8 @@
 {
-  "commit": "e2706e2628ade117a96e8a9e0e873f89af3c97b2",
-  "commitShort": "e2706e26",
+  "commit": "b14a7dcac142eaf614de6f108198350be9061e2a",
+  "commitShort": "b14a7dca",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: add DZ Jobs & Concours live search isolated intent — detects job/competition queries, runs multi-query SearXNG search, injects results as structured cards layer",
-  "deployedAt": "2026-08-02T00:10:37.868007Z",
+  "message": "fix: إصلاح DZ Jobs Intent — تفعيل البحث الحي للوظائف والمسابقات، منع LLM من الإجابة من ذاكرته الداخلية، إضافة كلمات الدارجة، تعزيز NON_MAP_REGEXES وإصلاح isDirectFactualQuestion",
+  "deployedAt": "2026-08-02T01:12:01.667050Z",
   "deployedBy": "scripts/deploy.py"
 }

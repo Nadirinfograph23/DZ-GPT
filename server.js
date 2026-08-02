@@ -25984,7 +25984,36 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       _jobsSearchContext = formatJobsSearchContext([], lastUserMessage)
     }
   }
-  // ────────────────────────────────────────────────────────────────────
+  // ── JOBS/CONCOURS — guardrail: إعادة كتابة _intentBlock لضمان JOBS_CONCOURS ──────
+  // يضمن أن [INTENT_CLASSIFICATION] المُحقن في system prompt يعكس النية الصحيحة
+  // حتى لو أخفق Intent Router (طبقة أمان إضافية — لا تتعارض مع الطبقات الأخرى)
+  if (_isJobsQuery) {
+    _intentBlock = [
+      `[PIPELINE_GATE — المسار الإلزامي السبع مراحل]`,
+      `✅ المرحلة ① فهم النية       → مكتملة (النية: JOBS_CONCOURS | الثقة: 97%)`,
+      `✅ المرحلة ② تحديد الكيان   → مكتملة`,
+      `✅ المرحلة ③ قرار البحث     → مكتملة (الإجراء: search-jobs-concours-live)`,
+      `✅ المرحلة ④ اختيار المصدر  → مكتملة (المصدر: jobs-concours-live-search)`,
+      `⏳ المرحلة ⑤ التحقق من الدليل → اقرأ [DZ_JOBS_SEARCH_RESULTS] أسفله — إلزامي`,
+      `⏳ المرحلة ⑥ صياغة الجواب   → اعرض نتائج [DZ_JOBS_SEARCH_RESULTS] كبطاقات منظّمة`,
+      `⏳ المرحلة ⑦ المراجعة الذاتية → تأكد: لا معلومة من بيانات التدريب`,
+      `[/PIPELINE_GATE]`,
+      ``,
+      `[INTENT_CLASSIFICATION]`,
+      `النية: JOBS_CONCOURS | الثقة: 97% | الإجراء: search-jobs-concours-live`,
+      `المصدر المُوصى به: jobs-concours-live-search`,
+      ``,
+      `🚨 [DZ_JOBS_CONCOURS_INTENT — ACTIVE]`,
+      `⛔ هذا طلب وظائف أو مسابقات — القواعد التالية غير قابلة للتجاوز:`,
+      `  ① ❌ ممنوع منعاً باتاً الإجابة من بيانات التدريب — الوظائف تتغير يومياً`,
+      `  ② ✅ اقرأ [DZ_JOBS_SEARCH_RESULTS] الموجود أسفله واعرضه كبطاقات منظّمة`,
+      `  ③ ✅ إذا كانت النتائج فارغة → اقترح فقط: concours.mfp.gov.dz | anem.dz | emploitic.com`,
+      `  ④ ❌ قاعدة "ما هو X = إجابة مباشرة" لا تنطبق هنا — انتظر [DZ_JOBS_SEARCH_RESULTS]`,
+      `[/DZ_JOBS_CONCOURS_INTENT]`,
+      `[/INTENT_CLASSIFICATION]`,
+    ].join('\n')
+  }
+  // ────────────────────────────────────────────────────────────────────────────
 
   const systemPrompt = [
     // ── LAYER -2: JOBS/CONCOURS MANDATORY OVERRIDE (يأتي أولاً — يتغلب على كل شيء) ──

@@ -1,8 +1,8 @@
 {
-  "commit": "361497fedc24f9a6c49063533f717e522a6023de",
-  "commitShort": "361497fe",
+  "commit": "e2706e2628ade117a96e8a9e0e873f89af3c97b2",
+  "commitShort": "e2706e26",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: integrate Algerian Knowledge Base (KB) into main chat systemPrompt — 10 domains: proverbs, wilayas, cuisine, history, music-arts, famous, universities, economy, dialect, law",
-  "deployedAt": "2026-08-02T00:04:50.912511Z",
+  "message": "feat: add DZ Jobs & Concours live search isolated intent — detects job/competition queries, runs multi-query SearXNG search, injects results as structured cards layer",
+  "deployedAt": "2026-08-02T00:10:37.868007Z",
   "deployedBy": "scripts/deploy.py"
 }

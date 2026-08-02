@@ -248,6 +248,7 @@ import { analyzeMultiIntent, buildMultiIntentSystemLayer, verifyCompleteness, bu
 import { isComplexBuildTask, buildWebsiteMultiTask, buildCodeMultiTask } from './lib/agent-build-engine.js'
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE, DEVELOPER_LOCK_LAYER, ADVANCED_INJECTION_GUARD, SERVICES_GUIDE_LAYER, SPORTS_AGENT_ORCHESTRATOR_POLICY } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
+import { getDZKBContext } from './lib/dz-kb/index.js'
 import { isTimeSensitiveQuery, detectTimeSensitiveIntent, buildEventSearchQuery } from './lib/dz-event-intent.js'
 import {
   detectPresidentYearQuery, detectPMYearQuery,
@@ -25941,6 +25942,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const _multiIntentLayer    = buildMultiIntentSystemLayer(_multiIntentAnalysis)
   logMultiIntentAnalysis(_multiIntentAnalysis)
   // ══════════════════════════════════════════════════════════════════════
+  const _dzKBLayer = getDZKBContext(lastUserMessage)
 
   const systemPrompt = [
     // ── LAYER -1: MULTI-INTENT OVERRIDE (يأتي أولاً لضمان الإجابة عن كل سؤال) ─
@@ -25963,6 +25965,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       : '',
     // ── LAYER 2: COGNITIVE BEHAVIOR RULES (قواعد السلوك المعرفي — إلزامية) ─
     COGNITIVE_BEHAVIOR_RULES,
+    // ── LAYER 2b: ALGERIAN KNOWLEDGE BASE (معلومات جزائرية موثوقة) ─────────
+    _dzKBLayer || '',
     // ── LAYER 17: PUBLIC FIGURES & HISTORICAL EVENTS VERIFICATION POLICY ──
     PUBLIC_FIGURES_VERIFICATION_POLICY,
     // ── LAYER 18: SEARCH & KNOWLEDGE ARCHITECTURE (SearXNG Edition) ───────

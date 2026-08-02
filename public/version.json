@@ -1,8 +1,8 @@
 {
-  "commit": "0e6981ee5abfcd1164435922168633e9bfcfea8d",
-  "commitShort": "0e6981ee",
+  "commit": "ab9ac1e08827d9e208e231d17f995e292e616b27",
+  "commitShort": "ab9ac1e0",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: IMAGE_SEARCH intent — صور نادرة/تاريخية تذهب لـ Pinterest+Wikimedia لا للأخبار",
-  "deployedAt": "2026-08-02T01:46:26.023437Z",
+  "message": "fix: إصلاح بحث الصور — تطبيع الهمزة + شهداء الثورة في القاموس + حل الترجمة الجزئية",
+  "deployedAt": "2026-08-02T02:14:17.970707Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -249,6 +249,7 @@ import { isComplexBuildTask, buildWebsiteMultiTask, buildCodeMultiTask } from '.
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE, DEVELOPER_LOCK_LAYER, ADVANCED_INJECTION_GUARD, SERVICES_GUIDE_LAYER, SPORTS_AGENT_ORCHESTRATOR_POLICY } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import { getDZKBContext } from './lib/dz-kb/index.js'
+import { isJobsQuery, buildJobsSearchQueries, DZ_JOBS_SYSTEM_LAYER, formatJobsSearchContext } from './lib/dz-jobs-intent.js'
 import { isTimeSensitiveQuery, detectTimeSensitiveIntent, buildEventSearchQuery } from './lib/dz-event-intent.js'
 import {
   detectPresidentYearQuery, detectPMYearQuery,
@@ -25944,6 +25945,43 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ══════════════════════════════════════════════════════════════════════
   const _dzKBLayer = getDZKBContext(lastUserMessage)
 
+  // ── DZ Jobs & Concours Intent (معزول — بحث حي مستقل) ──────────────
+  let _jobsSystemLayer = ''
+  let _jobsSearchContext = ''
+  const _isJobsQuery = isJobsQuery(lastUserMessage)
+  if (_isJobsQuery) {
+    try {
+      console.log('[DZ-Jobs] Jobs/Concours intent detected — starting live search')
+      const jobsQueries = buildJobsSearchQueries(lastUserMessage)
+      console.log(`[DZ-Jobs] Queries: ${jobsQueries.map(q => `"${q.slice(0,50)}"`).join(' | ')}`)
+      // بحث متوازٍ في أول استعلامين للسرعة
+      const [r1, r2] = await Promise.allSettled([
+        searchSearXNG(jobsQueries[0], { categories: 'general', language: 'ar', maxResults: 6, timeoutMs: 8000 }),
+        jobsQueries[1] ? searchSearXNG(jobsQueries[1], { categories: 'general', language: 'fr', maxResults: 5, timeoutMs: 7000 }) : Promise.resolve([]),
+      ])
+      const combined = [
+        ...(r1.status === 'fulfilled' && r1.value ? r1.value : []),
+        ...(r2.status === 'fulfilled' && r2.value ? r2.value : []),
+      ]
+      // إزالة التكرار بالـ URL
+      const seen = new Set()
+      const unique = combined.filter(r => {
+        const key = (r.url || r.title || '').toLowerCase()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      console.log(`[DZ-Jobs] Combined unique results: ${unique.length}`)
+      _jobsSystemLayer = DZ_JOBS_SYSTEM_LAYER
+      _jobsSearchContext = formatJobsSearchContext(unique, lastUserMessage)
+    } catch (jobsErr) {
+      console.warn('[DZ-Jobs] Search error:', jobsErr.message)
+      _jobsSystemLayer = DZ_JOBS_SYSTEM_LAYER
+      _jobsSearchContext = formatJobsSearchContext([], lastUserMessage)
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────
+
   const systemPrompt = [
     // ── LAYER -1: MULTI-INTENT OVERRIDE (يأتي أولاً لضمان الإجابة عن كل سؤال) ─
     _multiIntentLayer || '',
@@ -26177,6 +26215,10 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 1500)}\n> انسخ الجدول أعلاه كما هو. لا تخترع أرقاماً.` : '',
     rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 7000)}\n> ⚠️ قواعد عرض الأخبار (إلزامية):\n> 1. ابدأ مباشرةً بأول مصدر — بدون مقدمة ولا "راني نخمم"\n> 2. رتّب حسب المصدر: **اسم الصحيفة:** ثم 5 أخبار على الأقل لكل مصدر\n> 3. عناوين الأخبار فقط — بدون روابط ولا URLs ولا markdown links\n> 4. في نهاية الإجابة: 💡 قد يهمك أيضاً: 📰 رياضية / 💰 اقتصادية / 🌍 دولية\n> 5. لا تخترع أي معلومة${_economyIntent?.isEconomy ? '\n> 💡 اقتصاد: لا تستخدم أرقام بيانات التدريب — هذه الأخبار أحدث وأدق.' : ''}` : '',
     webSearchContext ? `🔍 نتائج البحث الحي:\n${_trim(webSearchContext, 3000)}\n> هذا مصدرك الوحيد للمعلومات الآنية. لا تخترع. [اسم](رابط) فقط.` : '',
+    // ── DZ Jobs Intent (معزول) ──────────────────────────────────────────
+    _jobsSystemLayer || '',
+    _jobsSearchContext ? `\n${_jobsSearchContext}` : '',
+    // ────────────────────────────────────────────────────────────────────
     weatherPriorityContext ? `🌤️ بيانات الطقس (جدول جاهز للعرض — لا تعيد صياغته):\n${_trim(weatherPriorityContext, 600)}\n> ابدأ إجابتك بهذا الجدول مباشرةً. لا تضف أي عناوين قبله. اذكر المصدر في آخر سطر فقط.` : '',
     educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',
     clientBehaviorContext ? `🧠 سياق المستخدم: ${clientBehaviorContext}` : '',

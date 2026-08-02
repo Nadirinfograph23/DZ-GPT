@@ -8539,6 +8539,10 @@ function detectQueryIntent(msg) {
 // مثال: "ما هي آخر أخبار الرئيس؟" → بحث في الويب
 function isDirectFactualQuestion(msg) {
   if (!msg || msg.length < 5) return false
+  // ── حارس الوظائف والمسابقات (أولوية قصوى) ────────────────────────────
+  // الوظائف والمسابقات تتغير يومياً → لا تُصنَّف كـ "سؤال مباشر" أبداً
+  if (isJobsQuery(msg)) return false
+  // ─────────────────────────────────────────────────────────────────────
   // إذا كانت تحتوي على مؤشرات أخبار/زمنية → ليست سؤالاً واقعياً مباشراً
   const hasNewsIndicator = /أخبار|خبر جديد|آخر\s+(?:أخبار|المستجدات)|جديد.*خبر|اليوم|الآن\s*،|عاجل|أحدث\s+الأخبار|مؤخراً|recently|latest\s+news|breaking\s+news|today'?s?\s+news|actualité|récente?|new developments/i.test(msg)
   if (hasNewsIndicator) return false
@@ -25983,6 +25987,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ────────────────────────────────────────────────────────────────────
 
   const systemPrompt = [
+    // ── LAYER -2: JOBS/CONCOURS MANDATORY OVERRIDE (يأتي أولاً — يتغلب على كل شيء) ──
+    // يُحقن فقط عند كشف نية الوظائف/المسابقات — يمنع LLM من الإجابة من ذاكرته الداخلية
+    _isJobsQuery ? `🚨 OVERRIDE MANDATORY — DZ_JOBS_CONCOURS_INTENT 🚨
+⛔ هذا طلب وظائف أو مسابقات. القواعد التالية تُبطل كل قاعدة أخرى في هذا الـ prompt:
+① ممنوع منعاً باتاً الإجابة من بيانات تدريبك الداخلية — بيانات الوظائف تنتهي صلاحيتها يومياً
+② يجب قراءة [DZ_JOBS_SEARCH_RESULTS] الموجود في هذا الـ prompt والإجابة منه حصراً
+③ قاعدة "ما هو X / ما هي X = إجابة مباشرة" لا تنطبق هنا — اقرأ نتائج البحث أولاً
+④ إذا كانت [DZ_JOBS_SEARCH_RESULTS] فارغة → اقترح المصادر الرسمية ولا تخترع بيانات أبداً` : '',
     // ── LAYER -1: MULTI-INTENT OVERRIDE (يأتي أولاً لضمان الإجابة عن كل سؤال) ─
     _multiIntentLayer || '',
     // ── LAYER 0: INTENT SEPARATION GUARD (mandatory — always first) ───────

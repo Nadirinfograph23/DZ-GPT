@@ -25984,6 +25984,37 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       _jobsSearchContext = formatJobsSearchContext([], lastUserMessage)
     }
   }
+  // ── IMAGE SEARCH — guardrail: إعادة كتابة _intentBlock لضمان IMAGE_SEARCH ──────────
+  // يضمن أن طلبات الصور لا تذهب لمحرك الأخبار أو التاريخ النصي
+  if (isImageSearchQuery(lastUserMessage) && !_isJobsQuery) {
+    _intentBlock = [
+      `[PIPELINE_GATE — المسار الإلزامي السبع مراحل]`,
+      `✅ المرحلة ① فهم النية       → مكتملة (النية: IMAGE_SEARCH | الثقة: 95%)`,
+      `✅ المرحلة ② تحديد الكيان   → مكتملة`,
+      `✅ المرحلة ③ قرار البحث     → مكتملة (الإجراء: search-images-pinterest-wikimedia)`,
+      `✅ المرحلة ④ اختيار المصدر  → مكتملة (المصدر: Pinterest + Wikimedia Commons + DuckDuckGo)`,
+      `⏳ المرحلة ⑤ → اعرض الصور الواردة في النتائج`,
+      `⏳ المرحلة ⑥ → تنسيق: صورة + عنوان + مصدر + رابط لكل نتيجة`,
+      `⏳ المرحلة ⑦ → تأكد: لا نص موسوعي — الهدف صور فقط`,
+      `[/PIPELINE_GATE]`,
+      ``,
+      `[INTENT_CLASSIFICATION]`,
+      `النية: IMAGE_SEARCH | الثقة: 95% | الإجراء: search-images-pinterest-wikimedia`,
+      `المصدر المُوصى به: Pinterest + Wikimedia Commons + DuckDuckGo Images`,
+      ``,
+      `🖼️ [IMAGE_SEARCH_INTENT — ACTIVE]`,
+      `⛔ هذا طلب صور حقيقية — ليس طلب أخبار ولا نص موسوعي:`,
+      `  ① ❌ ممنوع البحث في الأخبار أو الويكيبيديا كنص — المطلوب صور`,
+      `  ② ✅ المصادر: Pinterest + Wikimedia Commons + DuckDuckGo Images`,
+      `  ③ ✅ الصور التاريخية/النادرة → Pinterest لديه أرشيف ضخم من الصور النادرة`,
+      `  ④ ✅ اعرض كل صورة: عنوان + رابط الصورة + المصدر`,
+      `  ⑤ ❌ ممنوع تحويل الطلب لإجابة نصية موسوعية — الهدف عرض الصور`,
+      `[/IMAGE_SEARCH_INTENT]`,
+      `[/INTENT_CLASSIFICATION]`,
+    ].join('\n')
+  }
+  // ──────────────────────────────────────────────────────────────────────────────
+
   // ── JOBS/CONCOURS — guardrail: إعادة كتابة _intentBlock لضمان JOBS_CONCOURS ──────
   // يضمن أن [INTENT_CLASSIFICATION] المُحقن في system prompt يعكس النية الصحيحة
   // حتى لو أخفق Intent Router (طبقة أمان إضافية — لا تتعارض مع الطبقات الأخرى)

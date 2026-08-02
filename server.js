@@ -3452,21 +3452,12 @@ const TOOL_REDIRECT_MAP = [
       /(?:شغّل|شغل|دير)\s*(?:سورة|قرآن|تلاوة)/i,
     ],
   },
-  // ── Jobs ────────────────────────────────────────────────────────────────
-  {
-    id: 'jobs',
-    toolName: 'بحث وظيفي',
-    toolUrl: '/tools?tool=jobs',
-    toolIcon: '💼',
-    toolDesc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم',
-    smartMessage: 'لديّ **وكيل البحث الوظيفي** — يبحث عن الوظائف في الجزائر ويُولّد لك رسالة تقدم مخصصة ويُقدّم نصائح مقابلة العمل، كل ذلك في مكان واحد.',
-    patterns: [
-      /(?:ابحث|نبحث|دور)\s*(?:على|عن)\s*(?:وظيفة|عمل|منصب|شغل)/i,
-      /(?:وظيفة|عمل|شغل)\s*(?:في\s*)?(?:الجزائر|جزائر)/i,
-      /offre\s*(?:d')?emploi|emploi.*algér|job.*algérie/i,
-      /(?:نبغي|بغيت|حابب)\s*(?:نخدم|نلقى\s*خدمة|وظيفة)/i,
-    ],
-  },
+  // ── Jobs ─── مُعطَّل: يُعالَج بالكامل من isJobsQuery + searchDZJobsAllSources (11 مصدر حي)
+  // لا إعادة توجيه — المحرك الحي أفضل من صفحة الأدوات الثابتة
+  // {
+  //   id: 'jobs',
+  //   patterns: [/(?:ابحث|نبحث)\s*(?:على|عن)\s*(?:وظيفة|عمل)/i, ...],
+  // },
   // ── Health ──────────────────────────────────────────────────────────────
   {
     id: 'health',
@@ -17945,7 +17936,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _capBypassCurrency = detectCurrencyQuery(_rawLastMsg)
     // فيديو/يوتيوب حقيقي: مطابقة نفس نمط _ytKwRe_pre المبكر
     const _capBypassYouTube = /(?:فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|ابحث.*(?:فيديو|يوتيوب)|شرح.*بالفيديو|درس.*بالفيديو|فيديو.*يشرح|أفضل.*فيديو|best.*video|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب)/i.test(_rawLastMsg)
-    if (!_capBypassWeather && !_capBypassCurrency && !_capBypassYouTube) {
+    // وظائف/مسابقات حقيقية: يذهب لمحرك البحث الحي (11 مصدر جزائري) لا لـ capability guide
+    const _capBypassJobs = isJobsQuery(_rawLastMsg)
+    if (!_capBypassWeather && !_capBypassCurrency && !_capBypassYouTube && !_capBypassJobs) {
       const _capResp = getCapabilityResponse(_rawLastMsg)
       if (_capResp) {
         console.log(`[CapabilityKB] ✅ "${_rawLastMsg.slice(0,50)}" → خدمة مكتشفة`)

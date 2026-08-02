@@ -251,6 +251,7 @@ import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import { getDZKBContext } from './lib/dz-kb/index.js'
 import { isJobsQuery, buildJobsSearchQueries, classifyJobQuery, DZ_JOBS_SYSTEM_LAYER, formatJobsSearchContext } from './lib/dz-jobs-intent.js'
 import { searchDZJobsAllSources } from './lib/dz-jobs-scraper.js'
+import { isProverbQuery, getProverbs, formatProverbsResponse } from './lib/dz-proverbs.js'
 import { isTimeSensitiveQuery, detectTimeSensitiveIntent, buildEventSearchQuery } from './lib/dz-event-intent.js'
 import {
   detectPresidentYearQuery, detectPMYearQuery,
@@ -20460,6 +20461,25 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         mode: 'clarification',
         clarificationCase: _ambiguity.caseId,
       })
+    }
+  }
+
+  // ── Algerian Proverbs Engine — حِكم وأمثال جزائرية (بدون LLM) ─────────────
+  // يُفعَّل عند: "مثل جزائري" / "حكمة جزائرية" / "أمثال شعبية" ...
+  if (isProverbQuery(lastUserMessage)) {
+    console.log(`[DZ-Proverbs] Proverb/wisdom intent detected: "${lastUserMessage.slice(0, 80)}"`)
+    try {
+      const proverbs = await getProverbs(lastUserMessage, { count: 5, type: 'auto' })
+      const content = formatProverbsResponse(proverbs, lastUserMessage)
+      return res.status(200).json({
+        content,
+        mode: 'dz-proverbs',
+        _proverbs: true,
+        count: proverbs.length,
+      })
+    } catch (prvErr) {
+      console.warn('[DZ-Proverbs] Error:', prvErr.message)
+      // نتابع الطريق الطبيعي إذا فشل
     }
   }
 

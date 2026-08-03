@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "include": ["/api/*", "/ws/*"],
+  "exclude": [
+    "/assets/*",
+    "/fonts/*",
+    "/favicon.ico",
+    "/favicon-32.png",
+    "/apple-touch-icon.png",
+    "/pwa-192x192.png",
+    "/pwa-512x512.png",
+    "/icon.svg",
+    "/vite.svg",
+    "/manifest.webmanifest",
+    "/robots.txt",
+    "/sw.js",
+    "/version.json"
+  ]
+}

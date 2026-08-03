@@ -11,9 +11,20 @@
 | **الفرع النشط** | `devin/1774405518-init-dz-gpt` ← كل التحديثات هنا فقط |
 | **Repo** | `https://github.com/Nadirinfograph23/DZ-GPT` |
 | **Vercel** | https://dz-gpt.vercel.app — Project ID: `prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5` |
+| **Cloudflare Pages** | مربوط بنفس الـ Repo — يُنشر تلقائياً عند كل push |
 | **Deploy Hook** | مربوط بالفرع — يُطلق تلقائياً عند كل push |
 
 > 🚨 لا تعديل على `main` أبداً. `git commit/push` مقيّد — نستخدم `scripts/deploy.py` فقط.
+
+### إعداد Cloudflare Pages (مرة واحدة فقط)
+1. Cloudflare Dashboard → Pages → Create a project → Connect to Git → اختر `DZ-GPT`
+2. Framework preset: **Vite** | Build command: `npm run build` | Output: `dist`
+3. **Environment variables** → أضف كل الأسرار التالية (نفس قيم Replit Secrets):
+   - `AI_API_KEY`, `GEMINI_API_KEY`, `MISTRAL_API_KEY`, `NVIDIA_API_KEY`
+   - `COHERE_API_KEY`, `OPENROUTER_API_KEY`, `HF_TOKEN`, `OPENWEATHER_API_KEY`
+   - `GITHUB_TOKEN`, `VERCEL_TOKEN`, `SESSION_SECRET`
+   - `CF_ACCOUNT_ID`, `CF_API_TOKEN`, `CF_SECRET_ACCESS_KEY`, `CF_S3_ENDPOINT`
+4. Branch: `devin/1774405518-init-dz-gpt` ← نفس الفرع النشط
 
 ---
 

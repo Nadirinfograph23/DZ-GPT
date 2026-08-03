@@ -714,7 +714,7 @@ setInterval(async () => {
 // ⚠️ مُعطَّل على Vercel: الـ setInterval يُنشئ commit كل ساعة → deployment جديد
 //    → يستنزف fluidCpuDuration ويؤدي إلى FAIR_USE_LIMITS_EXCEEDED (soft-block)
 //    الحل: يعمل فقط في بيئة Replit/local وليس على Vercel
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL && !process.env.CF_PAGES) {
   setInterval(async () => {
     if (!_visitorsStore.visits.length) return
     const now = Date.now()
@@ -16458,7 +16458,7 @@ app.get('/api/dz-agent/sync/status', async (_req, res) => {
       pendingTotal: changedFiles + unpushedCommits,
       localSha,
       remoteSha,
-      runtime: process.env.VERCEL ? 'vercel' : 'replit',
+      runtime: process.env.CF_PAGES ? 'cloudflare' : process.env.VERCEL ? 'vercel' : 'replit',
     })
   } catch {
     return res.json({
@@ -16467,7 +16467,7 @@ app.get('/api/dz-agent/sync/status', async (_req, res) => {
       hasVercelToken: !!process.env.VERCEL_TOKEN,
       hasDeployAdminToken: !!process.env.DEPLOY_ADMIN_TOKEN,
       deployReady: !!(process.env.GITHUB_TOKEN && process.env.VERCEL_TOKEN && process.env.DEPLOY_ADMIN_TOKEN),
-      runtime: process.env.VERCEL ? 'vercel' : 'unknown',
+      runtime: process.env.CF_PAGES ? 'cloudflare' : process.env.VERCEL ? 'vercel' : 'unknown',
     })
   }
 })
@@ -35866,7 +35866,7 @@ app.post('/api/tools/img-inpaint', express.json({ limit: '30mb' }), async (req, 
   const mskB64 = maskBase64.includes(',') ? maskBase64.split(',')[1] : maskBase64
 
   // ── Primary: Python skimage biharmonic inpainting (Replit / self-hosted) ────
-  if (!process.env.VERCEL) {
+  if (!process.env.VERCEL && !process.env.CF_PAGES) {
     const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'scripts', 'inpaint.py')
     const pythonLibs = path.join(path.dirname(fileURLToPath(import.meta.url)), '.pythonlibs', 'lib', 'python3.11', 'site-packages')
     const payload = JSON.stringify({ image: imgB64, mask: mskB64 })

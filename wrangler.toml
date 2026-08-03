@@ -1,0 +1,13 @@
+name = "dz-gpt"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat_v2"]
+
+pages_build_output_dir = "dist"
+
+# ── Environment variables (non-secret) ────────────────────────────────────────
+# Secrets are set via: Cloudflare Dashboard → Pages → Settings → Environment variables
+# Or via: wrangler pages secret put <KEY>
+
+[vars]
+NODE_ENV = "production"
+CF_PAGES  = "1"

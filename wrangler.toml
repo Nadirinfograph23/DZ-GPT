@@ -1,13 +1,25 @@
-name = "dz-gpt"
+name = "dzagent"
+main = "workers/entry.js"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat_v2"]
 
-pages_build_output_dir = "dist"
+# ── Static assets served via ASSETS binding ────────────────────────────────────
+[assets]
+directory = "./dist"
+binding   = "ASSETS"
 
-# ── Environment variables (non-secret) ────────────────────────────────────────
-# Secrets are set via: Cloudflare Dashboard → Pages → Settings → Environment variables
-# Or via: wrangler pages secret put <KEY>
+# ── Bundle server-side data files so readFileSync works ───────────────────────
+[[rules]]
+type    = "Text"
+globs   = ["data/**/*.json", "dialect/**/*.json"]
+fallthrough = true
+
+# ── Non-secret environment variables ──────────────────────────────────────────
+# Secrets are set via:
+#   wrangler secret put AI_API_KEY
+#   wrangler secret put GEMINI_API_KEY  ... etc.
+# OR via Cloudflare Dashboard → Workers → Settings → Variables
 
 [vars]
 NODE_ENV = "production"
-CF_PAGES  = "1"
+CF_PAGES = "1"

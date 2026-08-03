@@ -1,8 +1,8 @@
 {
-  "commit": "7130ec4f61d3f9c1aa2d111203bd7116788f40b2",
-  "commitShort": "7130ec4f",
+  "commit": "c1266a65d1ef25e4402a232b743f65d2c6f9eb50",
+  "commitShort": "c1266a65",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: cloudflare workers entry + wrangler config for API routing",
-  "deployedAt": "2026-08-03T15:20:18.766934Z",
+  "message": "fix: patch process.versions.node for CF Workers iconv-lite streams crash",
+  "deployedAt": "2026-08-03T20:50:43.158505Z",
   "deployedBy": "scripts/deploy.py"
 }

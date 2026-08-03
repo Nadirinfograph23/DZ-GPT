@@ -1,8 +1,8 @@
 {
-  "commit": "97dce3a42c128cd950f432c181852c871494a564",
-  "commitShort": "97dce3a4",
+  "commit": "7130ec4f61d3f9c1aa2d111203bd7116788f40b2",
+  "commitShort": "7130ec4f",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: add Cloudflare Pages config — wrangler.toml, functions/api catchall, _routes.json, CF_PAGES patches",
-  "deployedAt": "2026-08-03T15:08:57.532700Z",
+  "message": "feat: cloudflare workers entry + wrangler config for API routing",
+  "deployedAt": "2026-08-03T15:20:18.766934Z",
   "deployedBy": "scripts/deploy.py"
 }

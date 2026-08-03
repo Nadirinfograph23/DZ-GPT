@@ -19496,6 +19496,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // BYPASS: شخصية معروفة في قاعدة معرفة KB → لا حاجة لـ clarification
   const _isKBPersonBypass = !!resolveRoleToPersonName(lastUserMessage)
   if (!_isAgentMode && !_clarificationBypass && !_isWebBuildBypass && !_isCurrencyBypass && !_isKBPersonBypass &&
+      !isJobsQuery(lastUserMessage) && !isProverbQuery(lastUserMessage) &&
       _intentClassification?.needsClarification &&
       _intentClassification?.clarificationMsg &&
       _intentClassification?.confidence < 40) {
@@ -25108,13 +25109,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // _isFootballNewsQuery is already defined earlier (before football context building)
   // Guard: لا تحمّل feeds الأخبار لاستعلامات العملة — "سعر الدولار اليوم" يحتوي "اليوم"
   // لكنه ليس خبراً ← العملة لها مسارها الخاص (currency fast-path)
-  if (newsQueryType && !isPrayerQuery && !isCurrencyQuery && (!isFootballQuery || _isFootballNewsQuery)) {
+  if (newsQueryType && !isPrayerQuery && !isCurrencyQuery && !isJobsQuery(lastUserMessage) && (!isFootballQuery || _isFootballNewsQuery)) {
     console.log(`[DZ Agent] News query detected: ${newsQueryType} (footballNews=${_isFootballNewsQuery})`)
     // ✅ FIX: يدعم "ال" التعريف — "الذكاء الاصطناعي" / "أخبار الذكاء" / "أخبار التقنية"
     const _isTechAIQuery = /(?:ال)?ذكاء\s*(?:ال)?اصطناعي|نموذج\s*(?:ال)?(?:ذكاء|لغوي)|أخبار\s*(?:ال)?(?:تقنية|تقني|تكنولوجيا|ذكاء)|تقنية\s*(?:ال)?ذكاء|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
     // News cards are data cards, not LLM tasks. Keep them independent from
     // provider availability so a bad/slow key can never leave the UI loading.
-    const _directNewsMode = !_isAgentMode
+    // لا نُفعّل وضع الأخبار المباشر لطلبات الوظائف/المسابقات أو الحِكم — لها معالجات خاصة
+    const _directNewsMode = !_isAgentMode && !isJobsQuery(lastUserMessage) && !isProverbQuery(lastUserMessage)
 
     // ── 🇩🇿 أولوية: أخبار الجزائر من الكاش المحمّل مسبقاً (فوري وسريع) ─────────
     if ((newsQueryType === 'news' || newsQueryType === 'both') && !_isTechAIQuery) {
@@ -25393,7 +25395,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     })
   }
 
-  if (!_isAgentMode && rssContext && rssContext.length > 200 && !isCurrencyQuery && getGroqKeys().length === 0) {
+  if (!_isAgentMode && rssContext && rssContext.length > 200 && !isCurrencyQuery && !isJobsQuery(lastUserMessage) && !isProverbQuery(lastUserMessage) && getGroqKeys().length === 0) {
     console.log(`[NoKey:RSS-PreRetrieval] Serving cached RSS directly (${rssContext.length} chars)`)
     return res.status(200).json({
       content: `${rssContext}\n\n---\n> 💡 **ملاحظة:** لتلقي إجابات مُلخَّصة وأكثر ذكاءً، أضف مفتاح \`AI_API_KEY\` (Groq — مجاني) في إعدادات المشروع.`,
@@ -25795,6 +25797,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       !_clarificationBypass &&
       !_layer1CurrencyBypass &&
       !_layer1WebBypass &&
+      !isJobsQuery(lastUserMessage) &&
+      !isProverbQuery(lastUserMessage) &&
       _intentClassification.needsClarification &&
       _intentClassification.clarificationMsg &&
       _intentClassification.confidence < 40 &&
@@ -26555,7 +26559,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   // يُطبَّق على: أخبار / ذكاء اصطناعي / تقنية — لا يُطبَّق على: عملة / وكيل
   {
     const _groqAvail = getGroqKeys().length > 0
-    if (!_groqAvail && rssContext && rssContext.length > 200 && !isCurrencyQuery && !_isAgentMode) {
+    if (!_groqAvail && rssContext && rssContext.length > 200 && !isCurrencyQuery && !_isAgentMode && !isJobsQuery(lastUserMessage) && !isProverbQuery(lastUserMessage)) {
       console.log(`[NoKey:RSS-FastPath] No Groq key — serving RSS context directly (${rssContext.length} chars)`)
       return res.status(200).json({
         content: `${rssContext}\n\n---\n> 💡 **ملاحظة:** لتلقي إجابات مُلخَّصة وأكثر ذكاءً، أضف مفتاح \`AI_API_KEY\` (Groq — مجاني) في إعدادات المشروع.`,
@@ -26814,7 +26818,8 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   }
 
   // If RSS context available, return it directly even without AI
-  if (rssContext) {
+  // (استثناء: الوظائف والحِكم لها محتوى خاص — لا نُخفيه بأخبار عامة)
+  if (rssContext && !_isJobsQuery && !isProverbQuery(lastUserMessage)) {
     return res.status(200).json({
       content: `${rssContext}\n\n---\n> **ملاحظة:** لتلقي إجابات أكثر ذكاءً وتلخيصاً للأخبار، يمكن إضافة مفتاح \`AI_API_KEY\` (Groq) في إعدادات المشروع.`,
     })
@@ -26836,6 +26841,16 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
         isExecution: true,
         executionLang: _tmplLang,
         executionCode: _tmplCode,
+      })
+    }
+
+    // ── Jobs fallback — عند فشل LLM نُعيد نتائج البحث مباشرةً ──────────────
+    if (_isJobsQuery && _jobsSearchContext) {
+      console.log('[DZ-Jobs] LLM unavailable — returning raw search context directly')
+      return res.status(200).json({
+        content: _jobsSearchContext,
+        status: 'jobs_direct',
+        mode: 'dz-jobs',
       })
     }
 

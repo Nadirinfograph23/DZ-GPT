@@ -28,9 +28,32 @@ function injectEnv(env) {
   process.env.NODE_ENV  = 'production'
 }
 
+/**
+ * CF Workers / unenv يُعيد {} بدلاً من دالة لـ iconv-lite/lib/streams.js
+ * السبب: iconv-lite يستدعي require("./streams")(iconv) فقط إذا كانت
+ *   process.versions.node تُحقّق: major > 0 || minor >= 10
+ * الحل: نضبط node = "0.9.0" ← major=0, minor=9 ← كلا الشرطين يفشلان
+ *   → streams لا تُحمَّل أبداً → لا crash
+ */
+function patchIconvLiteForCF() {
+  try {
+    if (process.versions && typeof process.versions === 'object') {
+      Object.defineProperty(process.versions, 'node', {
+        value: '0.9.0',
+        writable: true,
+        configurable: true,
+      })
+    }
+  } catch (_) {
+    // إذا فشل defineProperty نحاول الكتابة المباشرة
+    try { process.versions.node = '0.9.0' } catch (_2) { /* ignore */ }
+  }
+}
+
 async function getAdapter(env) {
   if (adapter) return adapter
   injectEnv(env)
+  patchIconvLiteForCF()
   const { app } = await import('../server.js')
   adapter = createServerAdapter(app)
   return adapter

@@ -711,16 +711,21 @@ setInterval(async () => {
 }, 60_000)
 
 // ─── GitHub sync كل ساعة — يحفظ البيانات قبل أي deployment ──────────────────
-setInterval(async () => {
-  if (!_visitorsStore.visits.length) return
-  const now = Date.now()
-  if (now - _vaLastGHSync < 55 * 60_000) return
-  _vaLastGHSync = now
-  await _vaPushToGitHub({
-    visits: _visitorsStore.visits,
-    knownSessions: [..._visitorsStore.knownSessions].slice(-_VA_MAX_SESSIONS),
-  })
-}, 30 * 60_000)
+// ⚠️ مُعطَّل على Vercel: الـ setInterval يُنشئ commit كل ساعة → deployment جديد
+//    → يستنزف fluidCpuDuration ويؤدي إلى FAIR_USE_LIMITS_EXCEEDED (soft-block)
+//    الحل: يعمل فقط في بيئة Replit/local وليس على Vercel
+if (!process.env.VERCEL) {
+  setInterval(async () => {
+    if (!_visitorsStore.visits.length) return
+    const now = Date.now()
+    if (now - _vaLastGHSync < 55 * 60_000) return
+    _vaLastGHSync = now
+    await _vaPushToGitHub({
+      visits: _visitorsStore.visits,
+      knownSessions: [..._visitorsStore.knownSessions].slice(-_VA_MAX_SESSIONS),
+    })
+  }, 30 * 60_000)
+}
 
 // Visitor tracking middleware — runs on page loads (not API/assets)
 app.use((req, res, next) => {

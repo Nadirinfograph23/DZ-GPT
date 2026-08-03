@@ -1,8 +1,8 @@
 {
-  "commit": "9f9cdb22363a4ef47d2a43a5e77dd69bd917809f",
-  "commitShort": "9f9cdb22",
+  "commit": "97dce3a42c128cd950f432c181852c871494a564",
+  "commitShort": "97dce3a4",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: bypass jobs+proverbs from all RSS/news/clarification guards — تفعيل محركات الوظائف والحكم كاملاً",
-  "deployedAt": "2026-08-03T00:14:56.548551Z",
+  "message": "feat: add Cloudflare Pages config — wrangler.toml, functions/api catchall, _routes.json, CF_PAGES patches",
+  "deployedAt": "2026-08-03T15:08:57.532700Z",
   "deployedBy": "scripts/deploy.py"
 }

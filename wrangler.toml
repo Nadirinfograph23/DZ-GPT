@@ -3,9 +3,6 @@ main = "workers/entry.js"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat_v2"]
 
-# ── Polyfill globals before any module loads ───────────────────────────────────
-inject = ["./workers/cf-polyfills.js"]
-
 # ── Static assets served via ASSETS binding ────────────────────────────────────
 [assets]
 directory = "./dist"

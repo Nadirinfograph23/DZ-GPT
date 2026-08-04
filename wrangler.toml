@@ -3,6 +3,9 @@ main = "workers/entry.js"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat_v2"]
 
+# ── Polyfill globals before any module loads ───────────────────────────────────
+inject = ["./workers/cf-polyfills.js"]
+
 # ── Static assets served via ASSETS binding ────────────────────────────────────
 [assets]
 directory = "./dist"
@@ -16,10 +19,20 @@ fallthrough = true
 
 # ── Non-secret environment variables ──────────────────────────────────────────
 # Secrets are set via:
-#   wrangler secret put AI_API_KEY
-#   wrangler secret put GEMINI_API_KEY  ... etc.
+#   wrangler secret put AI_API_KEY  ... etc.
 # OR via Cloudflare Dashboard → Workers → Settings → Variables
 
 [vars]
 NODE_ENV = "production"
 CF_PAGES = "1"
+
+# ── Define: replace import.meta.url so fileURLToPath() doesn't crash ──────────
+# In CF Workers the bundled import.meta.url is undefined; give it a valid
+# file:// URL so that path.dirname(fileURLToPath(...)) resolves to "/"
+[define]
+"import.meta.url" = '"file:///worker.js"'
+
+# ── Aliases: stub out dev/build-only modules that must not be bundled ─────────
+[alias]
+"lightningcss" = "./workers/stubs/lightningcss.js"
+"vite" = "./workers/stubs/vite.js"

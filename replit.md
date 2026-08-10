@@ -10,7 +10,7 @@
 |--------|--------|
 | **الفرع النشط** | `devin/1774405518-init-dz-gpt` ← كل التحديثات هنا فقط |
 | **Repo** | `https://github.com/Nadirinfograph23/DZ-GPT` |
-| **Vercel** | https://dz-gpt.vercel.app — Project ID: `prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5` |
+| **Vercel** | https://dzagent.app — Project ID: `prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5` |
 | **Cloudflare Pages** | مربوط بنفس الـ Repo — يُنشر تلقائياً عند كل push |
 | **Deploy Hook** | مربوط بالفرع — يُطلق تلقائياً عند كل push |
 
@@ -142,4 +142,4 @@ DZ-GPT/
 - Node 20 | Python 3.11 | Port 5000
 - `npm run dev` ← يشغّل `node server.js`
 - إشعار التحديث على الموقع المباشر إلزامي بعد كل مهمة — يظهر تلقائياً عبر `/api/version` (polling كل 45 ثانية) بمجرد اكتمال deploy Vercel؛ المصدر الأول على Vercel: `VERCEL_GIT_COMMIT_SHA` (يتغير بكل deploy تلقائياً)
-- أسماء الأسرار في Replit: `TOKEN_GITHUB` و`TOKEN_VERCEL` (يقرأها `scripts/deploy.py`)
+- أسماء الأسرار في Replit: `GITHUB_TOKEN` و`VERCEL_TOKEN` (ويقبل `scripts/deploy.py` أيضًا الأسماء القديمة للتوافق)

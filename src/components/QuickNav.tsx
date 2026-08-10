@@ -33,7 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/media',        label: 'DZ Media',     labelEn: 'صور وفيديو AI', icon: <Clapperboard size={18} />,   color: '#e879f9' },
   { path: '/my-projects',  label: 'مشاريعي',      labelEn: 'My Projects',  icon: <FolderOpen size={18} />,      color: '#34d399' },
   {
-    path: 'https://dz-gpt.vercel.app/dz-agent-certificate.html',
+    path: 'https://dzagent.app/dz-agent-certificate.html',
     label: 'Certificate',
     labelEn: 'شهادة DZ Agent',
     icon: <Award size={18} />,

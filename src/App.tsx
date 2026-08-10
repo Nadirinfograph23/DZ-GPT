@@ -228,7 +228,7 @@ const DEVELOPER_RESPONSE = `👨‍💻 **نذير حوامرية — Nadir Info
 🌐 **تواصل معه:**
 🔵 [فيسبوك](https://www.facebook.com/nadir.infograph23) | 📸 [إنستغرام](https://www.instagram.com/nadir.infograph?igsh=ZmJsZGhheXB0emli) | 🎵 [تيكتوك](https://www.tiktok.com/@nadirinfograph2) | ▶️ [يوتيوب](https://www.youtube.com/@Nadirinfograph)
 
-🏅 [شاهد شهادة Replit الرسمية](https://dz-gpt.vercel.app/dz-agent-certificate.html)`
+🏅 [شاهد شهادة Replit الرسمية](https://dzagent.app/dz-agent-certificate.html)`
 
 // ===== LANGUAGE DETECTION =====
 type OcrLang = { code: 'ar' | 'fr' | 'en'; label: string; flag: string; dir: 'rtl' | 'ltr' }
@@ -1039,7 +1039,7 @@ function App() {
 
           {/* Algeria Certificate Badge */}
           <a
-            href="https://dz-gpt.vercel.app/dz-agent-certificate.html"
+            href="https://dzagent.app/dz-agent-certificate.html"
             target="_blank"
             rel="noopener noreferrer"
             title="شهادة DZ Agent الجزائرية"

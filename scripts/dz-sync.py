@@ -334,7 +334,7 @@ def _trigger_vercel():
         with urllib.request.urlopen(req) as r:
             job = json.loads(r.read()).get('job', {})
         print(f'⚡ Vercel deploy: job={job.get("id","?")} state={job.get("state","?")}')
-        print(f'🌐 https://dz-gpt.vercel.app (جاهز خلال 2-3 دقائق)')
+        print(f'🌐 https://dzagent.app (جاهز خلال 2-3 دقائق)')
     except Exception as e:
         print(f'⚠️  Vercel hook: {e}')
 

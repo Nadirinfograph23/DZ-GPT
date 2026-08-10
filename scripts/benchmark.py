@@ -5,7 +5,7 @@ DZ Agent Benchmark — Acceptance Test Suite (20 questions)
 
 Usage:
     python3 scripts/benchmark.py                    # محلي (localhost:5000)
-    python3 scripts/benchmark.py --url https://dz-gpt.vercel.app
+    python3 scripts/benchmark.py --url https://dzagent.app
     python3 scripts/benchmark.py --json             # JSON output فقط
 """
 

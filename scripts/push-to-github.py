@@ -121,7 +121,7 @@ def push(commit_message, files):
         print(f'\n⚠️  Vercel hook: {e}')
 
     print(f'\n✅ تم بنجاح! → https://github.com/{REPO}/commit/{final_sha[:12]}')
-    print(f'🌐 الموقع سيُحدَّث على: https://dz-gpt.vercel.app (خلال 2-3 دقائق)')
+    print(f'🌐 الموقع سيُحدَّث على: https://dzagent.app (خلال 2-3 دقائق)')
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:

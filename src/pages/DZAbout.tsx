@@ -14,7 +14,7 @@ const DEVELOPER = {
   tiktok: 'https://www.tiktok.com/@nadirinfograph2?_r=1&_t=ZS-96pplHnvWo4',
   youtube: 'https://www.youtube.com/@Nadirinfograph',
   github: 'https://github.com/Nadirinfograph23',
-  site: 'https://dz-gpt.vercel.app',
+  site: 'https://dzagent.app',
   tv: [
     { label: 'التلفزيون الجزائري الوطني', url: 'https://youtu.be/-DPOFfvRS-Q?si=TOkP1VFTApMcktJ7' },
     { label: 'قناة الجزائر الدولية AL24', url: 'https://m.youtube.com/watch?v=gAzvBi4N7ic' },

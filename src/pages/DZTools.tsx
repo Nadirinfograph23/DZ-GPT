@@ -113,7 +113,7 @@ function generatePDF(
 </head>
 <body>
 <div class="pdf-header">
-  <div class="pdf-header-brand">🇩🇿 DZ-GPT · dz-gpt.vercel.app</div>
+  <div class="pdf-header-brand">🇩🇿 DZ-GPT · dzagent.app</div>
   <div class="pdf-header-title">${docTitle}</div>
   <div class="pdf-header-date">${now}</div>
 </div>
@@ -2171,7 +2171,7 @@ tr:nth-child(even) td{background:#f9fafb}
   </div>
   ${meta.note?`<div class="note"><strong>ملاحظات:</strong> ${meta.note}</div>`:''}
 </div>
-<div class="footer">DZ Tools — مولّد الفواتير الجزائري | dz-gpt.vercel.app</div>
+<div class="footer">DZ Tools — مولّد الفواتير الجزائري | dzagent.app</div>
 </body></html>`)
     win.document.close()
     setTimeout(() => { win.focus(); win.print() }, 700)
@@ -2388,7 +2388,7 @@ footer{margin-top:28px;font-size:11px;color:#9ca3af;text-align:center;border-top
   <tbody>${rows}</tbody>
 </table>
 <p style="font-size:11px;color:#777">* حسب قانون المالية الجزائري — شرائح IRG 2024. للاستشارة الضريبية المعتمدة راجع خبيراً محاسبياً.</p>
-<footer>DZ Tools — مُحاسب الضرائب | dz-gpt.vercel.app</footer>
+<footer>DZ Tools — مُحاسب الضرائب | dzagent.app</footer>
 </body></html>`)
     win.document.close()
     setTimeout(() => { win.focus(); win.print() }, 700)
@@ -2421,7 +2421,7 @@ footer{margin-top:28px;font-size:11px;color:#9ca3af;text-align:center;border-top
   <div class="card"><div class="card-label">صافي الربح بعد الضريبة</div><div class="card-val">${ibsResult.net.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
 </div>
 <div class="note">نوع النشاط: ${rateLabel}<br>* حسب قانون المالية الجزائري. للاستشارة المعتمدة راجع خبيراً محاسبياً معتمداً.</div>
-<footer>DZ Tools — مُحاسب الضرائب | dz-gpt.vercel.app</footer>
+<footer>DZ Tools — مُحاسب الضرائب | dzagent.app</footer>
 </body></html>`)
     win.document.close()
     setTimeout(() => { win.focus(); win.print() }, 700)
@@ -2643,7 +2643,7 @@ h1{color:#0a3d1f;border-bottom:3px solid #c8ff00;padding-bottom:8px}
   <div class="card"><div class="label">سن التقاعد القانوني</div><div class="val">${result.retireAge} سنة</div></div>
   <div class="card"><div class="label">السنوات المتبقية</div><div class="val red">${result.yearsLeft} سنة</div></div>
 </div>
-<div class="footer">🇩🇿 DZ Tools — dz-gpt.vercel.app | المعطيات وفق قانون CNAS/CASNOS الجزائري 2024</div>
+<div class="footer">🇩🇿 DZ Tools — dzagent.app | المعطيات وفق قانون CNAS/CASNOS الجزائري 2024</div>
 </body></html>`)
     w.document.close()
     setTimeout(() => { w.focus(); w.print() }, 600)
@@ -2778,7 +2778,7 @@ function QRCodeTool() {
   }
 
   const PRESETS = [
-    { label:'رابط موقع', value:'https://dz-gpt.vercel.app' },
+    { label:'رابط موقع', value:'https://dzagent.app' },
     { label:'واتساب',    value:'https://wa.me/213XXXXXXXXX' },
     { label:'إيميل',     value:'mailto:contact@example.com' },
     { label:'هاتف',      value:'tel:+213XXXXXXXXX' },
@@ -2808,7 +2808,7 @@ function QRCodeTool() {
         <label className="dzt-label">المحتوى (رابط، نص، رقم...)</label>
         <textarea
           className="dzt-textarea"
-          placeholder="https://dz-gpt.vercel.app أو أي نص أو رقم هاتف..."
+          placeholder="https://dzagent.app أو أي نص أو رقم هاتف..."
           value={text}
           onChange={e=>{ setText(e.target.value); setQrUrl('') }}
           rows={3}
@@ -4157,7 +4157,7 @@ function ScreenshotTool() {
 </head>
 <body>
   <div class="hd">
-    <div class="hd-brand">🇩🇿 DZ-GPT · dz-gpt.vercel.app</div>
+    <div class="hd-brand">🇩🇿 DZ-GPT · dzagent.app</div>
     <div class="hd-title">${result.title || host}</div>
     <div class="hd-date">${now}</div>
   </div>

@@ -243,7 +243,7 @@ export default function SystemHealth() {
       })
       const d = await r.json()
       if (d.success) {
-        setDeployResult(`✓ Deploy triggered → ${d.url || 'https://dz-gpt.vercel.app'}`)
+        setDeployResult(`✓ Deploy triggered → ${d.url || 'https://dzagent.app'}`)
         addTestLog(`✓ Vercel deploy: ${d.message} sha=${d.shortSha}`, 'ok')
       } else {
         setDeployResult(`✗ ${d.error || 'Deploy failed'}`)
@@ -645,8 +645,8 @@ export default function SystemHealth() {
                 <div style={{ flex: 1 }}>
                   <div className="sh-deploy-label">Vercel Production</div>
                   <div className="sh-deploy-meta">
-                    <a href="https://dz-gpt.vercel.app" target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none' }}>
-                      https://dz-gpt.vercel.app
+                    <a href="https://dzagent.app" target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none' }}>
+                      https://dzagent.app
                     </a>
                   </div>
                 </div>
@@ -705,11 +705,11 @@ export default function SystemHealth() {
             <div className="sh-card">
               <div className="sh-section-title">🌐 Production Links</div>
               {[
-                { label: 'Main Site', url: 'https://dz-gpt.vercel.app/' },
-                { label: 'DZ Agent', url: 'https://dz-gpt.vercel.app/dz-agent' },
-                { label: 'AI Quran', url: 'https://dz-gpt.vercel.app/quran' },
-                { label: 'DZ Tube', url: 'https://dz-gpt.vercel.app/dz-tube' },
-                { label: 'DZ Chat', url: 'https://dz-gpt.vercel.app/dzchat' },
+                { label: 'Main Site', url: 'https://dzagent.app/' },
+                { label: 'DZ Agent', url: 'https://dzagent.app/dz-agent' },
+                { label: 'AI Quran', url: 'https://dzagent.app/quran' },
+                { label: 'DZ Tube', url: 'https://dzagent.app/dz-tube' },
+                { label: 'DZ Chat', url: 'https://dzagent.app/dzchat' },
               ].map(({ label, url }) => (
                 <div key={url} className="sh-stat-row">
                   <span className="sh-stat-key">{label}</span>

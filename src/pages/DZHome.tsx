@@ -300,7 +300,7 @@ const SECTIONS = [
     id: 'certificate',
     label: 'Certificate',
     sublabel: 'شهادة DZ Agent',
-    path: 'https://dz-gpt.vercel.app/dz-agent-certificate.html',
+    path: 'https://dzagent.app/dz-agent-certificate.html',
     external: true,
     gradient: 'linear-gradient(145deg, #a06420 0%, #8c4e12 100%)',
     bgGlow: 'rgba(160,100,32,0.12)',
@@ -356,7 +356,7 @@ export default function DZHome() {
 
             {/* ميدالية الجزائر الذهبية — شهادة DZ Agent */}
             <a
-              href="https://dz-gpt.vercel.app/dz-agent-certificate.html"
+              href="https://dzagent.app/dz-agent-certificate.html"
               target="_blank"
               rel="noopener noreferrer"
               title="🥇 شهادة DZ Agent الجزائرية"

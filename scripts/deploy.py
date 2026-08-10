@@ -162,7 +162,7 @@ def notify_connected_users(message):
         return False
     body = json.dumps({'message': message}).encode('utf-8')
     req = urllib.request.Request(
-        'https://dz-gpt.vercel.app/api/broadcast-update',
+        'https://dzagent.app/api/broadcast-update',
         data=body,
         headers={
             'Content-Type': 'application/json',
@@ -306,7 +306,7 @@ def deploy(commit_msg, files):
     job_id = trigger_vercel(new_commit)
     if job_id:
         print(f'✓ job: {job_id}')
-        print(f'   https://dz-gpt.vercel.app ← يتحدث خلال ~2 دقيقة')
+        print(f'   https://dzagent.app ← يتحدث خلال ~2 دقيقة')
         if wait_for_vercel(job_id):
             notify_connected_users(f'تم نشر تحديث جديد من الفرع {BRANCH} في DZ GPT 🚀')
     else:

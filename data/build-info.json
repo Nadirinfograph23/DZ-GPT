@@ -1,8 +1,8 @@
 {
-  "commit": "4caf41ef05e9ef549802d2962e3fc4ee54447e2c",
-  "commitShort": "4caf41ef",
+  "commit": "03034dd75aa2b869d49d0993b2259be0e163fff0",
+  "commitShort": "03034dd7",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "docs: record the correct production domain dzagent.app",
-  "deployedAt": "2026-08-10T11:16:47.257039Z",
+  "message": "chore: switch production site references to dzagent.app",
+  "deployedAt": "2026-08-10T11:44:16.443423Z",
   "deployedBy": "scripts/deploy.py"
 }

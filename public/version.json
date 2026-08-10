@@ -1,8 +1,8 @@
 {
-  "commit": "c1266a65d1ef25e4402a232b743f65d2c6f9eb50",
-  "commitShort": "c1266a65",
+  "commit": "4caf41ef05e9ef549802d2962e3fc4ee54447e2c",
+  "commitShort": "4caf41ef",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: patch process.versions.node for CF Workers iconv-lite streams crash",
-  "deployedAt": "2026-08-03T20:50:43.158505Z",
+  "message": "docs: record the correct production domain dzagent.app",
+  "deployedAt": "2026-08-10T11:16:47.257039Z",
   "deployedBy": "scripts/deploy.py"
 }

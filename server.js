@@ -28932,7 +28932,7 @@ app.post('/api/dz-agent/github/agent-build', async (req, res) => {
 
     const projectFiles = [
       { path: 'index.html', content: generatedHtml },
-      { path: 'README.md',  content: `# ${safeRepo}\n\n> ${task}\n\n**نوع التصميم:** ${detectedSiteType}\n\nتم الإنشاء تلقائياً بواسطة [DZ Agent](https://dz-gpt.vercel.app) 🤖\n\n## 🌐 عرض مباشر\nhttps://${repoOwner}.github.io/${safeRepo}\n\n## 🚀 تقنيات مستخدمة\n- Tailwind CSS\n- Font Awesome 6\n- AOS Animations\n- Google Fonts` },
+      { path: 'README.md',  content: `# ${safeRepo}\n\n> ${task}\n\n**نوع التصميم:** ${detectedSiteType}\n\nتم الإنشاء تلقائياً بواسطة [DZ Agent](https://dzagent.app) 🤖\n\n## 🌐 عرض مباشر\nhttps://${repoOwner}.github.io/${safeRepo}\n\n## 🚀 تقنيات مستخدمة\n- Tailwind CSS\n- Font Awesome 6\n- AOS Animations\n- Google Fonts` },
     ]
 
     send({ type: 'detail', step: 'generate', text: `✅ موقع ${detectedSiteType} جاهز (${(generatedHtml.length / 1024).toFixed(1)} KB)` })
@@ -30874,7 +30874,7 @@ async function extractWithCobaltAPI(url) {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'User-Agent': 'DZ-GPT/2.0 (+https://dz-gpt.vercel.app)',
+          'User-Agent': 'DZ-GPT/2.0 (+https://dzagent.app)',
         },
         body: JSON.stringify({
           url,
@@ -33908,7 +33908,7 @@ async function _cobaltFetchYouTube(videoUrl, format, height) {
         headers: {
           'Content-Type': 'application/json',
           'Accept':       'application/json',
-          'User-Agent':   'DZ-GPT/2.0 (+https://dz-gpt.vercel.app)',
+          'User-Agent':   'DZ-GPT/2.0 (+https://dzagent.app)',
         },
         body: JSON.stringify({ url: videoUrl, downloadMode, videoQuality, audioFormat, audioBitrate: '192', filenameStyle: 'basic' }),
         signal: ctrl.signal,
@@ -35222,7 +35222,7 @@ app.get('/api/tools/image-search', async (req, res) => {
   const fetchOpenverse = async () => {
     const params = new URLSearchParams({ q: searchQ, page_size: '24', license_type: 'all' })
     const r = await fetch(`https://api.openverse.org/v1/images/?${params}`, {
-      headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app; contact@dz-gpt.vercel.app)' },
+      headers: { 'User-Agent': 'DZ-GPT/2.0 (dzagent.app; contact@dzagent.app)' },
       signal: AbortSignal.timeout(10000),
     })
     if (!r.ok) throw new Error(`Openverse ${r.status}`)
@@ -35256,7 +35256,7 @@ app.get('/api/tools/image-search', async (req, res) => {
       origin: '*',
     })
     const r = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, {
-      headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
+      headers: { 'User-Agent': 'DZ-GPT/2.0 (dzagent.app)' },
       signal: AbortSignal.timeout(10000),
     })
     if (!r.ok) throw new Error(`Wikimedia ${r.status}`)
@@ -35318,7 +35318,7 @@ app.get('/api/tools/image-search', async (req, res) => {
           format: 'json', origin: '*',
         })
         const wpSearchRes = await fetch(`https://en.wikipedia.org/w/api.php?${wpSearchParams}`, {
-          headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
+          headers: { 'User-Agent': 'DZ-GPT/2.0 (dzagent.app)' },
           signal: AbortSignal.timeout(8000),
         })
         if (wpSearchRes.ok) {
@@ -35331,7 +35331,7 @@ app.get('/api/tools/image-search', async (req, res) => {
               format: 'json', origin: '*',
             })
             const wpImgRes = await fetch(`https://en.wikipedia.org/w/api.php?${wpImgParams}`, {
-              headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
+              headers: { 'User-Agent': 'DZ-GPT/2.0 (dzagent.app)' },
               signal: AbortSignal.timeout(8000),
             })
             if (wpImgRes.ok) {
@@ -35508,7 +35508,7 @@ app.post('/api/tools/image-analyze', async (req, res) => {
       const imgRes = await fetch(imageUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)',
-          'Referer': 'https://dz-gpt.vercel.app',
+          'Referer': 'https://dzagent.app',
         },
         signal: AbortSignal.timeout(15000),
       })
@@ -35618,7 +35618,7 @@ app.post('/api/tools/image-analyze', async (req, res) => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${orKey}`,
-            'HTTP-Referer': 'https://dz-gpt.vercel.app',
+            'HTTP-Referer': 'https://dzagent.app',
             'X-Title': 'DZ-GPT Vision',
           },
           body: JSON.stringify(orBody),
@@ -35959,7 +35959,7 @@ async function pollinationsImage(prompt, { width = 768, height = 768, model = 'f
       const encoded = encodeURIComponent(prompt)
       const url = `https://image.pollinations.ai/prompt/${encoded}?model=${model}&width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false`
       const r = await fetch(url, {
-        headers: { 'Referer': 'https://dz-gpt.vercel.app', 'User-Agent': 'DZ-GPT/2.0' },
+        headers: { 'Referer': 'https://dzagent.app', 'User-Agent': 'DZ-GPT/2.0' },
         signal: AbortSignal.timeout(timeoutMs),
       })
       if (!r.ok) { lastErr = new Error(`Pollinations ${r.status}`); continue }
@@ -36125,7 +36125,7 @@ app.get('/api/tools/img-gen/status/:jobId', async (req, res) => {
   const { jobId } = req.params
   if (!jobId) return res.status(400).json({ error: 'jobId مطلوب' })
   const BASE = 'https://stablehorde.net/api/v2'
-  const H = { 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+  const H = { 'Client-Agent': 'DZ-GPT:1.0:dzagent.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
   try {
     const chk = await fetch(`${BASE}/generate/check/${jobId}`, { headers: H, signal: AbortSignal.timeout(8000) })
     if (!chk.ok) return res.status(502).json({ error: 'Horde unreachable', done: false })
@@ -36173,7 +36173,7 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
     const polUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(englishPrompt)}`
       + `?model=${polModel}&width=${Math.min(w,1024)}&height=${Math.min(h,1024)}&seed=${seed}&nologo=true&enhance=true&safe=false`
     const polRes = await fetch(polUrl, {
-      headers: { 'Referer': 'https://dz-gpt.vercel.app', 'User-Agent': 'DZ-GPT/2.0' },
+      headers: { 'Referer': 'https://dzagent.app', 'User-Agent': 'DZ-GPT/2.0' },
       signal: AbortSignal.timeout(40000),
     })
     if (polRes.ok && (polRes.headers.get('content-type') || '').startsWith('image/')) {
@@ -36222,7 +36222,7 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
   // (all sync providers failed — use async so frontend can poll)
   try {
     const HORDE_BASE = 'https://stablehorde.net/api/v2'
-    const HORDE_H = { 'Content-Type': 'application/json', 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+    const HORDE_H = { 'Content-Type': 'application/json', 'Client-Agent': 'DZ-GPT:1.0:dzagent.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
     const hordeBody = JSON.stringify({
       prompt: englishPrompt,
       params: { n: 1, steps: 20, width: 512, height: 512, sampler_name: 'k_euler_a', cfg_scale: 7 },
@@ -36248,7 +36248,7 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
 // ── Stable Horde: poll until job is done (server-side, max 72s — within Vercel 90s maxDuration) ──
 async function waitForHordeJob(jobId, maxWaitMs = 72000, maxWaitEstimateSec = 9999) {
   const BASE = 'https://stablehorde.net/api/v2'
-  const H = { 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+  const H = { 'Client-Agent': 'DZ-GPT:1.0:dzagent.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
   const start = Date.now(); let polls = 0
   while (Date.now() - start < maxWaitMs) {
     await new Promise(r => setTimeout(r, polls < 4 ? 5000 : 8000)); polls++
@@ -36280,7 +36280,7 @@ async function waitForHordeJob(jobId, maxWaitMs = 72000, maxWaitEstimateSec = 99
 // ── Stable Horde: submit img2img job and return jobId ─────────────────────────
 async function hordeSubmitImg2Img(imgB64, prompt, negPrompt, strength) {
   const BASE = 'https://stablehorde.net/api/v2'
-  const H = { 'Content-Type': 'application/json', 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+  const H = { 'Content-Type': 'application/json', 'Client-Agent': 'DZ-GPT:1.0:dzagent.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
   const r = await fetch(`${BASE}/generate/async`, {
     method: 'POST', headers: H,
     body: JSON.stringify({
@@ -37430,7 +37430,7 @@ async function fetchRadioBrowser(path) {
   for (const host of RADIO_BROWSER_HOSTS) {
     try {
       const r = await fetch(`${host}/json/${path}`, {
-        headers: { 'User-Agent': 'DZ-GPT/1.0:dz-gpt.vercel.app' },
+        headers: { 'User-Agent': 'DZ-GPT/1.0:dzagent.app' },
         signal: AbortSignal.timeout(8000),
       })
       if (r.ok) return r.json()
@@ -37756,7 +37756,7 @@ JSON فقط (بلا \`\`\`json):
       for (const orM of ['meta-llama/llama-3.3-70b-instruct:free','google/gemma-3-27b-it:free','mistralai/mistral-7b-instruct:free']) {
         try {
           const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${process.env.OPENROUTER_API_KEY}`,'HTTP-Referer':'https://dz-gpt.vercel.app','X-Title':'DZ-GPT Darija'},
+            method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${process.env.OPENROUTER_API_KEY}`,'HTTP-Referer':'https://dzagent.app','X-Title':'DZ-GPT Darija'},
             body:JSON.stringify({ model:orM, messages:_aiMsg, max_tokens:700, temperature:0.3 }), signal:AbortSignal.timeout(12000)
           })
           const d = await r.json(); const c = d.choices?.[0]?.message?.content

@@ -23,7 +23,7 @@ VERCEL_TOK = os.environ.get('TOKEN_VERCEL', '') or os.environ.get('VERCEL_TOKEN'
 CHAT_ADMIN = os.environ.get('DZ_CHAT_ADMIN_PASSWORD', '')
 REPO       = 'Nadirinfograph23/DZ-GPT'
 BRANCH     = 'devin/1774405518-init-dz-gpt'
-VERCEL_HOOK = 'https://api.vercel.com/v1/integrations/deploy/prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5/ul5gBfG4Af'
+VERCEL_HOOK = 'https://api.vercel.com/v1/integrations/deploy/prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5/2nmbKN1Mn8'
 
 # الملفات الافتراضية إذا لم يُحدَّد شيء
 DEFAULT_FILES = ['server.js']
@@ -141,15 +141,28 @@ def trigger_vercel(commit_sha=None):
             if dep_id:
                 print(f'\n   deployment id: {dep_id}')
                 print(f'   preview: https://{dep_url}')
-                return dep_id
+                return {'kind': 'deployment', 'id': dep_id, 'commit_sha': commit_sha}
         except Exception as e:
             print(f'\n⚠️  v13/deployments فشل ({e}) — جارٍ تجربة deploy hook...')
 
     # ── Fallback: deploy hook ─────────────────────────────────────────────
     try:
-        req = urllib.request.Request(VERCEL_HOOK, headers={'User-Agent': 'DZ-Agent/1.0'})
+        req = urllib.request.Request(
+            VERCEL_HOOK,
+            data=b'{}',
+            headers={
+                'Authorization': f'Bearer {VERCEL_TOK}',
+                'Content-Type': 'application/json',
+                'User-Agent': 'DZ-Agent/1.0',
+            },
+            method='POST',
+        )
         r = json.loads(urllib.request.urlopen(req).read())
-        return r.get('job', {}).get('id')
+        job_id = r.get('job', {}).get('id')
+        if job_id:
+            # Deploy Hook returns a job ID, not a Vercel deployment ID.
+            return {'kind': 'hook_job', 'id': job_id, 'commit_sha': commit_sha}
+        return None
     except Exception as e:
         print(f'⚠️  deploy hook فشل أيضاً: {e}')
         return None
@@ -180,14 +193,47 @@ def notify_connected_users(message):
         return False
 
 
-def wait_for_vercel(deployment_id, timeout=300):
-    """Wait until the deployment requested from the exact Git commit is live."""
-    if not deployment_id or not VERCEL_TOK:
+def wait_for_vercel(deployment_ref, timeout=300):
+    """Wait for the deployment created from the requested commit.
+
+    A direct Vercel API request returns a deployment ID. A Deploy Hook returns
+    a job ID, so hook jobs must be tracked through the project's deployment
+    list instead of querying /v13/deployments/{job_id}.
+    """
+    if not deployment_ref or not VERCEL_TOK:
         return False
     deadline = time.time() + timeout
+    kind = deployment_ref.get('kind')
+    deployment_id = deployment_ref.get('id')
+    commit_sha = deployment_ref.get('commit_sha')
     url = f'https://api.vercel.com/v13/deployments/{deployment_id}'
     while time.time() < deadline:
         try:
+            if kind == 'hook_job':
+                list_req = urllib.request.Request(
+                    f'https://api.vercel.com/v6/deployments?projectId={VERCEL_PROJECT_ID}&limit=20',
+                    headers={
+                        'Authorization': f'Bearer {VERCEL_TOK}',
+                        'User-Agent': 'DZ-Agent/1.0',
+                    },
+                )
+                deployments = json.loads(
+                    urllib.request.urlopen(list_req, timeout=20).read().decode('utf-8')
+                ).get('deployments', [])
+                match = next(
+                    (
+                        item for item in deployments
+                        if commit_sha and (item.get('meta') or {}).get('githubCommitSha') == commit_sha
+                    ),
+                    None,
+                )
+                if not match:
+                    print('   ⏳ Vercel: Deploy Hook قُبل، بانتظار إنشاء deployment...')
+                    time.sleep(10)
+                    continue
+                deployment_id = match.get('uid') or match.get('id')
+                url = f'https://api.vercel.com/v13/deployments/{deployment_id}'
+
             req = urllib.request.Request(
                 url,
                 headers={
@@ -303,11 +349,11 @@ def deploy(commit_msg, files):
 
     # 6. إطلاق Vercel
     print(f'🌐 إطلاق Vercel deploy hook...', end=' ', flush=True)
-    job_id = trigger_vercel(new_commit)
-    if job_id:
-        print(f'✓ job: {job_id}')
+    deployment_ref = trigger_vercel(new_commit)
+    if deployment_ref:
+        print(f"✓ {deployment_ref['kind']}: {deployment_ref['id']}")
         print(f'   https://dzagent.app ← يتحدث خلال ~2 دقيقة')
-        if wait_for_vercel(job_id):
+        if wait_for_vercel(deployment_ref):
             notify_connected_users(f'تم نشر تحديث جديد من الفرع {BRANCH} في DZ GPT 🚀')
     else:
         print('⚠️  تحقق يدوياً من Vercel')

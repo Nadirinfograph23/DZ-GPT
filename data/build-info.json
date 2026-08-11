@@ -1,8 +1,8 @@
 {
-  "commit": "03034dd75aa2b869d49d0993b2259be0e163fff0",
-  "commitShort": "03034dd7",
+  "commit": "56b961605118f5c90a1c8e14027133a003411c68",
+  "commitShort": "56b96160",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "chore: switch production site references to dzagent.app",
-  "deployedAt": "2026-08-10T11:44:16.443423Z",
+  "message": "fix: complete GitHub Vercel domain integration and deployment tracking",
+  "deployedAt": "2026-08-11T10:19:14.993175Z",
   "deployedBy": "scripts/deploy.py"
 }

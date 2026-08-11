@@ -1,8 +1,8 @@
 {
-  "commit": "3518f25ba3efb5e3a5330cc23632331c97bc46bc",
-  "commitShort": "3518f25b",
+  "commit": "7cc0e91cdc25a8d7745c1398c0dae0fdc5aa6051",
+  "commitShort": "7cc0e91c",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "ci: deploy Cloudflare Worker on repository updates",
-  "deployedAt": "2026-08-11T12:51:53.702160Z",
+  "message": "fix: use public npm registry in Cloudflare CI",
+  "deployedAt": "2026-08-11T12:57:42.880298Z",
   "deployedBy": "scripts/deploy.py"
 }

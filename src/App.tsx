@@ -218,7 +218,7 @@ function isDeveloperQuery(text: string): boolean {
 }
 const DEVELOPER_RESPONSE = `👨‍💻 **نذير حوامرية — Nadir Infograph** 🇩🇿
 
-مطوّر ومهندس ذكاء اصطناعي جزائري من **عنابة**، منشئ **DZ Agent** و**DZ-GPT** — منصة الذكاء الاصطناعي الجزائرية الأولى.
+مطوّر ومهندس ذكاء اصطناعي جزائري من **عنابة**، منشئ **DZ AGENT** — منصة الذكاء الاصطناعي الجزائرية الأولى.
 
 🎯 **تخصصاته:** Full-Stack AI Development · Multi-Agent Systems · NLP · الدارجة الجزائرية
 
@@ -297,8 +297,8 @@ function App() {
   useEffect(() => {
     // Console deterrent for devtools users
     const _warn = () => {
-      console.log('%c⛔ DZ-GPT — محمي', 'color:#c8ff00;font-size:22px;font-weight:bold;background:#111;padding:8px 18px;border-radius:6px')
-      console.log('%cجميع الحقوق محفوظة © DZ-GPT\nيُمنع استخراج الكود أو نسخ الواجهة أو استخدام API دون إذن كتابي.', 'color:#ff6b6b;font-size:13px')
+      console.log('%c⛔ DZ AGENT — محمي', 'color:#c8ff00;font-size:22px;font-weight:bold;background:#111;padding:8px 18px;border-radius:6px')
+      console.log('%cجميع الحقوق محفوظة © DZ AGENT\nيُمنع استخراج الكود أو نسخ الواجهة أو استخدام API دون إذن كتابي.', 'color:#ff6b6b;font-size:13px')
       console.log('%cAll rights reserved — No scraping, cloning or unauthorized API use permitted.', 'color:#aaa;font-size:12px')
     }
     _warn()

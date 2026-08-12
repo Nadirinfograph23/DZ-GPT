@@ -113,13 +113,13 @@ function generatePDF(
 </head>
 <body>
 <div class="pdf-header">
-  <div class="pdf-header-brand">🇩🇿 DZ-GPT · dzagent.app</div>
+  <div class="pdf-header-brand">🇩🇿 DZ AGENT · dzagent.app</div>
   <div class="pdf-header-title">${docTitle}</div>
   <div class="pdf-header-date">${now}</div>
 </div>
 <div class="pdf-body">${bodyHtml}</div>
 <div class="pdf-footer">
-  <span>🇩🇿 DZ-GPT — مُنشأ بواسطة الذكاء الاصطناعي</span>
+  <span>🇩🇿 DZ AGENT — مُنشأ بواسطة الذكاء الاصطناعي</span>
   <span>${now}</span>
 </div>
 </body>
@@ -2782,7 +2782,7 @@ function QRCodeTool() {
     { label:'واتساب',    value:'https://wa.me/213XXXXXXXXX' },
     { label:'إيميل',     value:'mailto:contact@example.com' },
     { label:'هاتف',      value:'tel:+213XXXXXXXXX' },
-    { label:'نص حر',    value:'مرحباً بكم في DZ-GPT 🇩🇿' },
+    { label:'نص حر',    value:'مرحباً بكم في DZ AGENT 🇩🇿' },
   ]
 
   return (
@@ -2935,7 +2935,7 @@ body{background:#f0f0f0;display:flex;align-items:center;justify-content:center;m
     ${form.website?`<div class="contact-row">🌐 ${form.website}</div>`:''}
     ${form.address?`<div class="contact-row">📍 ${form.address}</div>`:''}
   </div>
-  <div class="brand">DZ-GPT</div>
+  <div class="brand">DZ AGENT</div>
 </div>
 </body></html>`)
     w.document.close()
@@ -3036,7 +3036,7 @@ body{background:#f0f0f0;display:flex;align-items:center;justify-content:center;m
               {form.website && <div className="dzt-bc-contact" style={{color:theme.sub}}>🌐 {form.website}</div>}
               {form.address && <div className="dzt-bc-contact" style={{color:theme.sub}}>📍 {form.address}</div>}
             </div>
-            <div className="dzt-bc-brand" style={{color:theme.accent}}>DZ-GPT</div>
+            <div className="dzt-bc-brand" style={{color:theme.accent}}>DZ AGENT</div>
           </div>
         </div>
       </div>
@@ -4157,7 +4157,7 @@ function ScreenshotTool() {
 </head>
 <body>
   <div class="hd">
-    <div class="hd-brand">🇩🇿 DZ-GPT · dzagent.app</div>
+    <div class="hd-brand">🇩🇿 DZ AGENT · dzagent.app</div>
     <div class="hd-title">${result.title || host}</div>
     <div class="hd-date">${now}</div>
   </div>
@@ -4166,7 +4166,7 @@ function ScreenshotTool() {
     <img src="${result.screenshot}" alt="screenshot"/>
   </div>
   <div class="ft">
-    <span>🇩🇿 DZ-GPT — أداة تصوير المواقع</span>
+    <span>🇩🇿 DZ AGENT — أداة تصوير المواقع</span>
     <span>${now}</span>
   </div>
 </body>

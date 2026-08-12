@@ -37,8 +37,8 @@ const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!-- Sparkle - top right small -->
   <path d="M316 186 L319 198 L331 201 L319 204 L316 216 L313 204 L301 201 L313 198 Z" fill="#0d0d0d" opacity="0.7"/>
 
-  <!-- DZ GPT text -->
-  <text x="256" y="360" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="800" fill="white" text-anchor="middle" letter-spacing="-2">DZ GPT</text>
+  <!-- DZ AGENT text -->
+  <text x="256" y="360" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="800" fill="white" text-anchor="middle" letter-spacing="-2">DZ AGENT</text>
 </svg>`
 
 writeFileSync(path.join(publicDir, 'icon.svg'), svgIcon)

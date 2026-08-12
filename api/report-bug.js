@@ -36,7 +36,7 @@ export default async function handler(req, res) {
       const _html = `
         <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0a0a;color:#e5e5e5;border-radius:12px;overflow:hidden">
           <div style="background:linear-gradient(135deg,#00c853,#1b5e20);padding:24px 28px">
-            <h2 style="margin:0;color:#fff;font-size:20px">🐛 بلاغ جديد — DZ GPT</h2>
+            <h2 style="margin:0;color:#fff;font-size:20px">🐛 بلاغ جديد — DZ AGENT</h2>
             <p style="margin:6px 0 0;color:#c8e6c9;font-size:13px">${ts}</p>
           </div>
           <div style="padding:24px 28px">
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
             </div>
           </div>
           <div style="padding:16px 28px;background:#111;border-top:1px solid #222;text-align:center;color:#555;font-size:11px">
-            DZ GPT Platform — تم الإرسال تلقائياً
+            DZ AGENT Platform — تم الإرسال تلقائياً
           </div>
         </div>`
 
@@ -77,9 +77,9 @@ export default async function handler(req, res) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'DZ GPT Bugs <onboarding@resend.dev>',
+          from: 'DZ AGENT Bugs <onboarding@resend.dev>',
           to:   [_adminMail],
-          subject: `🐛 بلاغ DZ GPT: ${typeLabel}${name ? ` — ${name}` : ''}`,
+          subject: `🐛 بلاغ DZ AGENT: ${typeLabel}${name ? ` — ${name}` : ''}`,
           html: _html,
           reply_to: email || undefined,
         }),
@@ -120,7 +120,7 @@ export default async function handler(req, res) {
         description.trim(),
         ``,
         `---`,
-        `*تم الإرسال تلقائياً من DZ GPT Platform*`,
+        `*تم الإرسال تلقائياً من DZ AGENT Platform*`,
       ].join('\n')
 
       const _ghRes = await fetch('https://api.github.com/repos/Nadirinfograph23/DZ-GPT/issues', {

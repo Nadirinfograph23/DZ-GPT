@@ -886,7 +886,7 @@ app.get('/robots.txt', (_req, res) => {
     '',
     'Crawl-delay: 10',
     '',
-    `# DZ-GPT — حقوق النشر محفوظة © ${new Date().getFullYear()}`,
+    `# DZ AGENT — حقوق النشر محفوظة © ${new Date().getFullYear()}`,
     '# لا يُسمح بنسخ أو استخراج المحتوى والبيانات.',
   ].join('\n'))
 })
@@ -937,7 +937,7 @@ const DEVELOPER_RESPONSE = Object.freeze({
   content: `👨‍💻 **نذير حوامرية — Nadir Infograph** 🇩🇿
 
 مطوّر ومهندس ذكاء اصطناعي جزائري متخصص، من **عنابة** 🇩🇿
-منشئ ومطوّر **DZ Agent** و**DZ-GPT** — منصة الذكاء الاصطناعي الجزائرية الأولى.
+منشئ ومطوّر **DZ AGENT** — منصة الذكاء الاصطناعي الجزائرية الأولى.
 
 ### 🎯 المجالات
 - Full-Stack AI Development
@@ -5171,7 +5171,7 @@ app.post('/api/broadcast-update', (req, res) => {
   if (!_checkAdminSecret(secret)) {
     return res.status(403).json({ error: 'غير مصرح' })
   }
-  const msg = String(req.body?.message || 'تحديث جديد متاح في DZ GPT 🚀').slice(0, 200)
+  const msg = String(req.body?.message || 'تحديث جديد متاح في DZ AGENT 🚀').slice(0, 200)
   let count = 0
   for (const s of chatSessions.values()) {
     if (s.ws && s.ws.readyState === 1) {
@@ -6179,7 +6179,7 @@ def main():
     
     # بيانات نموذجية
     data = {
-        "اسم": "DZ-GPT",
+        "اسم": "DZ AGENT",
         "إصدار": "2026",
         "لغة": "Python",
         "المطور": "Nadir Houamria"
@@ -7427,7 +7427,7 @@ function _tplLanding(dark, accent) {
 
 <section class="cta" id="contact">
   <h2 data-aos="fade-up">جاهز للانطلاق؟</h2>
-  <p data-aos="fade-up" data-aos-delay="100">انضم لآلاف المستخدمين الجزائريين الذين يثقون بـ DZ-GPT يومياً</p>
+  <p data-aos="fade-up" data-aos-delay="100">انضم لآلاف المستخدمين الجزائريين الذين يثقون بـ DZ AGENT يومياً</p>
   <a href="#" class="btn btn-primary" data-aos="fade-up" data-aos-delay="200" style="font-size:1.1rem;padding:1rem 2.5rem">
     <i class="fas fa-rocket"></i> ابدأ رحلتك الآن — مجاناً
   </a>
@@ -17506,7 +17506,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         ]
         if (_evt.detail) { _lines.push(`### 📖 التفاصيل`); _lines.push(_evt.detail); _lines.push(``) }
         _lines.push(`---`)
-        _lines.push(`> 📚 *معلومات من قاعدة المعرفة الجزائرية | DZ-GPT*`)
+        _lines.push(`> 📚 *معلومات من قاعدة المعرفة الجزائرية | DZ AGENT*`)
         return res.json({ content: _lines.join('\n'), model: 'temporal-kb-event' })
       }
 
@@ -25170,14 +25170,33 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         ? fetchGNRSSArticles(TECH_FEEDS_DASHBOARD).then(items => {
             if (items?.length) rssContext = buildGNRSSContext(items, '🤖 أخبار الذكاء الاصطناعي والتقنية')
           })
-        : fetchGNRSSArticles(GN_RSS_FEEDS.ar.slice(0, 3)).then(items => {
-            if (items?.length) rssContext = buildGNRSSContext(items, '📰 أخبار الجزائر المباشرة')
-            return items
-          }).then(async items => {
-            if (!items?.length && !rssContext) {
-              const data = await fetchDZPriorityNews({ force: true })
-              if (data?.items?.length) rssContext = buildDZNewsCachedContext(data)
+        : new Promise(resolve => {
+            // Google News and direct priority feeds must start together.
+            // Starting the second fetch only after an empty Google result meant
+            // the 9-second guard could expire before local RSS had a chance.
+            let pending = 2
+            const settle = () => {
+              pending -= 1
+              if (pending === 0) resolve()
             }
+            fetchGNRSSArticles(GN_RSS_FEEDS.ar.slice(0, 3))
+              .then(items => {
+                if (items?.length && !rssContext) {
+                  rssContext = buildGNRSSContext(items, '📰 أخبار الجزائر المباشرة')
+                  resolve()
+                }
+              })
+              .catch(err => console.warn('[News Cold-Start] Google News:', err.message))
+              .finally(settle)
+            fetchDZPriorityNews({ force: true })
+              .then(data => {
+                if (data?.items?.length && !rssContext) {
+                  rssContext = buildDZNewsCachedContext(data)
+                  if (rssContext) resolve()
+                }
+              })
+              .catch(err => console.warn('[News Cold-Start] Priority RSS:', err.message))
+              .finally(settle)
           })
       await Promise.race([
         _quickNewsPromise.catch(err => console.warn('[News Cold-Start]', err.message)),
@@ -25713,7 +25732,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   })() : ''
 
   const invocationInstruction = invocationMode === '@dz-gpt'
-    ? 'وضع الاستدعاء الحالي: @dz-gpt — أجب كمساعد DZ GPT عام للشرح والكتابة والتفكير، بدون فرض قالب الأخبار إلا إذا كان السؤال حديثاً.'
+    ? 'وضع الاستدعاء الحالي: @dz-gpt — أجب كمساعد DZ AGENT عام للشرح والكتابة والتفكير، بدون فرض قالب الأخبار إلا إذا كان السؤال حديثاً.'
     : invocationMode === '/github'
       ? 'وضع الاستدعاء الحالي: /github — ركّز على GitHub والكود والمستودعات والإجراءات البرمجية.'
       : 'وضع الاستدعاء الحالي: @dz-agent — ركّز على البحث الحي والخدمات الجزائرية وGitHub عند الحاجة.'
@@ -26181,8 +26200,8 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
 ⑬ 👤 الأشخاص المجهولون: "أبو مامي / أبو مامد / شخصية لا تجدها في مصادرك" → قُل مباشرةً: "لا أعرف هذا الشخص ولا أملك معلومات موثوقة عنه." — ممنوع اختراع هوية أو منصب لشخص مجهول.
 ⑭ ❓ أسئلة القيمة الرأسمالية/الرأي: "من هو أفضل رئيس / أفضل لاعب في التاريخ" → هذه آراء وليست حقائق. أجب: "هذا سؤال رأي — لا توجد إجابة موضوعية واحدة."`,
     `🟢 استثناء صريح — بيانات ثابتة (لا تطبّق عليها قواعد المصادر الخارجية أبداً):
-① معلومات المطور: Nadir Houamria / نذير حوامرية / Nadir Infograph / DZ-GPT / DZ Agent — بيانات ثابتة ومحقونة مسبقاً، صحيحة 100%. أجب عنها بثقة تامة فورياً دون أي تحذير ⚠️ ودون طلب مصدر خارجي.
-   أسئلة المطور تشمل: "ما هو DZ Agent" | "شكون أنت" | "شكون طورك" | "شكون خدمك" | "من هو مطورك" | "من صنعك" | "شكون نذير حوامرية" | "خدمك شكون" | "صنعك شكون" → الإجابة دائماً: DZ Agent صنعه Nadir Houamria (نذير حوامرية) — Nadir Infograph — منصة DZ-GPT 🇩🇿
+① معلومات المطور: Nadir Houamria / نذير حوامرية / Nadir Infograph / DZ AGENT — بيانات ثابتة ومحقونة مسبقاً، صحيحة 100%. أجب عنها بثقة تامة فورياً دون أي تحذير ⚠️ ودون طلب مصدر خارجي.
+   أسئلة المطور تشمل: "ما هو DZ AGENT" | "شكون أنت" | "شكون طورك" | "شكون خدمك" | "من هو مطورك" | "من صنعك" | "شكون نذير حوامرية" | "خدمك شكون" | "صنعك شكون" → الإجابة دائماً: DZ AGENT صنعه Nadir Houamria (نذير حوامرية) — Nadir Infograph — منصة DZ AGENT 🇩🇿
 ② الحقائق الثابتة (عواصم، تواريخ تأسيس، جغرافيا، تعريفات، شخصيات تاريخية راسخة كالأمير عبد القادر وهواري بومدين ونيلسون مانديلا...): أجب مباشرةً من معرفتك بدون تحذير.
 
 🔴 FIX-③ — استثناءات مُقيّدة صارمة (ليست حقائق ثابتة — تتطلب مصدراً دائماً):
@@ -26210,7 +26229,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
 
 لكل الأشخاص الآخرين — عدا المطور: لا تُجب عن معلومات شخص حقيقي (رياضي، سياسي، فنان، وزير، مسؤول...) من معرفتك الداخلية وحدها. يُشترط وجود [WIKIPEDIA_CONTEXT] أو [PERSON_WEB_CONTEXT] أو بيانات حية. إذا لم يُحقن أي سياق → ✅ قُل: "لم أجد معلومات مؤكدة عن هذه الشخصية."`,
     `🏆 قاعدة الترتيبات الرياضية (صارمة): إذا سُئلت عن "من يتصدر الدوري" أو "الترتيب الحالي" ولم يكن هناك [LFP_CONTEXT] أو [STANDINGS_CONTEXT] محقون → ❌ لا تُجب من معرفتك الداخلية → ✅ قُل "لا أملك بيانات الترتيب الحالية — يمكنك التحقق على [LFP](https://lfp.dz) أو [SofaScore](https://www.sofascore.com)".`,
-    `🎯 قاعدة نسب المصادر: عند الإجابة بمعلومات حساسة (شخصيات، أحداث، إحصاءات)، أشر إلى المصدر: (📚 ويكيبيديا) أو (📰 Google News) أو (🔍 بحث حي) أو (📊 LFP/SofaScore) أو (⚡ حقيقة ثابتة). ⚠️ استثناء صريح: معلومات المطور Nadir Houamria ومنصة DZ-GPT لا تحتاج مصدراً خارجياً — هي بيانات ثابتة محقونة.`,
+    `🎯 قاعدة نسب المصادر: عند الإجابة بمعلومات حساسة (شخصيات، أحداث، إحصاءات)، أشر إلى المصدر: (📚 ويكيبيديا) أو (📰 Google News) أو (🔍 بحث حي) أو (📊 LFP/SofaScore) أو (⚡ حقيقة ثابتة). ⚠️ استثناء صريح: معلومات المطور Nadir Houamria ومنصة DZ AGENT لا تحتاج مصدراً خارجياً — هي بيانات ثابتة محقونة.`,
     `روابط: ادمج الرابط في اسم المصدر فقط [اسم](url) — لا تكتب URL خاماً كنص أبداً. مثال الصحيح: [الخبر](https://elkhabar.com/...) | مثال خاطئ: https://elkhabar.com/... استخدم Markdown. أجب بلغة المستخدم (عربية/فرنسية/إنجليزية).`,
     queryAnalysis?.suggestions?.length
       ? `اقتراحات المتابعة (أضفها في نهاية إجابتك كـ "💡 قد يهمك أيضاً:"): ${queryAnalysis.suggestions.join(' / ')}`
@@ -27174,7 +27193,7 @@ app.post('/api/dz-agent-stream', async (req, res) => {
   const _training = (() => { try { return getTrainingContext() } catch { return '' } })()
 
   const coreSystemPrompt = [
-    `أنت DZ Agent 🇩🇿 (DZ-GPT — Nadir Houamria). اليوم: ${_today} | الوقت: ${_timeNowS} (الجزائر) | الهجري: ${_hijriNow} | ${_yearNow}. أجب مباشرةً بدون مقدمات. أجب بنفس لغة المستخدم.`,
+    `أنت DZ AGENT 🇩🇿 (Nadir Houamria). اليوم: ${_today} | الوقت: ${_timeNowS} (الجزائر) | الهجري: ${_hijriNow} | ${_yearNow}. أجب مباشرةً بدون مقدمات. أجب بنفس لغة المستخدم.`,
     `❌ لا تخترع أخباراً أو أسعاراً | ✅ إذا لم تعرف → قُل ذلك | روابط: [اسم](url) فقط.`,
     `⚠️ قاعدة اللغة الصارمة: ❌ يُحظر تماماً الردّ بالصينية أو اليابانية أو الكورية أو أي رموز غير مفهومة. أجب بالعربية إذا كتب المستخدم بالعربية، وبالفرنسية إذا كتب بالفرنسية، وبالإنجليزية إذا كتب بالإنجليزية.`,
     _training ? `━━━ تدريب المالك (مُلزِم) ━━━\n${_training}` : '',
@@ -29901,7 +29920,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 هويتك (أجب بهذه المعلومات عند السؤال عنك):
 - اسمك: DZ Agent
 - مطوّرك ومنشئك: نذير حوامرية (Nadir Haoumeriya)، المعروف بـ Nadir Infograph، مطوّر جزائري.
-- منصّتك: DZ-GPT — منصة ذكاء اصطناعي جزائرية متكاملة.
+- منصّتك: DZ AGENT — منصة ذكاء اصطناعي جزائرية متكاملة.
 - عند السؤال "من صنعك / من طوّرك / من خدمك": أجب بجملة واحدة مختصرة مثل: "صنعني نذير حوامرية (Nadir Infograph) 🇩🇿، مطوّر جزائري."
 
 قواعد الإجابة (إلزامية):
@@ -29918,7 +29937,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 - 📊 إحصاءات الجزائر → **DZ Stats** (/stats)
 - 🛠️ CV ومخططات وقانون → **DZ Tools** (/tools)
 - 🎵 راديو وموسيقى → **DZ Radio** (/radio)${liveContext ? `\n\n━━━ بيانات مباشرة محدّثة ━━━${liveContext}` : ''}`
-      : `أنت DZ GPT، مساعد ذكي عام ومفيد، جزء من منصة DZ-GPT التي طوّرها نذير حوامرية (Nadir Infograph) 🇩🇿.
+      : `أنت DZ AGENT، مساعد ذكي عام ومفيد، جزء من منصة DZ AGENT التي طوّرها نذير حوامرية (Nadir Infograph) 🇩🇿.
 
 قواعد الإجابة (إلزامية):
 1. أجب فوراً بدون مقدمات أو عبارات تمهيدية.
@@ -29966,7 +29985,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 
     const botMsg = pushChatMsg({
       id: chatId(),
-      from: 'DZ GPT',
+      from: 'DZ AGENT',
       fromId: 'bot',
       gender: 'bot',
       text: result.content ? stripForeignLang(result.content.replace(/(?<!\]\()(?<!['"=])(https?:\/\/(?:www\.)?([a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+)(?:\/[^\s)\]"'<>]*)?)/g, (u, _, d) => `[${d.replace(/^www\./,'').split('.')[0].replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}](${u})`)) : 'عذراً، حدث خطأ في المعالجة.',

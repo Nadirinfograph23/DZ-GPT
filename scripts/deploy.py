@@ -354,7 +354,7 @@ def deploy(commit_msg, files):
         print(f"✓ {deployment_ref['kind']}: {deployment_ref['id']}")
         print(f'   https://dzagent.app ← يتحدث خلال ~2 دقيقة')
         if wait_for_vercel(deployment_ref):
-            notify_connected_users(f'تم نشر تحديث جديد من الفرع {BRANCH} في DZ GPT 🚀')
+            notify_connected_users(f'تم نشر تحديث جديد من الفرع {BRANCH} في DZ AGENT 🚀')
     else:
         print('⚠️  تحقق يدوياً من Vercel')
 

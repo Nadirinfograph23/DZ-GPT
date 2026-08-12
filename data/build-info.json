@@ -1,8 +1,8 @@
 {
-  "commit": "7afedab96e847d2d240244d0f7941be21d0d8a2a",
-  "commitShort": "7afedab9",
+  "commit": "9b110aed0e571a9112f3f0b994ae135e538e3cad",
+  "commitShort": "9b110aed",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: rename visible branding to DZ AGENT and harden cold-start news",
-  "deployedAt": "2026-08-12T01:03:43.034632Z",
+  "message": "fix: stabilize Algeria news on Cloudflare Worker and brand shell as DZ AGENT",
+  "deployedAt": "2026-08-12T12:28:35.560085Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -25163,19 +25163,25 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // AI key, never fall through to the multi-source/search pipeline: fetch a
     // small, bounded RSS sample and return it (or a clear response) promptly.
     if (_directNewsMode && !rssContext) {
+      // استخدم Google News السريع أولاً في التشغيل البارد. جلب كل المصادر
+      // المحلية ينتظر أبطأ RSS حتى 8 ثوانٍ، وكان ذلك يتجاوز المهلة
+      // ويُظهر رسالة فشل رغم توفر أخبار صالحة من Google News.
       const _quickNewsPromise = _isTechAIQuery
         ? fetchGNRSSArticles(TECH_FEEDS_DASHBOARD).then(items => {
             if (items?.length) rssContext = buildGNRSSContext(items, '🤖 أخبار الذكاء الاصطناعي والتقنية')
           })
-        : fetchDZPriorityNews({ force: true }).then(data => {
-            if (data?.items?.length) rssContext = buildDZNewsCachedContext(data)
+        : fetchGNRSSArticles(GN_RSS_FEEDS.ar.slice(0, 3)).then(items => {
+            if (items?.length) rssContext = buildGNRSSContext(items, '📰 أخبار الجزائر المباشرة')
+            return items
+          }).then(async items => {
+            if (!items?.length && !rssContext) {
+              const data = await fetchDZPriorityNews({ force: true })
+              if (data?.items?.length) rssContext = buildDZNewsCachedContext(data)
+            }
           })
-      // RSS providers can take a few seconds on a cold Worker instance.
-      // The previous 3.5s cutoff returned the unavailable message before
-      // the live sources had a chance to respond.
       await Promise.race([
         _quickNewsPromise.catch(err => console.warn('[News Cold-Start]', err.message)),
-        new Promise(resolve => setTimeout(resolve, 8000)),
+        new Promise(resolve => setTimeout(resolve, 9000)),
       ])
       if (rssContext) {
         console.log(`[NoKey:News-ColdStart] Returning bounded RSS response (${rssContext.length} chars)`)

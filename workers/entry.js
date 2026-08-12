@@ -1,5 +1,5 @@
 /**
- * Cloudflare Workers entry point — DZ-GPT
+ * Cloudflare Workers entry point — DZ AGENT
  * =========================================
  * Direct bridge: CF Workers Request → Express (Node.js) → CF Workers Response
  *
@@ -11,6 +11,145 @@
  */
 
 let expressApp = null
+
+// Cloudflare Workers can cold-start before the Express news preloader has
+// populated its in-memory cache. Keep a small, keyless RSS fallback here so a
+// valid live-news request never degrades to "news unavailable" just because the
+// Node compatibility bridge is still warming up.
+const WORKER_NEWS_FEEDS = [
+  {
+    name: 'Google أخبار الجزائر',
+    url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',
+  },
+  { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
+  { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
+  { name: 'البلاد', url: 'https://www.elbilad.net/feed' },
+]
+
+const WORKER_NEWS_QUERY_RE = /(?:أخبار|خبر|عاجل|اليوم|الآن|آخر|news|breaking|actualité|derni[eè]res)/i
+
+function decodeXmlText(value = '') {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .trim()
+}
+
+function parseWorkerRss(xml, source) {
+  const items = []
+  const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
+  let match
+
+  while ((match = itemRegex.exec(xml)) !== null && items.length < 10) {
+    const block = match[1]
+    const get = (tag) => {
+      const found = block.match(new RegExp(
+        `<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`,
+        'i',
+      ))
+      return found ? decodeXmlText(found[1]) : ''
+    }
+    const title = get('title')
+    if (!title) continue
+    const link = get('link') || (
+      block.match(/<link[^>]+href=["']([^"']+)["']/i) || []
+    )[1] || ''
+    items.push({
+      title,
+      link,
+      source,
+      pubDate: get('pubDate') || get('dc:date') || get('updated') || '',
+    })
+  }
+
+  return items
+}
+
+async function fetchWorkerNewsFallback(request) {
+  let payload
+  try {
+    payload = await request.json()
+  } catch {
+    return null
+  }
+
+  const messages = Array.isArray(payload?.messages) ? payload.messages : []
+  const lastUserMessage = [...messages]
+    .reverse()
+    .find(message => message?.role === 'user' && typeof message.content === 'string')
+    ?.content
+    ?.trim() || ''
+
+  const isAlgeriaNewsQuery = /الجزائر|الجزاير|algeria|alg[eé]rie/i.test(lastUserMessage)
+  if (!isAlgeriaNewsQuery || !WORKER_NEWS_QUERY_RE.test(lastUserMessage)) return null
+
+  const settled = await Promise.allSettled(
+    WORKER_NEWS_FEEDS.map(async (feed) => {
+      const response = await fetch(feed.url, {
+        headers: {
+          Accept: 'application/rss+xml,application/xml,text/xml,*/*',
+          'User-Agent': 'DZ-Agent-Worker/1.0 (+https://dzagent.app)',
+        },
+        signal: AbortSignal.timeout(6500),
+      })
+      if (!response.ok) return []
+      return parseWorkerRss(await response.text(), feed.name)
+    }),
+  )
+
+  const seen = new Set()
+  const items = settled
+    .flatMap(result => result.status === 'fulfilled' ? result.value : [])
+    .filter(item => {
+      const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .sort((a, b) => {
+      const aTime = Date.parse(a.pubDate || '') || 0
+      const bTime = Date.parse(b.pubDate || '') || 0
+      return bTime - aTime
+    })
+    .slice(0, 20)
+
+  if (!items.length) return null
+
+  const date = new Date().toLocaleDateString('ar-DZ', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+  const content = [
+    `## 📰 آخر أخبار الجزائر — ${date}`,
+    '',
+    ...items.map(item => {
+      const link = item.link ? ` [عرض الخبر](${item.link})` : ''
+      return `- **${item.title}** — *${item.source}*${link}`
+    }),
+    '',
+    '---',
+    '> ℹ️ تم جلب العناوين مباشرة من RSS عبر Cloudflare Worker.',
+  ].join('\n')
+
+  return new Response(JSON.stringify({
+    content,
+    status: 'rss_worker_direct',
+  }), {
+    status: 200,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+    },
+  })
+}
 
 /**
  * Copy CF Workers secrets/vars into process.env so server.js finds its keys.
@@ -192,14 +331,45 @@ export default {
 
     // ── Static assets → ASSETS binding (dist/) ────────────────────────────
     if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/ws/')) {
-      if (env.ASSETS) return env.ASSETS.fetch(request)
+      if (env.ASSETS) {
+        const asset = await env.ASSETS.fetch(request)
+        // Keep the public brand correct even if an edge has a stale HTML
+        // asset from before the rename. This only touches user-facing shell
+        // metadata; routes, script URLs, and all application behavior remain
+        // unchanged.
+        if (
+          asset.ok &&
+          (url.pathname === '/' ||
+            url.pathname === '/index.html' ||
+            url.pathname === '/manifest.webmanifest')
+        ) {
+          const headers = new Headers(asset.headers)
+          const body = (await asset.text()).replaceAll('DZ GPT', 'DZ AGENT')
+          return new Response(body, { status: asset.status, headers })
+        }
+        return asset
+      }
       return new Response('Not Found', { status: 404 })
     }
 
     // ── API routes → Express ───────────────────────────────────────────────
     try {
+      // Preserve the body for a Worker-native fallback. The Express bridge
+      // consumes the original stream before we can inspect its response.
+      const newsRequest = (
+        request.method === 'POST' &&
+        url.pathname === '/api/dz-agent-chat'
+      ) ? request.clone() : null
+      // Serve the Algeria-news card before loading the Node compatibility
+      // bridge. This makes the keyless news path independent of Express,
+      // whose optional stream modules can fail during a Worker cold start.
+      if (newsRequest) {
+        const directNews = await fetchWorkerNewsFallback(newsRequest)
+        if (directNews) return directNews
+      }
       const app = await getApp(env)
-      return await handleWithExpress(app, request)
+      const response = await handleWithExpress(app, request)
+      return response
     } catch (err) {
       console.error('[Worker] Fatal:', err?.message, '\n', err?.stack?.split('\n').slice(0,3).join('\n'))
       return new Response(

@@ -101,6 +101,24 @@ for (const rel of [
   patchFile(rel, ICONV_OLD, ICONV_NEW, 'CF Workers: streams/extend-node unavailable')
 }
 
+// ─── 1c. Skip Node-only stream extensions inside Cloudflare Workers ───────────
+// Wrangler may replace browser-disabled `./streams` modules with an empty
+// CommonJS wrapper. Calling that wrapper is unsafe on some Worker runtimes,
+// even though iconv-lite's encode/decode functionality itself is sufficient
+// for Express request parsing.
+const ICONV_CF_NEW = ICONV_NEW.replace(
+  'if (nodeVer) {',
+  `// CF runtime: Node stream extensions skipped
+if (nodeVer && !(typeof process !== 'undefined' && process.env && process.env.CF_PAGES)) {`,
+)
+
+for (const rel of [
+  'node_modules/body-parser/node_modules/iconv-lite/lib/index.js',
+  'node_modules/raw-body/node_modules/iconv-lite/lib/index.js',
+]) {
+  patchFile(rel, ICONV_NEW, ICONV_CF_NEW, 'CF runtime: Node stream extensions skipped')
+}
+
 // ─── 1b. iconv-lite root copy ─────────────────────────────────────────────────
 patchFile(
   'node_modules/iconv-lite/lib/index.js',

@@ -347,6 +347,27 @@ export default {
           const body = (await asset.text()).replaceAll('DZ GPT', 'DZ AGENT')
           return new Response(body, { status: asset.status, headers })
         }
+
+        // BrowserRouter needs the application shell for direct navigations and
+        // refreshes such as /dz-agent. Only fall back for document-like
+        // requests or extensionless paths: a missing .js/.css/image must stay
+        // a real 404, and /api/* and /ws/* never enter this branch.
+        const lastPathSegment = url.pathname.split('/').pop() || ''
+        const acceptsHtml = (request.headers.get('accept') || '')
+          .toLowerCase()
+          .includes('text/html')
+        const isDocumentRequest = request.method === 'GET' || request.method === 'HEAD'
+        const isExtensionlessPath = !lastPathSegment.includes('.')
+
+        if (isDocumentRequest && (acceptsHtml || isExtensionlessPath)) {
+          const indexRequest = new Request(new URL('/index.html', request.url), {
+            method: request.method,
+            headers: request.headers,
+          })
+          const spaShell = await env.ASSETS.fetch(indexRequest)
+          if (spaShell.ok) return spaShell
+        }
+
         return asset
       }
       return new Response('Not Found', { status: 404 })

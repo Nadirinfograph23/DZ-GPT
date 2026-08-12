@@ -42,8 +42,8 @@ function IosGuide({ onClose }: { onClose: () => void }) {
       <div className="pwa-guide-sheet" onClick={e => e.stopPropagation()}>
         <button className="pwa-guide-close" onClick={onClose}><X size={18} /></button>
         <div className="pwa-guide-header">
-          <img src="/pwa-192x192.png" alt="DZ GPT" width={52} height={52} />
-          <h3 className="pwa-guide-title">تثبيت DZ GPT على iPhone</h3>
+          <img src="/pwa-192x192.png" alt="DZ AGENT" width={52} height={52} />
+          <h3 className="pwa-guide-title">تثبيت DZ AGENT على iPhone</h3>
           <p className="pwa-guide-note">يعمل فقط عبر متصفح Safari</p>
         </div>
         <div className="pwa-guide-steps">
@@ -91,8 +91,8 @@ function AndroidGuide({ onClose }: { onClose: () => void }) {
       <div className="pwa-guide-sheet" onClick={e => e.stopPropagation()}>
         <button className="pwa-guide-close" onClick={onClose}><X size={18} /></button>
         <div className="pwa-guide-header">
-          <img src="/pwa-192x192.png" alt="DZ GPT" width={52} height={52} />
-          <h3 className="pwa-guide-title">تثبيت DZ GPT على Android</h3>
+          <img src="/pwa-192x192.png" alt="DZ AGENT" width={52} height={52} />
+          <h3 className="pwa-guide-title">تثبيت DZ AGENT على Android</h3>
           <p className="pwa-guide-note">عبر قائمة المتصفح</p>
         </div>
         <div className="pwa-guide-steps">
@@ -222,11 +222,11 @@ export default function PwaInstallBanner() {
     <>
       <div className="pwa-banner">
         <div className="pwa-banner-icon">
-          <img src="/pwa-192x192.png" alt="DZ GPT" width={44} height={44} />
+          <img src="/pwa-192x192.png" alt="DZ AGENT" width={44} height={44} />
         </div>
 
         <div className="pwa-banner-text">
-          <span className="pwa-banner-title">ثبّت تطبيق DZ GPT</span>
+          <span className="pwa-banner-title">ثبّت تطبيق DZ AGENT</span>
           <span className="pwa-banner-sub">
             {hasPrompt
               ? 'أضفه إلى شاشتك الرئيسية للوصول السريع'

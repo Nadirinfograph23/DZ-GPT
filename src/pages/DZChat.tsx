@@ -428,7 +428,7 @@ export default function DZChat() {
     } else {
       document.title = 'DZ Chat — دردشة مجتمعية'
     }
-    return () => { document.title = 'DZ GPT' }
+    return () => { document.title = 'DZ AGENT' }
   }, [unreadCount, windowFocused])
 
   const addMessages = useCallback((incoming: ChatMessage[]) => {
@@ -550,7 +550,7 @@ export default function DZChat() {
       import('../utils/versionChecker').then(m => m.triggerUpdateBanner?.())
       window.dispatchEvent(new CustomEvent('dz:task-complete', {
         detail: {
-          title: '🚀 تحديث جديد في DZ GPT',
+          title: '🚀 تحديث جديد في DZ AGENT',
           body: String(data.message || 'تم إصدار تحديث جديد للتطبيق.'),
         },
       }))
@@ -706,7 +706,7 @@ export default function DZChat() {
         from: 'System',
         fromId: 'system',
         gender: 'bot',
-        text: 'مرحباً بك في DZ Chat! هذه دردشة عامة لمستخدمي DZ GPT. يمكنك استدعاء الذكاء الاصطناعي باستخدام @dzagent متبوعاً بسؤالك.',
+        text: 'مرحباً بك في DZ Chat! هذه دردشة عامة لمستخدمي DZ AGENT. يمكنك استدعاء الذكاء الاصطناعي باستخدام @dzagent متبوعاً بسؤالك.',
         timestamp: Date.now(),
         isSystem: true,
       }
@@ -1135,7 +1135,7 @@ export default function DZChat() {
               <MessageCircle size={32} className="dzc-entry-logo-icon" />
               <span className="dzc-entry-logo-text">DZ Chat</span>
             </div>
-            <p className="dzc-entry-subtitle">دردشة مجتمعية حية لمستخدمي DZ GPT</p>
+            <p className="dzc-entry-subtitle">دردشة مجتمعية حية لمستخدمي DZ AGENT</p>
 
             <div className="dzc-entry-field">
               <input

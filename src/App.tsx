@@ -850,7 +850,7 @@ function App() {
           <div className="logo">
             <Sparkles size={22} className="logo-icon" />
             <div className="logo-text-group">
-              <span className="logo-text">DZ GPT</span>
+              <span className="logo-text">DZ AGENT</span>
               <span className="logo-subtitle">BY NADIR HOUAMRIA</span>
             </div>
           </div>
@@ -957,7 +957,7 @@ function App() {
             <div className="logo mobile-logo">
               <Sparkles size={20} className="logo-icon" />
               <div className="logo-text-group">
-                <span className="logo-text">DZ GPT</span>
+                <span className="logo-text">DZ AGENT</span>
                 <span className="logo-subtitle">BY NADIR HOUAMRIA</span>
               </div>
             </div>
@@ -1137,7 +1137,7 @@ function App() {
               <div className="welcome-icon">
                 <Sparkles size={44} />
               </div>
-              <h1 className="welcome-title">DZ GPT</h1>
+              <h1 className="welcome-title">DZ AGENT</h1>
               <p className="welcome-subtitle">
                 AI Chat powered by {currentModel.name}
               </p>

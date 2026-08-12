@@ -337,7 +337,7 @@ export default function DZHome() {
                 </defs>
               </svg>
             </div>
-            <span className="dz-home-logo-text">DZ GPT</span>
+            <span className="dz-home-logo-text">DZ AGENT</span>
           </div>
 
           {/* ── حقوق الـ nav: شارة + أيقونات ── */}
@@ -384,7 +384,7 @@ export default function DZHome() {
 
       {/* ===== HERO ===== */}
       <section className="dz-home-hero">
-        <h1 className="dz-home-hero-title">مرحباً بك في <span>DZ GPT</span></h1>
+        <h1 className="dz-home-hero-title">مرحباً بك في <span>DZ AGENT</span></h1>
         <p className="dz-home-hero-sub">منصة الذكاء الاصطناعي الجزائرية — اختر الأداة المناسبة لك</p>
       </section>
 

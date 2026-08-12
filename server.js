@@ -25170,9 +25170,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         : fetchDZPriorityNews({ force: true }).then(data => {
             if (data?.items?.length) rssContext = buildDZNewsCachedContext(data)
           })
+      // RSS providers can take a few seconds on a cold Worker instance.
+      // The previous 3.5s cutoff returned the unavailable message before
+      // the live sources had a chance to respond.
       await Promise.race([
         _quickNewsPromise.catch(err => console.warn('[News Cold-Start]', err.message)),
-        new Promise(resolve => setTimeout(resolve, 3500)),
+        new Promise(resolve => setTimeout(resolve, 8000)),
       ])
       if (rssContext) {
         console.log(`[NoKey:News-ColdStart] Returning bounded RSS response (${rssContext.length} chars)`)

@@ -1,7 +1,7 @@
 {
-  "name": "DZ GPT - ذكاء اصطناعي جزائري",
-  "short_name": "DZ GPT",
-  "description": "منصة الذكاء الاصطناعي الجزائرية — DZ GPT by Nadir Houamria",
+  "name": "DZ AGENT - ذكاء اصطناعي جزائري",
+  "short_name": "DZ AGENT",
+  "description": "منصة الذكاء الاصطناعي الجزائرية — DZ AGENT by Nadir Houamria",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -41,7 +41,7 @@
     {
       "name": "محادثة جديدة",
       "url": "/dz-chat",
-      "description": "ابدأ محادثة جديدة مع DZ GPT",
+      "description": "ابدأ محادثة جديدة مع DZ AGENT",
       "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
     },
     {

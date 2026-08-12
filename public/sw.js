@@ -1,4 +1,4 @@
-// DZ GPT — Service Worker v5.0
+// DZ AGENT — Service Worker v5.0
 // يدعم: PWA install، offline caching، push notifications، auto-update versioning
 const SHELL_CACHE   = 'dz-gpt-shell-v13'  // ← رُفع لإجبار كل المتصفحات على استلام SW_UPDATED
 const AUDIO_CACHE   = 'dz-tube-audio-v1'
@@ -128,14 +128,14 @@ self.addEventListener('fetch', (event) => {
 
 // ── Push notifications ────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
-  let data = { title: 'DZ GPT', body: 'رسالة جديدة' }
+  let data = { title: 'DZ AGENT', body: 'رسالة جديدة' }
   if (event.data) {
     try { data = event.data.json() } catch {
-      try { data = { title: 'DZ GPT', body: event.data.text() } } catch {}
+      try { data = { title: 'DZ AGENT', body: event.data.text() } } catch {}
     }
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'DZ GPT', {
+    self.registration.showNotification(data.title || 'DZ AGENT', {
       body:    data.body || '',
       icon:    '/pwa-192x192.png',
       badge:   '/pwa-192x192.png',

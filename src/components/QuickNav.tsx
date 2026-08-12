@@ -134,7 +134,7 @@ export default function QuickNav() {
         </nav>
 
         <div className="qnav-drawer-footer">
-          <span>DZ-GPT</span>
+          <span>DZ AGENT</span>
           <span className="qnav-version">v5</span>
         </div>
       </div>

@@ -5,3 +5,4 @@
 - [Deploy workflow](deploy-workflow.md) — الفرع النشط devin/1774405518-init-dz-gpt؛ Vercel عبر deploy hook.
 - [Vercel hook format](vercel-hook-format.md) — قيمة hook يجب أن تكون رابط HTTP(S) كاملاً، لا token أو hostname فقط.
 - [Live news cold-start](news-cold-start.md) — ابدأ RSS المباشر وGoogle News بالتوازي قبل مهلة الإقلاع القصيرة لتفادي fallback كاذب.
+- [Cloudflare iconv compatibility](cloudflare-iconv.md) — عطّل امتدادات Node في iconv-lite داخل Worker قبل أن يجمّع Wrangler الحزمة.

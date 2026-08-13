@@ -7,8 +7,10 @@
  *   @whatwg-node/server passes a WhatWG Request directly to Express as `req`.
  *   Express then tries `req.url = req.url.slice(1)` which throws
  *   "Cannot assign to read only property 'url'" on the native CF Request.
- *   This bridge creates a plain mutable object as req — avoiding the crash.
+ *   This bridge creates a mutable Node-compatible request — avoiding the crash.
  */
+
+import { Readable } from 'node:stream'
 
 let expressApp = null
 
@@ -192,8 +194,28 @@ async function handleWithExpress(app, cfRequest) {
   // zlib Transform stream that our fake res can't handle correctly.
   reqHeaders['accept-encoding'] = 'identity'
 
-  // ── Fake IncomingMessage (req) ────────────────────────────────────────────
-  const req = {
+  // Read JSON once at the Worker boundary. Express's body-parser expects a
+  // native IncomingMessage and can otherwise wait indefinitely on a bridged
+  // stream in the Workers runtime. Passing the parsed object and a zero body
+  // length makes body-parser take its normal "no body left to read" path.
+  let parsedBody
+  const contentType = reqHeaders['content-type'] || ''
+  if (bodyBuf?.length && /\bapplication\/json\b/i.test(contentType)) {
+    try {
+      parsedBody = JSON.parse(bodyBuf.toString('utf8'))
+      reqHeaders['content-length'] = '0'
+      delete reqHeaders['transfer-encoding']
+    } catch {
+      // Leave malformed JSON to Express so it returns its usual 400 response.
+    }
+  }
+
+  // ── IncomingMessage-compatible request ───────────────────────────────────
+  // body-parser relies on the request being a real Node readable stream. A
+  // plain object with hand-written `on()`/`read()` methods can leave raw-body
+  // waiting forever in Workers, which results in a 1101/hung request.
+  const req = Readable.from(bodyBuf ? [bodyBuf] : [])
+  Object.assign(req, {
     method:            cfRequest.method,
     url:               url.pathname + url.search,  // WRITABLE — no crash
     headers:           reqHeaders,
@@ -205,32 +227,19 @@ async function handleWithExpress(app, cfRequest) {
     socket:    { remoteAddress: '127.0.0.1', encrypted: url.protocol === 'https:', destroy() {} },
     connection:{ remoteAddress: '127.0.0.1', encrypted: url.protocol === 'https:' },
     _body:     bodyBuf,
-    _bodyRead: false,
-    read()     { if (!this._bodyRead) { this._bodyRead = true; return this._body } return null },
-    pipe(dest) { if (this._body) dest.write(this._body); dest.end(); return dest },
-    resume()   { return this },
-    pause()    { return this },
-    destroy()  {},
-    setEncoding() { return this },
-    unpipe()   { return this },
-    on(ev, fn) {
-      if (ev === 'data' && this._body) setTimeout(() => fn(this._body), 0)
-      if (ev === 'end')               setTimeout(() => fn(), 0)
-      if (ev === 'close')             setTimeout(() => fn(), 0)
-      return this
-    },
-    once(ev, fn)    { return this.on(ev, fn) },
-    removeListener(){ return this },
-    emit()          { return false },
-  }
+    body:              parsedBody,
+  })
 
   // ── Fake ServerResponse (res) ─────────────────────────────────────────────
   return new Promise((resolve) => {
     const resHdrs = {}
     const chunks  = []
     let   sc      = 200
+    let   settled = false
 
     function finish() {
+      if (settled) return
+      settled = true
       const body = chunks.length ? Buffer.concat(chunks) : null
       const cfHdrs = new Headers()
       for (const [k, v] of Object.entries(resHdrs)) {

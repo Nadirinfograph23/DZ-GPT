@@ -328,9 +328,14 @@ async function handleWithExpress(app, cfRequest) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
+    const isApiOrWebSocketPath =
+      url.pathname === '/api' ||
+      url.pathname.startsWith('/api/') ||
+      url.pathname === '/ws' ||
+      url.pathname.startsWith('/ws/')
 
     // ── Static assets → ASSETS binding (dist/) ────────────────────────────
-    if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/ws/')) {
+    if (!isApiOrWebSocketPath) {
       if (env.ASSETS) {
         const asset = await env.ASSETS.fetch(request)
         // Keep the public brand correct even if an edge has a stale HTML

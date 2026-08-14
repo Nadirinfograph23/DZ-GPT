@@ -1,8 +1,8 @@
 {
-  "commit": "32e8fbc01e0b11f65cadf71904d1804f1b40e07d",
-  "commitShort": "32e8fbc0",
+  "commit": "36c35fa1223431de09b3d1ee07f9aeb0b02157d2",
+  "commitShort": "36c35fa1",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "chore: record generated-data workflow note",
-  "deployedAt": "2026-08-14T11:46:27.909434Z",
+  "message": "fix: make bundled yt-dlp executable",
+  "deployedAt": "2026-08-14T11:53:37.676889Z",
   "deployedBy": "scripts/deploy.py"
 }

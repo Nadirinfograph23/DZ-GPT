@@ -131,32 +131,10 @@ function flushEvents() {
   } catch {}
 }
 
-// ── Warm helpers ────────────────────────────────────────────────────────────
-// Kept as a no-op-friendly export so any caller (e.g. DZ Tube cards) can
-// still invoke it without breaking — under YT IFrame playback there is no
-// server-side stream to pre-resolve, so this is now a tiny analytics ping
-// only and does not perform a server warm round-trip.
-const _warmedAt = new Map<string, number>()
-const WARM_DEDUP_MS = 5 * 60 * 1000
-function _shouldWarm(url: string): boolean {
-  const last = _warmedAt.get(url) || 0
-  if (Date.now() - last < WARM_DEDUP_MS) return false
-  _warmedAt.set(url, Date.now())
-  if (_warmedAt.size > 200) {
-    const arr = [...(_warmedAt.entries() as any)].sort((a: any, b: any) => a[1] - b[1])
-    for (let i = 0; i < 50 && arr[i]; i++) _warmedAt.delete(arr[i][0])
-  }
-  return true
-}
-
-// Public API kept for source-compatibility. Under YT IFrame playback the
-// "warm" concept is a no-op (the iframe handles its own buffering), so we
-// just dedup and return. The signature is preserved to avoid touching call
-// sites in DZTube.tsx and other UI files.
-export function warmTrackUrl(youtubeUrl: string | null | undefined, _abortRef?: React.MutableRefObject<AbortController | null>) {
+// Kept as a compatibility no-op for existing DZ Tube hover/touch call sites.
+// The YouTube IFrame owns buffering now, so there is no URL to pre-resolve.
+export function warmTrackUrl(youtubeUrl: string | null | undefined) {
   if (!youtubeUrl) return
-  if (!_shouldWarm(youtubeUrl)) return
-  // intentional no-op
 }
 
 export function useEnhancedMiniPlayer(state: MiniPlayerLikeState) {

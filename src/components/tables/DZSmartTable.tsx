@@ -380,14 +380,6 @@ function extractTableData(children: React.ReactNode): { headers: string[]; rows:
   return { headers, rows }
 }
 
-// Key based on <thead> text only — stable, not affected by streaming row additions.
-// Falls back to first 80 chars of full content if no thead is present.
-function _tableKey(el: HTMLDivElement): string {
-  const thead = el.querySelector('thead')
-  if (thead) return (thead.textContent ?? '').slice(0, 80).trim()
-  return (el.textContent ?? '').slice(0, 80).trim()
-}
-
 // ── TableScrollWrapper ─────────────────────────────────────────────────────
 // RTL-aware horizontal scroll with two floating side buttons.
 //

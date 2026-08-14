@@ -178,7 +178,6 @@ export function createTTS({ defaultGender = DEFAULTS.gender } = {}) {
       for (const chunk of chunks) {
         // If a new speak() superseded us, abort this session immediately.
         if (mySeq !== speakSeq || muted) { lastResult = { ok: false, reason: 'superseded' }; break }
-        // eslint-disable-next-line no-await-in-loop
         const r = await speakChunk(chunk, baseCfg, voices)
         if (!r.ok && r.reason !== 'interrupted' && r.reason !== 'canceled') {
           lastResult = r

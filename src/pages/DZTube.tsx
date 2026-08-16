@@ -358,12 +358,22 @@ export default function DZTube() {
         setDownloadingId(null)
         resolve(false)
       }
-      xhr.onload = () => {
+      xhr.onload = async () => {
         try {
           if (xhr.status < 200 || xhr.status >= 300) {
             setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
             setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)
-            throw new Error(`HTTP ${xhr.status}`)
+            let serverMsg = ''
+            try {
+              const errBlob = xhr.response as Blob | null
+              if (errBlob && typeof errBlob.text === 'function') {
+                const txt = (await errBlob.text()).trim()
+                if (txt && txt.length < 300) serverMsg = txt
+              }
+            } catch {
+              // ignore response body parse failures
+            }
+            throw new Error(serverMsg || `HTTP ${xhr.status}`)
           }
           const blob = xhr.response as Blob
           // Server may downgrade mp3 → m4a if ffmpeg isn't available; respect the

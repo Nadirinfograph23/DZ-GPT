@@ -30568,9 +30568,9 @@ function extractYouTubeVideoId(u) {
 }
 
 const PIPED_API_INSTANCES = [
-  // Refreshed 2026-07 (live-probed) — sorted fastest-first, more instances for resilience.
-  'https://pipedapi.kavin.rocks',
+  // Refreshed 2026-08 — the Piped network has shrunk to a handful of instances.
   'https://api.piped.private.coffee',
+  'https://pipedapi.kavin.rocks',
   'https://piapi.ggtyler.dev',
   'https://pipedapi.tokhmi.xyz',
   'https://api.piped.privacydev.net',
@@ -30592,8 +30592,11 @@ const PIPED_API_INSTANCES = [
 // bypasses googlevideo's IP-bound signed URL restrictions. We use it as a
 // third independent source raced alongside ytdown.to + Piped.
 const INVIDIOUS_API_INSTANCES = [
-  // Refreshed 2026-05-12 (live-probed) — sorted fastest-first.
+  // Refreshed 2026-08 (live-probed) — currently-listed https instances first.
+  'https://invidious.nerdvpn.de',
+  'https://invidious.f5.si',
   'https://inv.nadeko.net',
+  'https://invidious.tiekoetter.com',
   'https://invidious.fdn.fr',
   'https://iv.ggtyler.dev',
   'https://invidious.materialio.us',
@@ -30606,8 +30609,24 @@ const INVIDIOUS_API_INSTANCES = [
 // Returns { url, mime, ext, instance } where `url` already proxies through
 // the Invidious instance (so no IP-bound issues), or null if every instance
 // fails. The proxy URL is `${instance}/latest_version?id=VID&itag=ITAG&local=true`.
+//
+// 2026-08: most Invidious instances have DISABLED the `/api/v1/videos` JSON
+// endpoint, but the `/latest_version?id=...&itag=...&local=true` byte-proxy
+// still works. So instead of querying the API for available itags (dead), we
+// use the universal YouTube itags directly:
+//   itag 18  = 360p mp4 (muxed audio+video)
+//   itag 22  = 720p mp4 (muxed audio+video)
+//   itag 140 = m4a audio
+//   itag 251 = webm/opus audio
 async function fetchInvidiousStreams(videoId, { isAudio, height = 720 } = {}) {
   if (!videoId) return null
+  let pickItag, mime, ext
+  if (isAudio) {
+    pickItag = 140; mime = 'audio/mp4'; ext = 'm4a'
+  } else {
+    pickItag = height >= 720 ? 22 : 18
+    mime = 'video/mp4'; ext = 'mp4'
+  }
   // PERF: race all instances in parallel. Sequential iteration paid up to
   // 8s × N for every dead instance before reaching a working one. With
   // Promise.any the first responder wins and the rest are abandoned.
@@ -30615,40 +30634,21 @@ async function fetchInvidiousStreams(videoId, { isAudio, height = 720 } = {}) {
     const ctrl = new AbortController()
     const t = setTimeout(() => ctrl.abort(), 6000)
     try {
-      const r = await fetch(`${base}/api/v1/videos/${encodeURIComponent(videoId)}?fields=formatStreams,adaptiveFormats,title`, {
-        signal: ctrl.signal,
-        headers: { 'User-Agent': 'Mozilla/5.0 DZ-GPT/1.0', 'Accept': 'application/json' },
-      })
-      clearTimeout(t)
-      if (!r.ok) throw new Error(`http ${r.status}`)
-      const j = await r.json()
-      if (isAudio) {
-        const audios = (j.adaptiveFormats || []).filter(a => a && a.type && a.type.startsWith('audio/'))
-        if (!audios.length) throw new Error('no audio formats')
-        const m4a = audios.filter(a => a.type.includes('mp4') || a.type.includes('m4a'))
-        const pool = m4a.length ? m4a : audios
-        pool.sort((a, b) => Number(b.bitrate || 0) - Number(a.bitrate || 0))
-        const pick = pool[0]
-        if (!pick?.itag) throw new Error('no itag')
-        const isWebm = pick.type.includes('webm') || pick.type.includes('opus')
-        return {
-          url: `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pick.itag}&local=true`,
-          mime: isWebm ? 'audio/webm' : 'audio/mp4',
-          ext: isWebm ? 'webm' : 'm4a',
-          instance: base,
-        }
+      // HEAD first to confirm the instance will actually serve media bytes
+      // (dead instances / bot-challenges answer with HTML, JSON or a plain
+      // "stop abusing my instance" text body).
+      const r = await fetch(
+        `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pickItag}&local=true`,
+        { signal: ctrl.signal, method: 'HEAD', headers: { 'User-Agent': 'Mozilla/5.0 DZ-GPT/1.0' } },
+      )
+      const ctype = (r.headers.get('content-type') || '').toLowerCase()
+      const isMedia = ctype.includes('video/') || ctype.includes('audio/') || ctype.includes('octet-stream')
+      if (!r.ok || !isMedia) {
+        throw new Error(`http ${r.status} ${ctype || 'no-media'}`)
       }
-      const combined = (j.formatStreams || [])
-        .filter(v => v && v.itag && (!v.type || v.type.includes('mp4')))
-        .map(v => ({ ...v, h: parseInt(v.resolution || '0', 10) || 0 }))
-      combined.sort((a, b) => b.h - a.h)
-      const pick = combined.find(v => v.h <= height) || combined[0]
-      if (!pick?.itag) throw new Error('no video itag')
       return {
-        url: `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pick.itag}&local=true`,
-        mime: 'video/mp4',
-        ext: 'mp4',
-        instance: base,
+        url: `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pickItag}&local=true`,
+        mime, ext, instance: base,
       }
     } finally {
       clearTimeout(t)
@@ -30881,14 +30881,19 @@ async function extractWithYtDlpFast(url) {
 // Returns { status:'stream'|'redirect'|'tunnel', url } or { status:'error', error }
 // ✅ FIX 2026-07: تحديث instances — الأقدم كانت down أو غيّرت API
 const COBALT_INSTANCES = [
+  // Refreshed 2026-08 — most actively-maintained community instances first.
   'https://api.cobalt.best',
-  'https://cobalt.tools',
-  'https://dwnld.nichijou.co',
-  'https://cobalt.api.timelessnesses.me',
-  'https://cobaltapi.0x7d.eu',
-  'https://cobalt.catto.moe',
+  'https://co.eepy.gg',
+  'https://cobalt.lol',
+  'https://cobalt-api.kwiatekmiki.com',
   'https://cobalt.drgns.space',
+  'https://cobalt.catto.moe',
   'https://cobalt.privacydev.net',
+  'https://cobalt-api.salvatoresolazzo.com',
+  'https://cobalt.api.timelessnesses.me',
+  'https://dwnld.nichijou.co',
+  'https://cobaltapi.0x7d.eu',
+  'https://cobalt.tools',
 ]
 
 async function extractWithCobaltAPI(url) {
@@ -33703,8 +33708,23 @@ app.post('/api/dz-tube/info', async (req, res) => {
         available: { mp4: true, mp3: true, audio: true },
       })
     }
-    console.error('[DZTube:info:js]', e.message)
-    res.status(500).json({ error: 'تعذر جلب معلومات الفيديو' })
+    // Last-resort: still expose 360p (itag 18, muxed mp4) which is the one
+    // format YouTube always offers to unauthenticated datacenter IPs. Without
+    // this the download menu stays empty and the page looks broken whenever
+    // the primary extractors are bot-blocked.
+    console.warn('[DZTube:info] all extractors failed — falling back to 360p-only payload:', e.message)
+    res.json({
+      title: 'بدون عنوان',
+      thumbnail: null,
+      duration: 0,
+      uploader: '',
+      view_count: 0,
+      heights: [360],
+      downloadableHeights: [360],
+      hasFfmpeg,
+      degraded: true,
+      available: { mp4: true, mp3: true, audio: true },
+    })
   }
 })
 
@@ -33721,6 +33741,14 @@ async function streamUpstreamToClient(req, res, upstreamUrl, mime, downloadName)
     const upstream = await fetch(upstreamUrl, { headers: fwdHeaders })
     if (!upstream.ok && upstream.status !== 206) {
       console.warn('[DZTube:upstream-proxy] upstream', upstream.status)
+      if (!res.headersSent) res.status(502).end('فشل تحميل الملف من المصدر البديل')
+      return
+    }
+    // Guard against sources that answer 200 with an HTML/JSON/text abuse page
+    // (Invidious Anubis challenges, dead cobalt tunnels, etc.).
+    const upstreamType = (upstream.headers.get('content-type') || '').toLowerCase()
+    if (upstreamType && (upstreamType.includes('html') || upstreamType.includes('json') || upstreamType.includes('text/'))) {
+      console.warn(`[DZTube:upstream-proxy] non-media content-type=${upstreamType} — rejecting`)
       if (!res.headersSent) res.status(502).end('فشل تحميل الملف من المصدر البديل')
       return
     }
@@ -33850,6 +33878,11 @@ async function fetchYtdownItems(youtubeUrl) {
       const r = await fetch('https://app.ytdown.to/proxy.php', { method: 'POST', headers: apiHeaders, body, signal: ctl.signal })
       clearTimeout(t)
       if (!r.ok) { lastErr = `HTTP ${r.status}`; continue }
+      const ctype = (r.headers.get('content-type') || '')
+      // ytdown.to is now fronted by a Cloudflare challenge — if it answers
+      // with HTML instead of JSON there is no point retrying, the API needs a
+      // browser JS challenge we can't solve from a datacenter IP.
+      if (!ctype.includes('json')) { lastErr = `non-json (${ctype || 'unknown'})`; break }
       const data = await r.json().catch(() => null)
       const api = data?.api
       if (!api) { lastErr = 'invalid response'; continue }
@@ -33927,10 +33960,12 @@ async function _cobaltFetchYouTube(videoUrl, format, height) {
   const audioFormat  = format === 'mp3' ? 'mp3' : 'best'
   const videoQuality = String(height || 720)
 
+  const deadline = Date.now() + 20000
   for (const base of COBALT_INSTANCES) {
+    if (Date.now() > deadline) break
     try {
       const ctrl = new AbortController()
-      const tid  = setTimeout(() => ctrl.abort(), 12000)
+      const tid  = setTimeout(() => ctrl.abort(), 8000)
       const resp = await fetch(`${base}/`, {
         method: 'POST',
         headers: {
@@ -34083,6 +34118,15 @@ async function tryYtdlpDownloadToClient(req, res, url, format, h) {
     }
 
     console.warn(`[DZTube:dlp] ci=${ci} failed: ${result.stderr?.replace(/\n/g, ' ').slice(0, 300)}`)
+    // YouTube bot-challenge: no point trying the remaining clients — they all
+    // run from the same datacenter IP and will hit the same "Sign in to confirm
+    // you're not a bot" wall. Bail to the external-service fallbacks immediately
+    // instead of burning ~5 × 20s on doomed attempts.
+    const lowerErr = (result.stderr || '').toLowerCase()
+    if (lowerErr.includes('sign in to confirm') || lowerErr.includes('not a bot') || lowerErr.includes('http error 429')) {
+      console.warn('[DZTube:dlp] bot-challenge detected — skipping remaining clients')
+      break
+    }
     // Back off before next client (except last)
     if (ci < YT_DLP_CLIENTS.length - 1) await new Promise(r => setTimeout(r, 1500 + ci * 1000))
   }
@@ -34118,6 +34162,12 @@ app.get('/api/dz-tube/download', async (req, res) => {
 
   const h = DZ_TUBE_QUALITY_MAP[quality] || 720
   const isAudio = format === 'mp3' || format === 'audio'
+
+  // Global resolution budget: everything before the first response byte
+  // (yt-dlp attempts + external fallbacks) must fit inside this window.
+  // Once we start streaming a real file we let it run to completion.
+  const resolutionStartedAt = Date.now()
+  const resolutionDeadline = () => Date.now() - resolutionStartedAt
 
   // ── PRIMARY: yt-dlp (fastest & most reliable when available) ─────────
   // We try this FIRST. External services (ytdown.to / Invidious / Piped)
@@ -34229,6 +34279,14 @@ app.get('/api/dz-tube/download', async (req, res) => {
   // If ytdown returned an actionable error (private / live / unavailable),
   // surface it immediately — yt-dlp won't fare better for these cases.
   if (friendlyError) return res.status(400).send(`فشل التحميل: ${friendlyError}`)
+
+  // Give up on further slow attempts once the resolution budget is spent —
+  // a single yt-dlp re-run can add minutes and the caller (browser XHR) has
+  // already been waiting through the primary + fallback chain above.
+  if (resolutionDeadline() > 45000) {
+    console.warn(`[DZTube:download] resolution budget exceeded (${resolutionDeadline()}ms) — bailing with error`)
+    return res.status(504).send('فشل التحميل: استغرقت عملية البحث عن الملف وقتاً طويلاً. حاول مرة أخرى.' )
+  }
 
   // Locate yt-dlp (PATH or bundled at bin/yt-dlp on Vercel)
   const dlpBin = await ytDlpBinaryPath()

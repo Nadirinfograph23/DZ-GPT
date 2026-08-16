@@ -48,3 +48,20 @@ export default tseslint.config({
   },
 })
 ```
+
+## DZ Tube (YouTube downloads) — how it works
+
+تحميل من يوتيوب يعتمد على الطريقة المجانية الحديثة التالية: `yt-dlp` + `ffmpeg`.
+- **mp4**: يجلب yt-dlp أفضل تدفق متاح ثم يدمجه مع الصوت عبر ffmpeg (يتطلب ffmpeg).
+- **m4a / mp3**: يجلب yt-dlp الصوت فقط (`bestaudio`) ثم يحوّله إلى m4a أو mp3 عبر ffmpeg. بدون ffmpeg لا يمكن إرجاع صوت حقيقي، لذا يفشل الطلب بدلاً من إرجاع فيديو بصيغة صوت.
+
+### المتغيرات الاختيارية لرفع نسبة النجاح (free modern methods)
+| Variable | Purpose |
+|----------|---------|
+| `YOUTUBE_COOKIES` | ملف cookies مُصدَّر من متصفحك (يفتح تحميلات أعلى دقة ويقلل حظر "Sign in to confirm you're not a bot"). |
+| `YOUTUBE_PO_TOKEN` | PO Token بصيغة `<client>+<token>` (مثلاً `WEB+...` أو `ANDROID_VR+...`). الطريقة الحديثة الرسمية لفك الحجب والحصول على صوت/جودة أعلى بدون cookies. |
+| `FFMPEG_BIN` | مسار ثنائي ffmpeg مخصص إن لم يكن في `PATH` (الخادم يبحث أيضاً في `bin/ffmpeg` ثم `PATH`). |
+
+ملاحظات:
+- `replit.nix` يضيف `pkgs.ffmpeg` + `pkgs.yt-dlp` تلقائياً.
+- على Vercel (serverless) ثبّت ثنائي ffmpeg داخل `bin/ffmpeg` (المُضمَّن عبر `vercel.json includeFiles: bin/**`).

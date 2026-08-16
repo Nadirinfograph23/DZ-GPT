@@ -30084,6 +30084,22 @@ let _uaIdx = 0
 const YT_DLP_USER_AGENT = YT_DLP_USER_AGENTS[0]
 function _nextUA() { _uaIdx = (_uaIdx + 1) % YT_DLP_USER_AGENTS.length; return YT_DLP_USER_AGENTS[_uaIdx] }
 
+// Modern YouTube (2025–2026) enforces "PO Tokens" (proof-of-origin / BotGuard)
+// for GVS (stream) and player requests on most clients. Without one, datacenter
+// IPs are typically limited to muxed format 18 (360p mp4): audio-only streams
+// (itag 140/251) and higher-res video return HTTP 403.
+//
+// The free, confirmed, modern fix is to provide a PO Token. Set
+// YOUTUBE_PO_TOKEN to "<client>+<token>" (e.g. "web+eyJ..."), usually produced
+// by a PO-Token provider (bgutil-ytdlp-pot-provider / yt-dlp-getpot-wpc) or the
+// newer yt-dlp built-in handling. With it, yt-dlp unlocks every format from
+// any IP. Docs: https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
+function ytDlpPoTokenArgs() {
+  const raw = (process.env.YOUTUBE_PO_TOKEN || '').trim()
+  if (!raw) return []
+  return ['--extractor-args', `youtube:po_token=${raw}`]
+}
+
 // Client rotation order for multi-attempt retry — 2026 TESTED results.
 // TESTED 2026-07-30 on datacenter IP (GCP/Vercel):
 //   android     ✅ format 18 (360p combined) always available — NOT SABR-protected
@@ -30092,8 +30108,11 @@ function _nextUA() { _uaIdx = (_uaIdx + 1) % YT_DLP_USER_AGENTS.length; return Y
 //   ios         ❌ requires GVS PO Token — skips all formats
 //   web         ❌ requires JS runtime for signature (deno/node)
 // → android is the ONLY reliable client from datacenter IPs without cookies/tokens.
+// When YOUTUBE_PO_TOKEN is configured the later clients become viable, so the
+// rotation order stays the same but every attempt also sends the token.
 const YT_DLP_CLIENTS = [
   'android',       // ✅ PRIMARY — format 18 always works, SABR formats auto-skipped
+  'android_vr',    // no PO token needed for non-SABR formats; some IPs expose more
   'tv_embedded',   // ⚠️ skipped internally, acts as android_vr — 2nd attempt
   'web_embedded',  // tries embedded web player — may work for some videos
   'mweb',          // ❌ needs PO Token but worth a try as last resort
@@ -30104,6 +30123,7 @@ function ytDlpAntiBotArgs(clientIdx = 0) {
   const client = YT_DLP_CLIENTS[clientIdx % YT_DLP_CLIENTS.length]
   return [
     '--extractor-args', `youtube:player_client=${client}`,
+    ...ytDlpPoTokenArgs(),
     '--user-agent', _nextUA(),
     '--geo-bypass',
     '--no-check-certificate',
@@ -33268,13 +33288,62 @@ function spawnAudioStream(url) {
 // Download full audio to disk via yt-dlp, then remux with faststart so the moov
 // atom is at the front (HTML5 audio needs this to know duration & to play).
 // Returns a promise that resolves once the file at `outPath` is fully written.
+let _ffmpegProbe = null
+// Resolve the ffmpeg binary path. Checks (in order): $FFMPEG_BIN, a bundled
+// static binary at <projectRoot>/bin/ffmpeg (Vercel ships bin/** via
+// includeFiles, so dropping ffmpeg there makes audio extraction work in
+// serverless), then ffmpeg on PATH.
+// A positive result is cached for 10 min; a negative result is cached only
+// briefly (30s) so an ffmpeg installed while the server is already running
+// (e.g. dev-box provisioning) is picked up instead of being remembered as
+// missing forever.
+function ffmpegBinPath() {
+  if (_ffmpegProbe && _ffmpegProbe.expiresAt > Date.now()) return Promise.resolve(_ffmpegProbe.path)
+  _ffmpegProbe = null
+  const probe = async () => {
+    const candidates = []
+    if (process.env.FFMPEG_BIN) candidates.push(process.env.FFMPEG_BIN)
+    try {
+      const url = await import('url')
+      const pathMod = await import('path')
+      const here = pathMod.dirname(url.fileURLToPath(import.meta.url))
+      candidates.push(pathMod.join(here, 'bin', 'ffmpeg'))
+      candidates.push(pathMod.join(process.cwd(), 'bin', 'ffmpeg'))
+    } catch {}
+    candidates.push('ffmpeg')
+    for (const c of candidates) {
+      if (c && c.includes('/') && !fs.existsSync(c)) continue
+      const ok = await new Promise(resolve => {
+        try {
+          const p = spawn(c, ['-version'])
+          let killed = false
+          const t = setTimeout(() => { killed = true; try { p.kill('SIGKILL') } catch {}; resolve(false) }, 4000)
+          p.on('error', () => { clearTimeout(t); resolve(false) })
+          p.on('close', code => { clearTimeout(t); if (!killed) resolve(code === 0) })
+        } catch { resolve(false) }
+      })
+      if (ok) { _ffmpegProbe = { path: c, expiresAt: Date.now() + 10 * 60 * 1000 }; return c }
+    }
+    _ffmpegProbe = { path: null, expiresAt: Date.now() + 30 * 1000 }
+    return null
+  }
+  return probe()
+}
+
 function ffmpegAvailable() {
-  if (ffmpegAvailable._cached !== undefined) return Promise.resolve(ffmpegAvailable._cached)
-  return new Promise(resolve => {
-    const p = spawn('ffmpeg', ['-version'])
-    p.on('error', () => { ffmpegAvailable._cached = false; resolve(false) })
-    p.on('close', code => { ffmpegAvailable._cached = code === 0; resolve(ffmpegAvailable._cached) })
-  })
+  return ffmpegBinPath().then(p => !!p)
+}
+
+// yt-dlp finds ffmpeg via PATH or its own directory. When the server resolved
+// ffmpeg at an explicit path (FFMPEG_BIN or bundled bin/ffmpeg), pass
+// --ffmpeg-location so merging and audio extraction still work.
+async function ytDlpFfmpegLocationArgs() {
+  const bin = await ffmpegBinPath()
+  if (!bin || bin === 'ffmpeg') return []
+  try {
+    const pathMod = await import('path')
+    return ['--ffmpeg-location', pathMod.dirname(bin)]
+  } catch { return [] }
 }
 
 async function downloadAudioToFile(url, outPath) {
@@ -33319,6 +33388,7 @@ async function downloadAudioToFile(url, outPath) {
       '-y',
       '-i', tmpRaw,
       '-c', 'copy',
+      '-vn',
       '-movflags', '+faststart',
       '-f', 'mp4',
       tmpFixed,
@@ -33788,8 +33858,27 @@ async function tryYtdlCoreDownload(req, res, url, format) {
     const title = info.videoDetails?.title || 'video'
     const safeName = title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || 'video'
 
+    // For an audio request we must hand back a REAL audio-only stream. The old
+    // code reused the muxed audioandvideo format (18 = 360p mp4 with video),
+    // silently delivering a full video file labelled .m4a. Prefer audioonly;
+    // if none is obtainable (datacenter IP without PO token) return false so
+    // the caller moves to the external audio-only fallbacks.
+    if (isAudio) {
+      let fmt
+      try {
+        fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
+      } catch { fmt = null }
+      if (!fmt?.url) {
+        console.warn('[DZTube:ytdl-core] no audio-only format found for audio request')
+        return false
+      }
+      const downloadName = `${safeName}.m4a`
+      console.log(`[DZTube:ytdl-core] ✓ audio format=${fmt.itag} q=${fmt.quality} → ${downloadName}`)
+      await streamUpstreamToClient(req, res, fmt.url, 'audio/mp4', downloadName)
+      return true
+    }
+
     // audioandvideo = format 18 (360p mp4, always available, no PO Token needed)
-    // audioonly requires PO Token on most datacenter IPs — skip it
     let fmt
     try {
       fmt = ytdl.chooseFormat(info.formats, { quality: 'lowestvideo', filter: 'audioandvideo' })
@@ -33801,11 +33890,9 @@ async function tryYtdlCoreDownload(req, res, url, format) {
       return false
     }
 
-    const mime = isAudio ? 'audio/mp4' : 'video/mp4'
-    const ext  = isAudio ? 'm4a' : 'mp4'
-    const downloadName = `${safeName}.${ext}`
+    const downloadName = `${safeName}.mp4`
     console.log(`[DZTube:ytdl-core] ✓ format=${fmt.itag} q=${fmt.quality} → ${downloadName}`)
-    await streamUpstreamToClient(req, res, fmt.url, mime, downloadName)
+    await streamUpstreamToClient(req, res, fmt.url, 'video/mp4', downloadName)
     return true
   } catch (e) {
     console.warn('[DZTube:ytdl-core] failed:', e.message?.slice(0, 120))
@@ -34019,6 +34106,7 @@ async function tryYtdlpDownloadToClient(req, res, url, format, h) {
     const client = YT_DLP_CLIENTS[clientIdx % YT_DLP_CLIENTS.length]
     return [
       '--extractor-args', `youtube:player_client=${client}`,
+      ...ytDlpPoTokenArgs(),
       '--user-agent', _nextUA(),
       '--geo-bypass',
       '--no-check-certificate',
@@ -34044,7 +34132,13 @@ async function tryYtdlpDownloadToClient(req, res, url, format, h) {
               '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
       mime = 'audio/mp4'
     } else if (isAudio) {
-      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18',
+      // No ffmpeg → must hand the user a REAL audio-only stream. The old
+      // format string fell back to `/18` (muxed 360p mp4 with video), which
+      // silently delivered a full video file labelled .m4a. Dropping `/18`
+      // makes yt-dlp fail fast when bestaudio isn't available so the caller
+      // falls through to the external audio-only fallbacks (ytdown/Piped/
+      // Invidious/Cobalt) instead of serving a video.
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
               '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
       mime = 'audio/mp4'
     } else if (hasFfmpeg) {
@@ -34061,11 +34155,12 @@ async function tryYtdlpDownloadToClient(req, res, url, format, h) {
   }
 
   // ── Multi-client retry loop ─────────────────────────────────────
+  const ffmpegLoc = await ytDlpFfmpegLocationArgs()
   for (let ci = 0; ci < YT_DLP_CLIENTS.length; ci++) {
     if (res.writableEnded || res.headersSent) return true
     const outPath = tmpFile(initialExt)
     const { args, mime } = buildArgs(ci)
-    const fullArgs = [...args, '-o', outPath, url]
+    const fullArgs = [...args, ...ffmpegLoc, '-o', outPath, url]
 
     console.log(`[DZTube:dlp] attempt ci=${ci} client=${YT_DLP_CLIENTS[ci]} format=${format} ffmpeg=${hasFfmpeg}`)
 
@@ -34317,29 +34412,33 @@ app.get('/api/dz-tube/download', async (req, res) => {
     let downloadName
     let mime
     const antiBot = ytDlpAntiBotArgs()
+    const ffmpegLoc = await ytDlpFfmpegLocationArgs()
     // NOTE (2025-2026): YouTube now requires a "GVS PO Token" for separate
     // audio/video streams on most clients, so `bestaudio` and `bestvideo`
     // often return "Requested format is not available". Format `18` (360p
     // mp4 with combined audio+video) does NOT need a PO Token, so we use
-    // it as a universal fallback in every format string below.
+    // it as a universal fallback in every VIDEO format string below.
     if (format === 'mp3' && hasFfmpeg) {
-      args = ['-f', 'bestaudio/18', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...ffmpegLoc, ...cookies, url]
       downloadName = `${safeName}.mp3`
       mime = 'audio/mpeg'
     } else if (isAudio && hasFfmpeg) {
-      // Want native m4a — extract audio (transcodes from 18 if needed)
-      args = ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '-x', '--audio-format', 'm4a', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
+      // Want native m4a — extract audio (remuxes the audio track out of 18)
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18', '-x', '--audio-format', 'm4a', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...ffmpegLoc, ...cookies, url]
       downloadName = `${safeName}.m4a`
       mime = 'audio/mp4'
     } else if (isAudio) {
-      // No ffmpeg → if bestaudio is unavailable we serve format 18 (mp4
-      // with audio); browsers can still play the audio track from it.
-      args = ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
+      // No ffmpeg → must hand back a REAL audio-only stream. The old string
+      // fell back to `/18` (muxed 360p mp4 with video), silently shipping a
+      // full video file named .m4a. Without /18, yt-dlp fails fast when no
+      // audio-only format exists and the caller reports the failure instead
+      // of handing the user a video disguised as audio.
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
       downloadName = `${safeName}.m4a`
       mime = 'audio/mp4'
     } else if (hasFfmpeg) {
       const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${h}][ext=mp4]/best[height<=${h}]/22/18`
-      args = ['-f', fmt, '--merge-output-format', 'mp4', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
+      args = ['-f', fmt, '--merge-output-format', 'mp4', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...ffmpegLoc, ...cookies, url]
       downloadName = `${safeName}_${h}p.mp4`
       mime = 'video/mp4'
     } else {

@@ -266,6 +266,10 @@ interface LiveCapabilities {
   circuit_breaker?: {
     fallback_chain?: string[]
   }
+  agents?: unknown[]
+  tools?: unknown[]
+  skills?: unknown[]
+  providers?: unknown[]
 }
 
 export default function DZAbout() {
@@ -292,10 +296,15 @@ export default function DZAbout() {
       .catch(() => {})
   }, [])
 
-  const totalAgents   = live?.overview?.total_agents   ?? AGENTS_STATIC.length
-  const totalTools    = live?.overview?.total_tools    ?? TOOLS_STATIC.length
-  const totalSkills   = live?.overview?.total_skills   ?? SKILLS_STATIC.length
-  const totalProviders = live?.overview?.total_providers ?? PROVIDERS_STATIC.length
+  // Some Worker builds can return an overview with zeroes when the registry
+  // JSON is not available at the edge. Prefer the actual arrays (or our
+  // complete static catalogue) so the public page never reports "0".
+  const positiveOr = (value: number | undefined, fallback: number) =>
+    typeof value === 'number' && value > 0 ? value : fallback
+  const totalAgents   = positiveOr(live?.overview?.total_agents, live?.agents?.length || AGENTS_STATIC.length)
+  const totalTools    = positiveOr(live?.overview?.total_tools, live?.tools?.length || TOOLS_STATIC.length)
+  const totalSkills   = positiveOr(live?.overview?.total_skills, live?.skills?.length || SKILLS_STATIC.length)
+  const totalProviders = positiveOr(live?.overview?.total_providers, live?.providers?.length || PROVIDERS_STATIC.length)
   const version        = live?.overview?.version ?? '5.1.0'
 
   const tokenIn   = live?.token_limits?.max_input_tokens      ?? 32768

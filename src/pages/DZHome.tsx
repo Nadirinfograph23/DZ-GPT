@@ -356,7 +356,7 @@ export default function DZHome() {
 
             {/* ميدالية الجزائر الذهبية — شهادة DZ Agent */}
             <a
-              href="https://dzagent.app/dz-agent-certificate.html"
+              href="/dz-agent-certificate.html"
               target="_blank"
               rel="noopener noreferrer"
               title="🥇 شهادة DZ Agent الجزائرية"

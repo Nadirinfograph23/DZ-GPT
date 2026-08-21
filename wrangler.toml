@@ -7,9 +7,12 @@ compatibility_flags = ["nodejs_compat_v2"]
 [assets]
 directory = "./dist"
 binding   = "ASSETS"
-# Run the Worker before the asset resolver so extensionless BrowserRouter
-# navigations reach the explicit SPA fallback in workers/entry.js.
-run_worker_first = true
+# Run the Worker only for server/API paths. Static HTML files such as
+# /dz-agent-certificate.html must be served directly by the asset router.
+# Extensionless BrowserRouter paths continue to receive index.html through
+# the SPA fallback below.
+run_worker_first = ["/api/*", "/ws/*"]
+not_found_handling = "single-page-application"
 
 # ── Bundle server-side data files so readFileSync works ───────────────────────
 [[rules]]

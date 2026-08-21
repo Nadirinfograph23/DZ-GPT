@@ -48,12 +48,12 @@ function safeFilename(title) {
     .slice(0, 120) || 'video'
 }
 
-function runYtDlp(args, { collectStdout = true } = {}) {
+function runYtDlp(args) {
   return new Promise((resolve, reject) => {
     const child = spawn(getYtDlp(), args, { stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''
     let stderr = ''
-    child.stdout.on('data', chunk => { if (collectStdout) stdout += chunk.toString() })
+    child.stdout.on('data', chunk => { stdout += chunk.toString() })
     child.stderr.on('data', chunk => { stderr += chunk.toString() })
     child.on('error', reject)
     child.on('close', code => {
@@ -125,35 +125,24 @@ async function handleDownload(req, res) {
   let formatSelector
   let extra = []
   if (format === 'mp4') {
-    // Prefer a single progressive MP4 so the response can be streamed directly
-    // without requiring FFmpeg to merge separate video/audio tracks.
     formatSelector = Number.isFinite(requestedHeight) && requestedHeight > 0
       ? `best[ext=mp4][vcodec!=none][acodec!=none][height<=${requestedHeight}]/best[ext=mp4][vcodec!=none][acodec!=none]/best[ext=mp4]`
       : 'best[ext=mp4][vcodec!=none][acodec!=none]/best[ext=mp4]'
   } else if (format === 'mp3' && ffmpeg) {
-    // MP3 requires transcoding; only request it when a real FFmpeg binary is
-    // available. This avoids the old failure mode on serverless deployments.
     formatSelector = 'bestaudio/best'
     extra = ['-x', '--audio-format', 'mp3', '--audio-quality', '0', '--ffmpeg-location', ffmpeg]
   } else {
     // M4A is YouTube's native AAC container and needs no transcoding. When MP3
-    // was requested but FFmpeg is unavailable, return the native M4A instead
-    // of failing the entire download.
+    // is requested but FFmpeg is unavailable, return native M4A rather than
+    // failing the entire download.
     formatSelector = 'bestaudio[ext=m4a]/bestaudio'
   }
 
   const suffix = format === 'mp4' && Number.isFinite(requestedHeight) && requestedHeight > 0 ? `_${requestedHeight}p` : ''
   const filename = `${title}${suffix}.${actualExt}`
   const args = [
-    '--no-warnings',
-    '--no-progress',
-    '--no-playlist',
-    '--force-overwrites',
-    '--js-runtimes', 'node',
-    '-f', formatSelector,
-    '-o', '-',
-    ...extra,
-    url,
+    '--no-warnings', '--no-progress', '--no-playlist', '--force-overwrites',
+    '--js-runtimes', 'node', '-f', formatSelector, '-o', '-', ...extra, url,
   ]
 
   let child
@@ -180,13 +169,12 @@ async function handleDownload(req, res) {
   started = true
   child.stdout.pipe(res)
 
-  const finish = code => {
+  child.on('close', code => {
     if (code !== 0 && !res.writableEnded) {
       console.error('[DZ Tube] yt-dlp download failed:', stderr.trim().slice(-2000))
       res.destroy(new Error(stderr.trim() || `yt-dlp exited with ${code}`))
     }
-  }
-  child.on('close', finish)
+  })
   req.on('close', () => {
     if (!res.writableEnded) {
       try { child.kill('SIGTERM') } catch {}
@@ -225,7 +213,8 @@ export function mountDownloadV2(app) {
   router.post('/info', handleInfo)
   router.get('/info', handleInfo)
 
-  // V2 endpoint. The DZ Tube client uses this route for downloads while the
-  // legacy /api/dz-tube/info remains compatible with existing search flows.
+  // Keep the new V2 endpoint and also shadow the legacy DZ Tube download/info
+  // routes when this service is mounted before the old router.
   app.use('/api/download-v2', router)
+  app.use('/api/dz-tube', router)
 }

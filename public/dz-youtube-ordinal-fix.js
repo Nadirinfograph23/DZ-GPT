@@ -1,8 +1,7 @@
 // DZ Agent YouTube ordinal-action bridge.
-// The suggestion "اشرح لي الفيديو الأول" is rendered after a YouTube search, but
-// the generic chat handler only receives that ordinal text and therefore cannot
-// know which result was meant. Resolve it in the browser to the selected card's
-// real YouTube URL before submitting the request.
+// IMPORTANT: ordinal suggestions must use the same React analysis flow as
+// "تحليل و مناقشة الفيديو". Sending "اشرح لي الفيديو الأول" through the
+// generic chat router loses the selected result and may produce a tool redirect.
 (function () {
   'use strict'
 
@@ -24,67 +23,31 @@
     return -1
   }
 
-  function videoUrlFromCard(card) {
-    var link = card.querySelector('a[href*="youtube.com/watch"], a[href*="youtu.be/"]')
-    if (link && link.href) return link.href
+  function clickRealAnalysisAction(panel, index) {
+    var cards = panel.querySelectorAll('.dzc-yt-card')
+    var card = cards[index]
+    if (!card) return false
 
-    var img = card.querySelector('img.dzc-yt-card-thumb, img[src*="/vi/"]')
-    if (img && img.src) {
-      var m = img.src.match(/\/vi\/([\w-]{6,})\//)
-      if (m) return 'https://www.youtube.com/watch?v=' + m[1]
-    }
-    return ''
-  }
+    // The result cards are React buttons. Clicking the real card first updates
+    // selectedVideo inside YouTubePanel. We then click the component's own
+    // "تحليل و مناقشة الفيديو" action, which calls onDiscuss(selectedVideo)
+    // and enters the existing YouTube analysis/transcript flow.
+    card.click()
 
-  function setReactValue(input, value) {
-    var setter = Object.getOwnPropertyDescriptor(
-      window.HTMLTextAreaElement.prototype,
-      'value'
-    )
-    if (setter && setter.set) setter.set.call(input, value)
-    else input.value = value
-
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-    input.dispatchEvent(new Event('change', { bubbles: true }))
-  }
-
-  function findComposerButton(input) {
-    var root = input.closest('form') || input.parentElement && input.parentElement.parentElement
-    var candidates = [
-      root && root.querySelector('button[type="submit"]'),
-      root && root.querySelector('button[aria-label*="إرسال"]'),
-      root && root.querySelector('button[title*="إرسال"]'),
-      document.querySelector('button[type="submit"]'),
-      document.querySelector('button[aria-label*="إرسال"]'),
-      document.querySelector('button[title*="إرسال"]')
-    ]
-    for (var i = 0; i < candidates.length; i++) {
-      if (candidates[i] && !candidates[i].disabled) return candidates[i]
-    }
-    return null
-  }
-
-  function submitResolvedVideo(url) {
-    var input = document.querySelector(
-      'textarea.dz-chat-input, textarea[placeholder*="اكتب"], textarea[placeholder*="رسالتك"], textarea'
-    )
-    if (!input) return false
-
-    var prompt = 'اشرح لي محتوى هذا الفيديو فعلياً بالتفصيل، ولخّص ما يقوله المتحدث والنقاط الأساسية فيه. لا تقترح أداة؛ قم بتحليل الفيديو نفسه: ' + url
-    setReactValue(input, prompt)
-
-    // Allow React's controlled state to commit, then use the normal send path.
-    window.setTimeout(function () {
-      var button = findComposerButton(input)
-      if (button) {
-        button.click()
-        return
+    var attempts = 0
+    function findAndClickAnalysis() {
+      attempts++
+      var action = panel.querySelector('.dzc-yt-action-btn--discuss')
+      if (action && !action.disabled) {
+        action.click()
+        return true
       }
-      input.dispatchEvent(new KeyboardEvent('keydown', {
-        key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
-        bubbles: true, cancelable: true
-      }))
-    }, 30)
+      if (attempts < 20) {
+        window.setTimeout(findAndClickAnalysis, 25)
+      }
+      return false
+    }
+    window.setTimeout(findAndClickAnalysis, 30)
     return true
   }
 
@@ -103,20 +66,16 @@
 
     var panel = button.closest('.dzc-yt')
     if (!panel) return
-
     var cards = panel.querySelectorAll('.dzc-yt-card')
-    var card = cards[index]
-    if (!card) return
+    if (!cards[index]) return
 
-    var url = videoUrlFromCard(card)
-    if (!url) return
-
-    // Capture phase prevents the old generic suggestion handler from sending
-    // the ordinal phrase to the AI router first.
+    // Stop the generic onAsk(s) handler. That handler intentionally sends the
+    // suggestion text to the generic AI router, which is the root cause of the
+    // old "اقترح أداة" response.
     event.preventDefault()
     event.stopImmediatePropagation()
-    submitResolvedVideo(url)
+    clickRealAnalysisAction(panel, index)
   }, true)
 
-  console.log('[DZ Tube] ordinal video explanation bridge loaded')
+  console.log('[DZ Tube] ordinal video explanation bridge loaded — native analysis path')
 })()

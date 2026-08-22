@@ -9,17 +9,17 @@
     [/الفيديو\s+(?:الخامس|5|خمسة)/i, 4],
     [/الفيديو\s+(?:السادس|6|ستة)/i, 5],
     [/الفيديو\s+(?:السابع|7|سبعة)/i, 6],
-    [/الفيديو\s+(?:الثامن|8|ثمانية)/i, 7],
+    [/الفيديو\s+(?:الثامن|8|ثمانية)/i, 7] as const;
   ];
 
-  function getVideoUrl(button) {
+  function getVideoUrl(button: HTMLButtonElement | null) {
     const match = button.textContent?.match(/(?:الفيديو\s+)?(?:الأول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|[1-8])/i);
     if (!match) return null;
     const ordinal = ordinalMap.find(([re]) => re.test(button.textContent || ''));
     if (!ordinal) return null;
     const panel = button.closest('.dzc-yt');
     const cards = panel ? Array.from(panel.querySelectorAll('.dzc-yt-card')) : [];
-    const card = cards[ordinal[1]];
+    const card = cards[(ordinal as [RegExp, number] | undefined)?.[1] ?? 0];
     if (!card) return null;
     const link = card.querySelector('a[href*="youtube.com/watch"], a[href*="youtu.be/"]');
     if (link instanceof HTMLAnchorElement) return link.href;
@@ -36,7 +36,7 @@
     const button = target instanceof Element ? target.closest('.dzc-yt-sugg-btn') : null;
     if (!(button instanceof HTMLButtonElement)) return;
     const label = button.textContent || '';
-    const ordinal = ordinalMap.find(([re]) => re.test(label));
+    const ordinal = ordinalMap.find(([re]) => re.test(label)) as [RegExp, number] | undefined;
     if (!ordinal) return;
     const url = getVideoUrl(button);
     if (!url) return;

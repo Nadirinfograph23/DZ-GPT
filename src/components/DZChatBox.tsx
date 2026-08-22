@@ -9272,7 +9272,7 @@ ${rows}
                             // (setState is async — ref ensures sendMessage reads the latest value)
                             activeYouTubeVideoRef.current = videoData
                             setActiveYouTubeVideo(videoData)
-                            sendMessage(`ناقش معي موضوع هذا الفيديو: "${ytResult.title}"`)
+                            sendMessage(`ناقش معي موضوع هذا الفيديو على يوتيوب: "${ytResult.title}" — ${ytResult.url}`)
                           }}
                         />
                       )}

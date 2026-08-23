@@ -11662,7 +11662,7 @@ async function fetchPrayerTimesAladhan(city, country = 'Algeria') {
 
   try {
     const url = `https://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=2`
-    const r = await fetch(url, { signal: AbortSignal.timeout(8000) })
+    const r = await resilientFetch(url, { timeout: 8000, retries: 2, scrapingHeaders: false, extraHeaders: { 'Accept': 'application/json' } })
     if (!r.ok) throw new Error(`aladhan API error: ${r.status}`)
     const d = await r.json()
     if (d.code !== 200) throw new Error('aladhan returned non-200')
@@ -11699,7 +11699,7 @@ async function fetchPrayerByCoords(lat, lon, cityLabel) {
     const mm = String(today.getMonth() + 1).padStart(2, '0')
     const yyyy = today.getFullYear()
     const url = `https://api.aladhan.com/v1/timings/${dd}-${mm}-${yyyy}?latitude=${lat}&longitude=${lon}&method=2`
-    const r = await fetch(url, { signal: AbortSignal.timeout(8000) })
+    const r = await resilientFetch(url, { timeout: 8000, retries: 2, scrapingHeaders: false, extraHeaders: { 'Accept': 'application/json' } })
     if (!r.ok) throw new Error(`aladhan coords error: ${r.status}`)
     const d = await r.json()
     if (d.code !== 200) throw new Error('aladhan returned non-200')
@@ -30023,7 +30023,17 @@ function sendDmNotify(recipSession, senderName, senderId, preview, timestamp, ms
 import { spawn } from 'child_process'
 import fs from 'fs'
 import os from 'os'
-import ytdl from '@distube/ytdl-core'
+let _ytdl = null
+let _ytdlLoadPromise = null
+async function getYtdl() {
+  if (_ytdl) return _ytdl
+  if (!_ytdlLoadPromise) {
+    _ytdlLoadPromise = import('@distube/ytdl-core')
+      .then(m => { _ytdl = m.default || m; return _ytdl })
+      .catch(e => { console.warn('[DZTube] ytdl-core unavailable:', e.message); _ytdlLoadPromise = null; return null })
+  }
+  return _ytdlLoadPromise
+}
 import YouTubeSR from 'youtube-sr'
 
 const YouTube = YouTubeSR.default || YouTubeSR
@@ -30250,7 +30260,7 @@ async function jsSearch(q, limit) {
 }
 
 async function jsInfo(url) {
-  const info = await ytdl.getInfo(url)
+  const info = await (await getYtdl()).getInfo(url)
   const vd = info.videoDetails
   const heights = Array.from(new Set(
     info.formats.filter(f => f.hasVideo && f.height).map(f => f.height)
@@ -32672,8 +32682,8 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
     }
   }
   try {
-    const info = await ytdl.getInfo(url)
-    const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
+    const info = await (await getYtdl()).getInfo(url)
+    const fmt = (await getYtdl()).chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
     if (!fmt?.url) throw new Error('no audio format')
     return res.json({ streamUrl: fmt.url })
   } catch (e) {
@@ -32734,8 +32744,8 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
   // ytdl-core: fast, Node.js only — frequently blocked on datacenter IPs but
   // included as the first contestant because it occasionally wins on warm runs.
   const tryJs = (async () => {
-    const info = await ytdl.getInfo(youtubeUrl)
-    const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
+    const info = await (await getYtdl()).getInfo(youtubeUrl)
+    const fmt = (await getYtdl()).chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
     if (!fmt?.url) throw new Error('ytdl-core: no url')
     return fmt.url
   })()
@@ -33154,8 +33164,8 @@ app.get('/api/dz-tube/debug-extract', async (req, res) => {
       return { url: r.url, probe }
     }),
     runOne('ytdl-core', async () => {
-      const info = await ytdl.getInfo(url)
-      const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
+      const info = await (await getYtdl()).getInfo(url)
+      const fmt = (await getYtdl()).chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
       if (!fmt?.url) throw new Error('no url')
       return fmt.url
     }),
@@ -33268,7 +33278,7 @@ try { fs.mkdirSync(audioCacheDir, { recursive: true }) } catch {}
 const audioDownloads = new Map()
 
 function spawnAudioStream(url) {
-  return ytDlpBinaryPath().then(dlpBin => {
+  return ytDlpBinaryPath().then(async dlpBin => {
     if (dlpBin) {
       const proc = spawn(dlpBin, [
         '-f', 'bestaudio[ext=m4a]/bestaudio/18',
@@ -33280,7 +33290,9 @@ function spawnAudioStream(url) {
       proc.stderr.on('data', d => { /* console.warn('[yt-dlp]', d.toString()) */ })
       return { stream: proc.stdout, kill: () => { try { proc.kill('SIGKILL') } catch {} } }
     }
-    const s = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 })
+    const ytdlCore = await getYtdl()
+    if (!ytdlCore) throw new Error('ytdl-core not available')
+    const s = ytdlCore(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 })
     return { stream: s, kill: () => { try { s.destroy() } catch {} } }
   })
 }
@@ -33347,6 +33359,8 @@ async function ytDlpFfmpegLocationArgs() {
 }
 
 async function downloadAudioToFile(url, outPath) {
+  const ytdlCore = await getYtdl()
+  if (!ytdlCore) throw new Error('ytdl-core not available')
   const tmpRaw = outPath + '.raw'
   const useDlp = await ytDlpAvailable()
 
@@ -33366,7 +33380,7 @@ async function downloadAudioToFile(url, outPath) {
       proc.on('error', reject)
       proc.on('close', code => code === 0 ? resolve() : reject(new Error(stderr || `yt-dlp exited ${code}`)))
     } else {
-      const s = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 })
+      const s = ytdlCore(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 })
       const ws = fs.createWriteStream(tmpRaw)
       s.on('error', reject)
       ws.on('error', reject)
@@ -33854,7 +33868,7 @@ async function streamUpstreamToClient(req, res, upstreamUrl, mime, downloadName)
 async function tryYtdlCoreDownload(req, res, url, format) {
   try {
     const isAudio = format === 'mp3' || format === 'audio'
-    const info = await ytdl.getInfo(url)
+    const info = await (await getYtdl()).getInfo(url)
     const title = info.videoDetails?.title || 'video'
     const safeName = title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || 'video'
 
@@ -33866,7 +33880,7 @@ async function tryYtdlCoreDownload(req, res, url, format) {
     if (isAudio) {
       let fmt
       try {
-        fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
+        fmt = (await getYtdl()).chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
       } catch { fmt = null }
       if (!fmt?.url) {
         console.warn('[DZTube:ytdl-core] no audio-only format found for audio request')
@@ -33881,7 +33895,7 @@ async function tryYtdlCoreDownload(req, res, url, format) {
     // audioandvideo = format 18 (360p mp4, always available, no PO Token needed)
     let fmt
     try {
-      fmt = ytdl.chooseFormat(info.formats, { quality: 'lowestvideo', filter: 'audioandvideo' })
+      fmt = (await getYtdl()).chooseFormat(info.formats, { quality: 'lowestvideo', filter: 'audioandvideo' })
     } catch {
       fmt = null
     }
@@ -34393,7 +34407,7 @@ app.get('/api/dz-tube/download', async (req, res) => {
       const info = await runYtDlpJSONWith(dlpBin, url)
       title = info.title || title
     } else {
-      const info = await ytdl.getInfo(url)
+      const info = await (await getYtdl()).getInfo(url)
       title = info.videoDetails?.title || title
     }
   } catch {}
@@ -34496,11 +34510,13 @@ app.get('/api/dz-tube/download', async (req, res) => {
   // JS fallback (no yt-dlp) — buffer to disk via ytdl-core then stream
   try {
     let stream
+    const ytdlCore = await getYtdl()
+    if (!ytdlCore) throw new Error('ytdl-core not available')
     if (isAudio) {
       // Audio-only m4a (no transcoding without ffmpeg in serverless)
-      stream = ytdl(url, { quality: 'highestaudio', filter: 'audioonly' })
+      stream = ytdlCore(url, { quality: 'highestaudio', filter: 'audioonly' })
     } else {
-      stream = ytdl(url, { quality: 'highest', filter: f => f.hasVideo && f.hasAudio && (!h || (f.height || 0) <= h) })
+      stream = ytdlCore(url, { quality: 'highest', filter: f => f.hasVideo && f.hasAudio && (!h || (f.height || 0) <= h) })
     }
     const ws = fs.createWriteStream(outPath)
     let aborted = false

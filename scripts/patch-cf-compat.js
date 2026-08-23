@@ -16,6 +16,7 @@
  *   4. undici/web/fetch/request    — typeof guard for FinalizationRegistry
  *   5. undici/core/connect         — typeof guard for FinalizationRegistry
  *   6. @whatwg-node/server cjs+esm — already guarded; kept for safety
+ *   7. http-cookie-agent           — typeof guard for Agent.compose (undici 5.x compat)
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs'
@@ -231,5 +232,40 @@ for (const rel of [
     "typeof FinalizationRegistry !== 'undefined'"
   )
 }
+
+// ─── 7. http-cookie-agent — undici 5.x compat (compose may be missing) ──────────
+patchFile(
+  'node_modules/http-cookie-agent/dist/undici/cookie_agent.js',
+  `class CookieAgent extends _undici.Agent {
+  constructor({
+    cookies: cookieOpts,
+    ...agentOpts
+  }) {
+    super({
+      ...agentOpts
+    });
+    if (cookieOpts != null) {
+      return this.compose((0, _create_cookie_interceptor.createCookieInterceptor)(cookieOpts));
+    } else {
+      return this;
+    }
+  }
+}`,
+  `class CookieAgent extends _undici.Agent {
+  constructor({
+    cookies: cookieOpts,
+    ...agentOpts
+  }) {
+    super({
+      ...agentOpts
+    });
+    if (cookieOpts != null && typeof this.compose === 'function') {
+      return this.compose((0, _create_cookie_interceptor.createCookieInterceptor)(cookieOpts));
+    }
+    return this;
+  }
+}`,
+  "typeof this.compose === 'function'"
+)
 
 console.log(`[patch-cf] done — ${patched} file(s) patched, ${skipped} skipped`)

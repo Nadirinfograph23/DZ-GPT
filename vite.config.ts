@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "node:sqlite": path.resolve(__dirname, "./workers/stubs/node-sqlite.js"),
     },
     dedupe: ["react", "react-dom", "react-router-dom"],
   },

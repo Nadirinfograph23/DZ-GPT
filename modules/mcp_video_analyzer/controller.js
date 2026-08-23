@@ -1,8 +1,15 @@
 import { spawn } from 'child_process'
 import { execSync } from 'child_process'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+import { existsSync } from 'fs'
 
-const MCP_VIDEO_ANALYZER_CMD = 'npx'
-const MCP_VIDEO_ANALYZER_ARGS = ['-y', 'mcp-video-analyzer@latest', 'analyze']
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const PROJECT_ROOT = join(__dirname, '..', '..')
+const LOCAL_YTDLP = join(PROJECT_ROOT, 'bin', 'yt-dlp')
+const YTDLP_PATH = process.env.YTDLP_PATH || (existsSync(LOCAL_YTDLP) ? LOCAL_YTDLP : 'yt-dlp')
+const MCP_VIDEO_ANALYZER_CMD = join(PROJECT_ROOT, 'node_modules', '.bin', 'mcp-video-analyzer')
+const MCP_VIDEO_ANALYZER_ARGS = ['analyze']
 const ANALYSIS_TIMEOUT_MS = 120_000
 
 /**
@@ -26,14 +33,16 @@ export async function analyzeVideo(url, opts = {}) {
     return { ok: false, url, error: 'url مطلوب' }
   }
 
-  const args = [url, '--detail', detail, '--json']
+  const args = [url, '--detail', detail]
   if (maxFrames) args.push('--max-frames', String(maxFrames))
   if (forceRefresh) args.push('--force-refresh')
 
   return new Promise((resolve) => {
+    const ytdlpDir = join(PROJECT_ROOT, 'bin')
     const child = spawn(MCP_VIDEO_ANALYZER_CMD, [...MCP_VIDEO_ANALYZER_ARGS, ...args], {
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: ANALYSIS_TIMEOUT_MS,
+      env: { ...process.env, PATH: `${ytdlpDir}${process.env.PATH ? ':' + process.env.PATH : ''}` },
     })
 
     let stdout = ''
@@ -103,12 +112,9 @@ export async function analyzeVideo(url, opts = {}) {
 
 export function isMCPVideoAnalyzerAvailable() {
   try {
-    execSync(`${MCP_VIDEO_ANALYZER_CMD} ${MCP_VIDEO_ANALYZER_ARGS[0]} ${MCP_VIDEO_ANALYZER_ARGS[1]} --version`, {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 15_000,
-    })
-    return true
+    const ytdlpOk = existsSync(YTDLP_PATH) || execSync('yt-dlp --version', { encoding: 'utf8', timeout: 5000 }).trim()
+    const binOk = existsSync(MCP_VIDEO_ANALYZER_CMD)
+    return Boolean(ytdlpOk && binOk)
   } catch {
     return false
   }

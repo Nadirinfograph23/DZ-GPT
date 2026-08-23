@@ -13,7 +13,7 @@ async function getMCPAnalyzer() {
   if (_mcpAnalyzerAvailable === false) return null
   if (_mcpAnalyzeVideo) return _mcpAnalyzeVideo
   try {
-    const mod = await import('../../mcp_video_analyzer/controller.js')
+    const mod = await import('../mcp_video_analyzer/controller.js')
     _mcpAnalyzeVideo = mod.analyzeVideo
     _mcpAnalyzerAvailable = true
     return _mcpAnalyzeVideo
@@ -28,7 +28,7 @@ async function enrichWithMCPAnalyzer(videoId, videoUrl, baseResult) {
   if (!analyze) return baseResult
 
   try {
-    const mcpResult = await analyze(videoUrl, { detail: 'standard', maxFrames: 12 })
+    const mcpResult = await analyze(videoUrl, { detail: 'brief' })
     if (!mcpResult?.ok) return baseResult
 
     const enriched = { ...baseResult }

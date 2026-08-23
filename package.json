@@ -32,6 +32,7 @@
     "html2canvas": "^1.4.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.364.0",
+    "mcp-video-analyzer": "^0.10.0",
     "msedge-tts": "^2.0.5",
     "papaparse": "^5.5.3",
     "pdfjs-dist": "^5.6.205",

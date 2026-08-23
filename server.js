@@ -17940,7 +17940,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // عملة حقيقية: detectCurrencyQuery تميّز الطلب الحقيقي عن السؤال عن الخدمة
     const _capBypassCurrency = detectCurrencyQuery(_rawLastMsg)
     // فيديو/يوتيوب حقيقي: مطابقة نفس نمط _ytKwRe_pre المبكر
-    const _capBypassYouTube = /(?:فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|ابحث.*(?:فيديو|يوتيوب)|شرح.*بالفيديو|درس.*بالفيديو|فيديو.*يشرح|أفضل.*فيديو|best.*video|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب)/i.test(_rawLastMsg)
+    const _capBypassYouTube = /(?:فيديو|فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|ابحث.*(?:فيديو|يوتيوب)|شرح.*بالفيديو|درس.*بالفيديو|فيديو.*يشرح|أفضل.*فيديو|best.*video|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب)/i.test(_rawLastMsg)
     // وظائف/مسابقات حقيقية: يذهب لمحرك البحث الحي (11 مصدر جزائري) لا لـ capability guide
     const _capBypassJobs = isJobsQuery(_rawLastMsg)
     if (!_capBypassWeather && !_capBypassCurrency && !_capBypassYouTube && !_capBypassJobs) {
@@ -21693,9 +21693,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             captionNote: ytSmartResult.captionNote || null,
             captionText: ytSmartResult.captionText || null,
           }
-          if (ytSmartResult.hasMCPTranscript) responseBody.hasMCPTranscript = true
-          if (ytSmartResult.hasMCPOCR) responseBody.hasMCPOCR = true
-          if (ytSmartResult.hasMCPTimeline) responseBody.hasMCPTimeline = true
+          if (ytSmartResult.hasMCPTranscript) {
+            responseBody.hasMCPTranscript = true
+            responseBody.mcpTranscript = ytSmartResult.mcpTranscript
+          }
+          if (ytSmartResult.hasMCPOCR) {
+            responseBody.hasMCPOCR = true
+            responseBody.mcpOCR = ytSmartResult.mcpOCR
+          }
+          if (ytSmartResult.hasMCPTimeline) {
+            responseBody.hasMCPTimeline = true
+            responseBody.mcpTimeline = ytSmartResult.mcpTimeline
+          }
+          if (ytSmartResult.mcpMetadata) responseBody.mcpMetadata = ytSmartResult.mcpMetadata
           if (ytSmartResult.mcpWarnings?.length) responseBody.mcpWarnings = ytSmartResult.mcpWarnings
           return res.status(200).json(responseBody)
         }
@@ -21736,9 +21746,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           captionNote: ytResult.captionNote || null,
           captionText: ytResult.captionText || null,
         }
-        if (ytResult.hasMCPTranscript) responseBody.hasMCPTranscript = true
-        if (ytResult.hasMCPOCR) responseBody.hasMCPOCR = true
-        if (ytResult.hasMCPTimeline) responseBody.hasMCPTimeline = true
+        if (ytResult.hasMCPTranscript) {
+          responseBody.hasMCPTranscript = true
+          responseBody.mcpTranscript = ytResult.mcpTranscript
+        }
+        if (ytResult.hasMCPOCR) {
+          responseBody.hasMCPOCR = true
+          responseBody.mcpOCR = ytResult.mcpOCR
+        }
+        if (ytResult.hasMCPTimeline) {
+          responseBody.hasMCPTimeline = true
+          responseBody.mcpTimeline = ytResult.mcpTimeline
+        }
+        if (ytResult.mcpMetadata) responseBody.mcpMetadata = ytResult.mcpMetadata
         if (ytResult.mcpWarnings?.length) responseBody.mcpWarnings = ytResult.mcpWarnings
         return res.status(200).json(responseBody)
       } else {
@@ -34109,6 +34129,77 @@ async function _cobaltFetchYouTube(videoUrl, format, height) {
 // Returns true  → response was fully handled (success or client disconnected).
 // Returns false → yt-dlp failed BEFORE writing any response headers so the
 //                 caller can fall through to external-service fallbacks.
+
+// Direct-streaming variant: pipes yt-dlp stdout straight to the HTTP response
+// with chunked transfer encoding. No disk buffering, no Content-Length.
+// Use when ffmpeg post-processing is NOT required (native audio, or format 18).
+async function streamYtdlpDirect(req, res, dlpBin, url, format, h, mime, downloadName, clientIdx) {
+  const antiBot = ytDlpAntiBotArgs(clientIdx)
+  let args
+  if (format === 'audio') {
+    args = ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '--no-warnings', '--no-playlist', ...antiBot, '-o', '-', url]
+  } else if (format === 'mp4') {
+    args = ['-f', '18', '--no-warnings', '--no-playlist', ...antiBot, '-o', '-', url]
+  } else {
+    return false
+  }
+
+  return new Promise((resolve) => {
+    const TIMEOUT_MS = 5 * 60 * 1000
+    const proc = spawn(dlpBin, args)
+    let stderrBuf = '', clientGone = false, headersSent = false
+
+    const timer = setTimeout(() => {
+      try { proc.kill('SIGKILL') } catch {}
+      if (!headersSent && !res.headersSent) res.status(504).end('فشل التحميل: انتهت المهلة')
+      resolve(true)
+    }, TIMEOUT_MS)
+
+    const onClose = () => {
+      clientGone = true
+      try { proc.kill('SIGTERM') } catch {}
+    }
+    req.on('close', onClose)
+
+    proc.stderr.on('data', d => { stderrBuf += d.toString() })
+    proc.on('error', err => {
+      clearTimeout(timer); req.off('close', onClose)
+      if (!headersSent && !res.headersSent) res.status(500).end('فشل التحميل')
+      resolve(true)
+    })
+
+    proc.stdout.on('data', (chunk) => {
+      if (!headersSent) {
+        res.setHeader('Content-Type', mime)
+        res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`)
+        res.setHeader('Transfer-Encoding', 'chunked')
+        res.setHeader('Cache-Control', 'no-cache')
+        headersSent = true
+      }
+      if (!res.write(chunk)) {
+        proc.stdout.pause()
+        res.once('drain', () => { proc.stdout.resume() })
+      }
+    })
+
+    proc.on('close', async code => {
+      clearTimeout(timer); req.off('close', onClose)
+      if (clientGone) return resolve(true)
+      if (!headersSent) {
+        const lowerErr = (stderrBuf || '').toLowerCase()
+        const isBot = lowerErr.includes('sign in to confirm') || lowerErr.includes('not a bot') || lowerErr.includes('http error 429')
+        const msg = isBot
+          ? 'فشل التحميل: YouTube يحجب خادم النشر مؤقتاً. حاول مجدداً بعد دقيقة.'
+          : `فشل التحميل: ${stderrBuf.split('\n').filter(l => l.includes('ERROR') || l.includes('error')).slice(-1)[0]?.slice(0, 220) || 'خطأ غير معروف'}`
+        if (!res.headersSent) res.status(500).end(msg)
+        return resolve(true)
+      }
+      try { res.end() } catch {}
+      resolve(true)
+    })
+  })
+}
+
 async function tryYtdlpDownloadToClient(req, res, url, format, h) {
   const dlpBin = await ytDlpBinaryPath()
   if (!dlpBin) return false
@@ -34431,9 +34522,20 @@ app.get('/api/dz-tube/download', async (req, res) => {
   const cookies = await ytDlpCookiesArgs()
 
   if (dlpBin) {
-    // yt-dlp backend → buffer to disk, then stream to client.
-    // We must avoid features that require ffmpeg when it's not on PATH
-    // (e.g. on Vercel serverless where only the yt-dlp binary is bundled).
+    // ── FAST PATH: direct streaming (no disk, no ffmpeg) ─────────────
+    // Streams yt-dlp stdout straight to the client with chunked encoding.
+    // Skips disk I/O and starts sending data immediately — critical for
+    // serverless timeouts and slow networks.
+    const canDirectStream = (format === 'audio') || (format === 'mp4' && !hasFfmpeg)
+    if (canDirectStream) {
+      const directMime = isAudio ? 'audio/mp4' : 'video/mp4'
+      const directName = isAudio ? `${safeName}.m4a` : `${safeName}_${h}p.mp4`
+      const directOk = await streamYtdlpDirect(req, res, dlpBin, url, format, h, directMime, directName, 0)
+      if (directOk) return
+      if (res.headersSent) return
+    }
+
+    // ── SLOW PATH: buffer to disk, then stream ─────────────────────────
     let args
     let downloadName
     let mime

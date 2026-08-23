@@ -322,15 +322,31 @@ export default function DZTube() {
       const isAudioReq = format === 'mp3' || format === 'audio'
 
       if (!opts?.silent) {
-        // Open the history panel automatically so the user can watch the
-        // percentage advance — and show a clear "started" toast.
         setHistoryOpen(true)
         showToast('⬇️ بدأ التحميل الآن')
       }
 
       const params = new URLSearchParams({ url: r.url, format, quality })
+      const downloadUrl = `/api/dz-tube/download?${params}`
+
+      // Fallback: trigger browser-native download via hidden <a> tag.
+      // This is the most reliable method — no XHR/blob handling needed.
+      const fallbackDownload = () => {
+        const a = document.createElement('a')
+        a.href = downloadUrl
+        a.download = ''
+        a.target = '_blank'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n })
+        setDownloadingId(null)
+        if (!opts?.silent) showToast('✅ تم التحميل (طريقة بديلة)')
+        resolve(true)
+      }
+
       const xhr = new XMLHttpRequest()
-      xhr.open('GET', `/api/dz-tube/download?${params}`)
+      xhr.open('GET', downloadUrl)
       xhr.responseType = 'blob'
 
       setActiveDownloads(prev => ({
@@ -354,8 +370,10 @@ export default function DZTube() {
         setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
         setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)
         setError('فشل التحميل')
-        if (!opts?.silent) showToast('فشل التحميل', 'err')
+        if (!opts?.silent) showToast('فشل التحميل — جرب الطريقة البديلة', 'err')
         setDownloadingId(null)
+        // Fallback to native browser download
+        fallbackDownload()
         resolve(false)
       }
       xhr.onload = async () => {
@@ -409,7 +427,11 @@ export default function DZTube() {
           resolve(true)
         } catch (err) {
           setError(err instanceof Error ? err.message : 'فشل التحميل')
-          if (!opts?.silent) showToast('فشل التحميل', 'err')
+          if (!opts?.silent) showToast('فشل التحميل — جرب الطريقة البديلة', 'err')
+          setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n })
+          setDownloadingId(null)
+          // Fallback to native browser download
+          fallbackDownload()
           resolve(false)
         } finally {
           setDownloadingId(null)

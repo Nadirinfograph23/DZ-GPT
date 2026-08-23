@@ -330,11 +330,12 @@ export default function DZTube() {
       const downloadUrl = `/api/dz-tube/download?${params}`
 
       // Fallback: trigger browser-native download via hidden <a> tag.
-      // This is the most reliable method — no XHR/blob handling needed.
+      // Uses target='_self' to avoid popup blockers and ensure the browser
+      // honors the server's Content-Disposition filename.
       const fallbackDownload = () => {
         const a = document.createElement('a')
         a.href = downloadUrl
-        a.target = '_blank'
+        a.target = '_self'
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
@@ -347,6 +348,7 @@ export default function DZTube() {
       const xhr = new XMLHttpRequest()
       xhr.open('GET', downloadUrl)
       xhr.responseType = 'blob'
+      xhr.timeout = 5 * 60 * 1000 // 5 minutes
 
       setActiveDownloads(prev => ({
         ...prev,
@@ -371,7 +373,15 @@ export default function DZTube() {
         setError('فشل التحميل')
         if (!opts?.silent) showToast('فشل التحميل — جرب الطريقة البديلة', 'err')
         setDownloadingId(null)
-        // Fallback to native browser download
+        fallbackDownload()
+        resolve(false)
+      }
+      xhr.ontimeout = () => {
+        setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
+        setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)
+        setError('انتهت مهلة التحميل')
+        if (!opts?.silent) showToast('انتهت مهلة التحميل — جرب الطريقة البديلة', 'err')
+        setDownloadingId(null)
         fallbackDownload()
         resolve(false)
       }

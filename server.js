@@ -34195,9 +34195,17 @@ async function streamYtdlpDirect(req, res, dlpBin, url, format, h, mime, downloa
         res.setHeader('Cache-Control', 'no-cache')
         headersSent = true
       }
-      if (!res.write(chunk)) {
-        proc.stdout.pause()
-        res.once('drain', () => { proc.stdout.resume() })
+      try {
+        if (!res.write(chunk)) {
+          proc.stdout.pause()
+          res.once('drain', () => { proc.stdout.resume() })
+        }
+      } catch (e) {
+        // Client likely disconnected — clean up and stop.
+        clientGone = true
+        try { proc.kill('SIGTERM') } catch {}
+        try { res.end() } catch {}
+        return resolve(true)
       }
     })
 

@@ -24,6 +24,11 @@ export default defineConfig({
       "Expires": "0",
     },
   },
+  build: {
+    rollupOptions: {
+      external: ["node:sqlite"],
+    },
+  },
   optimizeDeps: {
     force: true,
     include: [

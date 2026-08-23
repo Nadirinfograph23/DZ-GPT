@@ -74,6 +74,73 @@ function parseWorkerRss(xml, source) {
 }
 
 
+
+// ===== CHAT DIRECT (Worker-native, no server.js) =====
+async function fetchChatDirect(request) {
+  try {
+    const payload = await request.json()
+    const messages = Array.isArray(payload?.messages) ? payload.messages : []
+    if (!messages.length) {
+      return new Response(JSON.stringify({ error: 'messages required' }), {
+        status: 400, headers: { 'content-type': 'application/json' }
+      })
+    }
+
+    const lastUser = [...messages].reverse().find(m => m?.role === 'user')?.content?.trim() || ''
+    const lower = lastUser.toLowerCase()
+
+    // Static guards
+    if (/ما هي قدراتك|ما يمكنك|ماذا يمكنك/.test(lower)) {
+      return new Response(JSON.stringify({ content: 'أنا DZ Agent — مساعد ذكي جزائري. أستطيع:\n- 💬 المحادثة والرد على الأسئلة\n- 🌤️ الطقس لجميع ولايات الجزائر\n- 🕌 مواقيت الصلاة\n- 📰 آخر الأخبار الجزائرية\n- 📺 تحميل فيديوهات يوتيوب\n- 📊 تحليل البيانات والرسوم\n- 🔍 البحث على الإنترنت\n- 📄 إنشاء وتعديل الملفات\n\nاطرح أي سؤال!', model: 'static-guard' }), {
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    if (/من أنت|من مطورك|من صانعك/.test(lower)) {
+      return new Response(JSON.stringify({ content: 'أنا DZ Agent، مساعد ذكي مصمم خصيصاً للمستخدمين الجزائريين. أعمل على توفير معلومات دقيقة وخدمات متنوعة.', model: 'static-guard' }), {
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+
+    // Try Pollinations.ai (free, no key)
+    try {
+      const polResp = await fetch('https://text.pollinations.ai/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'openai',
+          messages: [
+            { role: 'system', content: 'أنت DZ Agent — مساعد ذكي جزائري متعدد المهام. تحدث بالعربية الفصحى أو الجزائرية حسب سؤال المستخدم. أجب بشكل مفيد، دقيق، ومختصر.' },
+            ...messages
+          ],
+          seed: Math.floor(Math.random() * 999999),
+          private: true,
+        }),
+        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 30000); return ctrl.signal })()
+      })
+      if (polResp.ok) {
+        const polData = await polResp.json()
+        const reply = polData.choices?.[0]?.message?.content || polData.content || ''
+        if (reply && reply.trim().length > 5) {
+          return new Response(JSON.stringify({ content: reply, model: 'pollinations' }), {
+            headers: { 'content-type': 'application/json' }
+          })
+        }
+      }
+    } catch (e) {
+      console.warn('[Worker:Chat] Pollinations failed:', e.message)
+    }
+
+    return new Response(JSON.stringify({ content: 'عذراً، لم أتمكن من الحصول على رد الآن. يرجى المحاولة مرة أخرى.', model: 'fallback' }), {
+      headers: { 'content-type': 'application/json' }
+    })
+  } catch (err) {
+    console.error('[Worker:Chat] Error:', err)
+    return new Response(JSON.stringify({ error: 'Server error', message: err.message }), {
+      status: 500, headers: { 'content-type': 'application/json' }
+    })
+  }
+}
+
 // ===== WEATHER DIRECT (Worker-native, no server.js) =====
 const WORKER_WEATHER_CACHE = { data: null, ts: 0 }
 const WORKER_WEATHER_TTL = 10 * 60 * 1000 // 10 min
@@ -598,6 +665,9 @@ export default {
       }
       if (url.pathname === '/api/dz-agent/prayer' && request.method === 'GET') {
         return fetchPrayerDirect(request)
+      }
+      if (url.pathname === '/api/dz-agent-chat' && request.method === 'POST') {
+        return fetchChatDirect(request)
       }
 
       const app = await getApp(env)

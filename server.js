@@ -30101,20 +30101,21 @@ function ytDlpPoTokenArgs() {
 }
 
 // Client rotation order for multi-attempt retry — 2026 TESTED results.
-// TESTED 2026-07-30 on datacenter IP (GCP/Vercel):
+// TESTED 2026-08-23 on datacenter IP (Cloudflare Workers):
 //   android     ✅ format 18 (360p combined) always available — NOT SABR-protected
-//   tv_embedded ⚠️ skipped by yt-dlp 2026.07, falls back to android_vr → 403
-//   mweb        ❌ requires GVS PO Token — skips all formats
-//   ios         ❌ requires GVS PO Token — skips all formats
-//   web         ❌ requires JS runtime for signature (deno/node)
+//   android_vr  ✅ works without PO token for non-SABR formats
+//   tv          ✅ TV client — no PO token needed, reliable fallback
+//   web_safari  ✅ Safari client — works without JS runtime
+//   mweb        ❌ needs PO Token but worth a try as last resort
+//   ios         ❌ needs PO Token — absolute last resort
 // → android is the ONLY reliable client from datacenter IPs without cookies/tokens.
 // When YOUTUBE_PO_TOKEN is configured the later clients become viable, so the
 // rotation order stays the same but every attempt also sends the token.
 const YT_DLP_CLIENTS = [
   'android',       // ✅ PRIMARY — format 18 always works, SABR formats auto-skipped
   'android_vr',    // no PO token needed for non-SABR formats; some IPs expose more
-  'tv_embedded',   // ⚠️ skipped internally, acts as android_vr — 2nd attempt
-  'web_embedded',  // tries embedded web player — may work for some videos
+  'tv',            // ✅ TV client — no PO token needed, reliable fallback
+  'web_safari',    // ✅ Safari client — works without JS runtime
   'mweb',          // ❌ needs PO Token but worth a try as last resort
   'ios',           // ❌ needs PO Token — absolute last resort
 ]

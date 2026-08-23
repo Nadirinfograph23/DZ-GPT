@@ -17,8 +17,18 @@ const WILAYA_COORDS = {
   'سوق أهراس': { lat: 36.2833, lon: 7.95 },
 }
 
+const WILAYA_ALIASES = {
+  'oran': 'وهران', 'constantine': 'قسنطينة', 'annaba': 'عنابة',
+  'batna': 'باتنة', 'bejaia': 'بجاية', 'béjaïa': 'بجاية',
+  'tlemcen': 'تلمسان', 'tizi ouzou': 'تيزي وزو', 'setif': 'سطيف',
+  'skikda': 'سطيف', 'jijel': 'عنابة', 'algiers': 'الجزائر',
+  'alger': 'الجزائر', 'adrar': 'الأغواط', 'biskra': 'بسكرة',
+}
+
 function getWilayaCoords(city) {
   const lower = city.toLowerCase()
+  const alias = WILAYA_ALIASES[lower] || WILAYA_ALIASES[lower.split(' ')[0]]
+  if (alias && WILAYA_COORDS[alias]) return { ...WILAYA_COORDS[alias], label: alias }
   for (const [name, coords] of Object.entries(WILAYA_COORDS)) {
     if (lower.includes(name.toLowerCase()) || name.toLowerCase().includes(lower)) {
       return { ...coords, label: name }

@@ -13,6 +13,7 @@
   ] as const;
 
   function getVideoUrl(button: HTMLButtonElement | null) {
+    if (!button) return null;
     const match = button.textContent?.match(/(?:الفيديو\s+)?(?:الأول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|[1-8])/i);
     if (!match) return null;
     const ordinal = ordinalMap.find(([re]) => re.test(button.textContent || ''));

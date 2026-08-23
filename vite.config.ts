@@ -25,11 +25,11 @@ export default defineConfig({
     },
   },
   ssr: {
-    external: ["node:sqlite"],
+    external: ["node:sqlite", "undici"],
   },
   build: {
     rollupOptions: {
-      external: ["node:sqlite"],
+      external: ["node:sqlite", "undici"],
     },
   },
   optimizeDeps: {

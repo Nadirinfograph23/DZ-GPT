@@ -59,7 +59,7 @@
     if (!button) return
 
     var label = (button.textContent || '').replace(/\s+/g, ' ').trim()
-    if (!/اشرح\s+لي\s+الفيديو/i.test(label)) return
+    if (!/^(?:اشرح|شرح|حلّل)\s+(?:لي\s+)?الفيديو/i.test(label)) return
 
     var index = ordinalIndex(label)
     if (index < 0) return

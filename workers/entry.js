@@ -118,10 +118,11 @@ async function fetchWeatherDirect(request) {
   const lon = parseFloat(url.searchParams.get('lon'))
 
   // Check cache first
-  const cacheKey = `${lat},${lon}`.replace(/NaN/g, 'city')
+  const cacheKey = (!isNaN(lat) && !isNaN(lon)) ? `${lat},${lon}` : city
   const now = Date.now()
   if (WORKER_WEATHER_CACHE.data && WORKER_WEATHER_CACHE.ts > now - WORKER_WEATHER_TTL && WORKER_WEATHER_CACHE.key === cacheKey) {
-    return new Response(JSON.stringify(WORKER_WEATHER_CACHE.data), {
+    const data = { ...WORKER_WEATHER_CACHE.data, city: coords.label || city }
+    return new Response(JSON.stringify(data), {
       headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
     })
   }
@@ -189,10 +190,11 @@ async function fetchPrayerDirect(request) {
   const lon = parseFloat(url.searchParams.get('lon'))
 
   // Check cache first
-  const cacheKey = `${lat},${lon}`.replace(/NaN/g, city)
+  const cacheKey = (!isNaN(lat) && !isNaN(lon)) ? `${lat},${lon}` : city
   const now = Date.now()
   if (WORKER_PRAYER_CACHE.data && WORKER_PRAYER_CACHE.ts > now - WORKER_PRAYER_TTL && WORKER_PRAYER_CACHE.key === cacheKey) {
-    return new Response(JSON.stringify(WORKER_PRAYER_CACHE.data), {
+    const data = { ...WORKER_PRAYER_CACHE.data, city: coords.label || city }
+    return new Response(JSON.stringify(data), {
       headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
     })
   }

@@ -50,10 +50,10 @@ export default async function handler(req, res) {
   const latNum = parseFloat(lat)
   const lonNum = parseFloat(lon)
 
-  const cacheKey = `${latNum},${lonNum}`.replace(/NaN/g, cityStr)
+  const cacheKey = (!isNaN(latNum) && !isNaN(lonNum)) ? `${latNum},${lonNum}` : cityStr
   const now = Date.now()
   if (WORKER_WEATHER_CACHE.data && WORKER_WEATHER_CACHE.ts > now - WORKER_WEATHER_TTL && WORKER_WEATHER_CACHE.key === cacheKey) {
-    return res.status(200).json(WORKER_WEATHER_CACHE.data)
+    return res.status(200).json({ ...WORKER_WEATHER_CACHE.data, city: coords.label || cityStr })
   }
 
   let coords

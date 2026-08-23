@@ -39,10 +39,10 @@ export default async function handler(req, res) {
   const latNum = parseFloat(lat)
   const lonNum = parseFloat(lon)
 
-  const cacheKey = `${latNum},${lonNum}`.replace(/NaN/g, cityStr)
+  const cacheKey = (!isNaN(latNum) && !isNaN(lonNum)) ? `${latNum},${lonNum}` : cityStr
   const now = Date.now()
   if (WORKER_PRAYER_CACHE.data && WORKER_PRAYER_CACHE.ts > now - WORKER_PRAYER_TTL && WORKER_PRAYER_CACHE.key === cacheKey) {
-    return res.status(200).json(WORKER_PRAYER_CACHE.data)
+    return res.status(200).json({ ...WORKER_PRAYER_CACHE.data, city: coords.label || cityStr })
   }
 
   let coords

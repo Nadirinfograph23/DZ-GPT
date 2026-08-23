@@ -113,6 +113,86 @@ function isYouTubeUrl(u: string): boolean {
   try { const x = new URL(u); return /youtube\.com|youtu\.be/i.test(x.hostname) } catch { return false }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// 📥 COBALT FALLBACK — Modern free YouTube downloader (no server required)
+// ══════════════════════════════════════════════════════════════════════════════
+const COBALT_INSTANCES = [
+  'https://api.cobalt.best',
+  'https://co.eepy.gg',
+  'https://cobalt.lol',
+  'https://cobalt-api.kwiatekmiki.com',
+  'https://cobalt.drgns.space',
+]
+
+async function getCobaltDownloadUrl(url: string, format: string, quality: string): Promise<{ url: string; ext: string }> {
+  const isAudio = format === 'mp3' || format === 'audio'
+  for (const base of COBALT_INSTANCES) {
+    try {
+      const resp = await fetch(base + '/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          url,
+          downloadMode: isAudio ? 'audio' : 'auto',
+          filenameStyle: 'basic',
+          videoQuality: quality,
+          audioFormat: 'mp3',
+          audioBitrate: '192',
+        }),
+        signal: (() => {
+          const ctrl = new AbortController()
+          const tid = setTimeout(() => ctrl.abort(), 12000)
+          return ctrl.signal
+        })()
+      })
+      const data = await resp.json().catch(() => ({}))
+      if (!resp.ok || data.status === 'error' || data.error) continue
+      const dlUrl = data.url
+      if (!dlUrl) continue
+      const ext = /\.mp3/i.test(dlUrl) ? 'mp3' : /\.m4a/i.test(dlUrl) ? 'm4a' : /\.webm/i.test(dlUrl) ? 'webm' : 'mp4'
+      return { url: dlUrl, ext }
+    } catch (e) {
+      continue
+    }
+  }
+  throw new Error('cobalt_fallback_exhausted')
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 📥 DOWNLOAD WITH COBALT (fallback) — preserves progress bar via XMLHttpRequest
+// ══════════════════════════════════════════════════════════════════════════════
+function downloadBlobWithProgress(
+  dlUrl: string,
+  onProgress: (loaded: number, total: number) => void
+): Promise<{ blob: Blob; ext: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('GET', dlUrl)
+    xhr.responseType = 'blob'
+    xhr.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded, e.total)
+    }
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) return reject(new Error(`HTTP ${xhr.status}`))
+      const blob = xhr.response as Blob
+      const cd = xhr.getResponseHeader('content-disposition') || ''
+      const ct = (xhr.getResponseHeader('content-type') || '').toLowerCase()
+      const cdMatch = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
+      let ext = 'mp4'
+      if (cdMatch) {
+        try { ext = decodeURIComponent(cdMatch[1]).split('.').pop()?.toLowerCase() || 'mp4' } catch { ext = 'mp4' }
+      } else if (ct.includes('audio/mpeg')) ext = 'mp3'
+      else if (ct.includes('audio/mp4')) ext = 'm4a'
+      else if (ct.includes('audio/webm')) ext = 'webm'
+      else if (ct.includes('video/mp4')) ext = 'mp4'
+      resolve({ blob, ext })
+    }
+    xhr.onerror = () => reject(new Error('download_network_error'))
+    xhr.onabort = () => reject(new Error('download_aborted'))
+    xhr.send()
+  })
+}
+
 export default function DZTube() {
   const navigate = useNavigate()
   const player = useMiniPlayer()
@@ -361,6 +441,40 @@ export default function DZTube() {
       xhr.onload = async () => {
         try {
           if (xhr.status < 200 || xhr.status >= 300) {
+            // 🔄 Try Cobalt fallback when server fails (e.g., Cloudflare Worker error)
+            if (xhr.status === 500 || xhr.status === 503) {
+              try {
+                showToast('جاري التحميل عبر خدمة بديلة...')
+                const { blob: cobaltBlob, ext: cobaltExt } = await downloadBlobWithProgress(
+                  (await getCobaltDownloadUrl(r.url, format, quality)).url,
+                  (loaded, total) => {
+                    setActiveDownloads(prev => {
+                      const cur = prev[dlKey]; if (!cur) return prev
+                      return { ...prev, [dlKey]: { ...cur, loaded, total } }
+                    })
+                  }
+                )
+                const safeTitle = r.title.replace(/[^\w؀-ۿ\s.-]/g, '').slice(0, 80).trim() || 'video'
+                const filename = `${safeTitle}.${cobaltExt}`
+                const url = URL.createObjectURL(cobaltBlob)
+                const a = document.createElement('a')
+                a.href = url; a.download = filename
+                document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                setTimeout(() => URL.revokeObjectURL(url), 1000)
+                if (!opts?.silent) showToast('✅ تم التحميل بنجاح')
+                notifyDone('DZ Tube — اكتمل التحميل', filename, r.thumbnail)
+                setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n })
+                setHistory(prev => {
+                  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+                  return [{ id, url: r.url, title: r.title, thumbnail: r.thumbnail, format, quality, timestamp: Date.now() }, ...prev.filter(h => !(h.url === r.url && h.format === format && h.quality === quality))].slice(0, HISTORY_MAX)
+                })
+                resolve(true)
+                return
+              } catch (cobaltErr) {
+                console.warn('[DZTube:Cobalt:fallback:fail]', cobaltErr)
+                // Continue to original error handling
+              }
+            }
             setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
             setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)
             let serverMsg = ''

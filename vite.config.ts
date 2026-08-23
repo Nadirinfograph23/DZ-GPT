@@ -24,6 +24,9 @@ export default defineConfig({
       "Expires": "0",
     },
   },
+  ssr: {
+    external: ["node:sqlite"],
+  },
   build: {
     rollupOptions: {
       external: ["node:sqlite"],

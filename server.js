@@ -55,6 +55,25 @@ import { WebSocketServer } from 'ws'
 import compression from 'compression'
 import { getIntegrationSecretStatus } from './lib/integration-secrets.js'
 
+// ── Runtime patch: http-cookie-agent + undici 5.x compat (Cloudflare/Vercel) ──
+// This must run before any module that imports http-cookie-agent.
+try {
+  const caPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'node_modules', 'http-cookie-agent', 'dist', 'undici', 'cookie_agent.js')
+  if (_existsFS(caPath)) {
+    let src = _readFileSync(caPath, 'utf8')
+    if (src.includes('if (cookieOpts != null) {') && !src.includes("if (cookieOpts != null && typeof this.compose === 'function') {")) {
+      src = src.replace(
+        `if (cookieOpts != null) {\n      return this.compose((0, _create_cookie_interceptor.createCookieInterceptor)(cookieOpts));\n    } else {\n      return this;\n    }`,
+        `if (cookieOpts != null && typeof this.compose === 'function') {\n      return this.compose((0, _create_cookie_interceptor.createCookieInterceptor)(cookieOpts));\n    }\n    return this;`
+      )
+      _writeFS(caPath, src)
+      console.log('[runtime-patch] ✅ http-cookie-agent patched for undici 5.x')
+    }
+  }
+} catch (e) {
+  console.warn('[runtime-patch] http-cookie-agent patch skipped:', e.message)
+}
+
 // ── Autonomous Reasoning Engine (CoT, ReAct, ToT, Self-Reflection) ──────────
 import { applyReasoning, selfReflect } from './lib/reasoning/index.js'
 

@@ -1,5 +1,5 @@
 {
-  "installCommand": "npx --yes npm@9 ci --ignore-scripts",
+  "installCommand": "npx --yes npm@9 ci",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",

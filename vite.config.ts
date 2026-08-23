@@ -45,7 +45,7 @@ export default defineConfig({
       "@tanstack/react-table",
       "@tanstack/react-virtual",
     ],
-    exclude: ["undici", 
+    exclude: ["undici", "node:sqlite", 
       "pdfjs-dist",
       "tesseract.js",
       "jszip",

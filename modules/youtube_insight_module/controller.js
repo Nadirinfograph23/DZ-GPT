@@ -5,6 +5,58 @@
 
 import { YouTube } from 'youtube-sr'
 
+// ── MCP Video Analyzer (lazy) ──────────────────────────────────────────────
+let _mcpAnalyzerAvailable = null
+let _mcpAnalyzeVideo = null
+
+async function getMCPAnalyzer() {
+  if (_mcpAnalyzerAvailable === false) return null
+  if (_mcpAnalyzeVideo) return _mcpAnalyzeVideo
+  try {
+    const mod = await import('../../mcp_video_analyzer/controller.js')
+    _mcpAnalyzeVideo = mod.analyzeVideo
+    _mcpAnalyzerAvailable = true
+    return _mcpAnalyzeVideo
+  } catch {
+    _mcpAnalyzerAvailable = false
+    return null
+  }
+}
+
+async function enrichWithMCPAnalyzer(videoId, videoUrl, baseResult) {
+  const analyze = await getMCPAnalyzer()
+  if (!analyze) return baseResult
+
+  try {
+    const mcpResult = await analyze(videoUrl, { detail: 'standard', maxFrames: 12 })
+    if (!mcpResult?.ok) return baseResult
+
+    const enriched = { ...baseResult }
+    if (mcpResult.transcript && mcpResult.transcript.length > 0) {
+      enriched.mcpTranscript = mcpResult.transcript
+      enriched.hasMCPTranscript = true
+    }
+    if (mcpResult.ocrResults && mcpResult.ocrResults.length > 0) {
+      enriched.mcpOCR = mcpResult.ocrResults.filter((o) => o.text).map((o) => o.text).join('\n')
+      enriched.hasMCPOCR = true
+    }
+    if (mcpResult.timeline && mcpResult.timeline.length > 0) {
+      enriched.mcpTimeline = mcpResult.timeline
+      enriched.hasMCPTimeline = true
+    }
+    if (mcpResult.metadata) {
+      enriched.mcpMetadata = mcpResult.metadata
+    }
+    if (mcpResult.warnings && mcpResult.warnings.length > 0) {
+      enriched.mcpWarnings = mcpResult.warnings
+    }
+    enriched.analysisSource = 'youtube-insight+mcp-video-analyzer'
+    return enriched
+  } catch {
+    return baseResult
+  }
+}
+
 // ── Browser-like headers to avoid bot detection ───────────────────────────
 const YT_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -471,7 +523,7 @@ function buildAnalysisPrompt(video, captionData) {
 // handleYouTubeInput — Entry point: URL analysis OR keyword search
 // ═══════════════════════════════════════════════════════════════════════════
 export async function handleYouTubeInput(urlOrQuery, opts = {}) {
-  const { aiGenerate, preloadedMeta, noSuggestions } = opts
+  const { aiGenerate, preloadedMeta, noSuggestions, useMCPAnalyzer } = opts
 
   // ── URL Mode ─────────────────────────────────────────────────────────────
   if (isYtUrl(urlOrQuery)) {
@@ -571,7 +623,7 @@ export async function handleYouTubeInput(urlOrQuery, opts = {}) {
       captionNote ? `\n> ℹ️ ${captionNote}` : null,
     ].filter(l => l !== null).join('\n')
 
-    return {
+    const baseResult = {
       flow: 'url',
       message,
       video: { ...video, captionTracks: undefined },
@@ -580,6 +632,14 @@ export async function handleYouTubeInput(urlOrQuery, opts = {}) {
       captionText: captionData?.text || null,
       captionNote,
     }
+
+    // ── MCP Video Analyzer enrichment (optional) ─────────────────────────
+    if (useMCPAnalyzer) {
+      const enriched = await enrichWithMCPAnalyzer(videoId, `https://www.youtube.com/watch?v=${videoId}`, baseResult)
+      return enriched
+    }
+
+    return baseResult
   }
 
   // ── Search Mode ──────────────────────────────────────────────────────────

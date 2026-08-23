@@ -21680,9 +21680,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       try {
         const ytSmartResult = await handleYouTubeInput(selectedVideo.url, {
           aiGenerate: (params) => safeGenerateAI({ ...params }),
+          useMCPAnalyzer: true,
         })
         if (ytSmartResult.flow === 'url') {
-          return res.status(200).json({
+          const responseBody = {
             content: ytSmartResult.message || `🎬 تم تحليل **"${selectedVideo.title}"** بنجاح!`,
             isYouTube: true,
             youtubeFlow: 'url',
@@ -21691,7 +21692,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             youtubeSuggestions: ytSmartResult.suggestions || [],
             captionNote: ytSmartResult.captionNote || null,
             captionText: ytSmartResult.captionText || null,
-          })
+          }
+          if (ytSmartResult.hasMCPTranscript) responseBody.hasMCPTranscript = true
+          if (ytSmartResult.hasMCPOCR) responseBody.hasMCPOCR = true
+          if (ytSmartResult.hasMCPTimeline) responseBody.hasMCPTimeline = true
+          if (ytSmartResult.mcpWarnings?.length) responseBody.mcpWarnings = ytSmartResult.mcpWarnings
+          return res.status(200).json(responseBody)
         }
       } catch (ytSmartErr) {
         console.error('[YouTube:SmartSelect] Error:', ytSmartErr.message)
@@ -21717,9 +21723,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         aiGenerate: (params) => safeGenerateAI({ ...params }),
         preloadedMeta: _ytPreloadedMeta,
         noSuggestions: !!_ytPreloadedMeta,
+        useMCPAnalyzer: true,
       })
       if (ytResult.flow === 'url') {
-        return res.status(200).json({
+        const responseBody = {
           content: ytResult.message || '🎬 تم تحليل الفيديو بنجاح!',
           isYouTube: true,
           youtubeFlow: 'url',
@@ -21728,7 +21735,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           youtubeSuggestions: ytResult.suggestions || [],
           captionNote: ytResult.captionNote || null,
           captionText: ytResult.captionText || null,
-        })
+        }
+        if (ytResult.hasMCPTranscript) responseBody.hasMCPTranscript = true
+        if (ytResult.hasMCPOCR) responseBody.hasMCPOCR = true
+        if (ytResult.hasMCPTimeline) responseBody.hasMCPTimeline = true
+        if (ytResult.mcpWarnings?.length) responseBody.mcpWarnings = ytResult.mcpWarnings
+        return res.status(200).json(responseBody)
       } else {
         return res.status(200).json({
           content: ytResult.message || '🔍 نتائج البحث على YouTube:',

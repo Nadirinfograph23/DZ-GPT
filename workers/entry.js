@@ -141,6 +141,69 @@ async function fetchChatDirect(request) {
   }
 }
 
+
+// ===== NEWS DIRECT (Worker-native, no server.js) =====
+const WORKER_NEWS_CACHE = { data: null, ts: 0 }
+const WORKER_NEWS_TTL = 15 * 60 * 1000
+
+const WORKER_NEWS_FEEDS_STANDALONE = [
+  { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
+  { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
+  { name: 'البلاد', url: 'https://www.elbilad.net/feed' },
+]
+
+async function fetchNewsDirect(request) {
+  const now = Date.now()
+  if (WORKER_NEWS_CACHE.data && WORKER_NEWS_CACHE.ts > now - WORKER_NEWS_TTL) {
+    return new Response(JSON.stringify(WORKER_NEWS_CACHE.data), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  }
+
+  try {
+    const settled = await Promise.allSettled(
+      WORKER_NEWS_FEEDS_STANDALONE.map(async (feed) => {
+        const response = await fetch(feed.url, {
+          headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*', 'User-Agent': 'DZ-Agent-Worker/1.0' },
+          signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 8000); return ctrl.signal })()
+        })
+        if (!response.ok) return []
+        const xml = await response.text()
+        return parseWorkerRss(xml, feed.name)
+      }),
+    )
+
+    const seen = new Set()
+    const items = settled
+      .flatMap(result => result.status === 'fulfilled' ? result.value : [])
+      .filter(item => {
+        const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .sort((a, b) => {
+        const aTime = Date.parse(a.pubDate || '') || 0
+        const bTime = Date.parse(b.pubDate || '') || 0
+        return bTime - aTime
+      })
+      .slice(0, 20)
+
+    const data = { items, generatedAt: new Date().toISOString() }
+    WORKER_NEWS_CACHE.data = data
+    WORKER_NEWS_CACHE.ts = now
+    return new Response(JSON.stringify(data), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  } catch (err) {
+    console.error('[Worker:News] Failed:', err.message)
+    return new Response(JSON.stringify({ items: [], error: 'تعذّر جلب الأخبار', generatedAt: new Date().toISOString() }), {
+      headers: { 'content-type': 'application/json' }
+    })
+  }
+}
+
 // ===== WEATHER DIRECT (Worker-native, no server.js) =====
 const WORKER_WEATHER_CACHE = { data: null, ts: 0 }
 const WORKER_WEATHER_TTL = 10 * 60 * 1000 // 10 min
@@ -668,6 +731,9 @@ export default {
       }
       if (url.pathname === '/api/dz-agent-chat' && request.method === 'POST') {
         return fetchChatDirect(request)
+      }
+      if (url.pathname === '/api/dz-agent/news' && request.method === 'GET') {
+        return fetchNewsDirect(request)
       }
 
       const app = await getApp(env)

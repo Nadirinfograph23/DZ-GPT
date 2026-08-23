@@ -26,11 +26,11 @@ export default defineConfig({
     },
   },
   ssr: {
-    external: [/^node:/, "undici"],
+    external: [/^node:/, "undici"] as any,
   },
   build: {
     rollupOptions: {
-      external: [/^node:/, "undici"],
+      external: [/^node:/, "undici"] as any,
     },
   },
   optimizeDeps: {

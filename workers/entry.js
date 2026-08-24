@@ -77,6 +77,7 @@ function parseWorkerRss(xml, source) {
 
 // ===== CHAT DIRECT (Worker-native, no server.js) =====
 async function fetchChatDirect(request) {
+  const requestUrl = new URL(request.url)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -263,6 +264,7 @@ const WORKER_NEWS_FEEDS_STANDALONE = [
 ]
 
 async function fetchNewsDirect(request) {
+  const requestUrl = new URL(request.url)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -350,6 +352,7 @@ const WORKER_NT_RSS_FEEDS = [
 
 
 async function fetchNationalTeamNewsDirect(request) {
+  const requestUrl = new URL(request.url)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -361,7 +364,7 @@ async function fetchNationalTeamNewsDirect(request) {
     })
   }
   const url = new URL(request.url)
-  const bypassCache = url.searchParams.get('bypassCache') === '1'
+  const bypassCache = requestUrl.searchParams.get('bypassCache') === '1'
   const now = Date.now()
   if (!bypassCache && WORKER_NT_NEWS_CACHE.ts && now - WORKER_NT_NEWS_CACHE.ts < WORKER_NT_NEWS_TTL) {
     return new Response(JSON.stringify({ items: WORKER_NT_NEWS_CACHE.items, fetchedAt: new Date().toISOString() }), {
@@ -465,6 +468,7 @@ function getWilayaCoords(city) {
 }
 
 async function fetchWeatherDirect(request) {
+  const requestUrl = new URL(request.url)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -476,9 +480,9 @@ async function fetchWeatherDirect(request) {
     })
   }
   const url = new URL(request.url)
-  const city = String(url.searchParams.get('city') || 'Algiers').slice(0, 80)
-  const lat = parseFloat(url.searchParams.get('lat'))
-  const lon = parseFloat(url.searchParams.get('lon'))
+  const city = String(requestUrl.searchParams.get('city') || 'Algiers').slice(0, 80)
+  const lat = parseFloat(requestUrl.searchParams.get('lat'))
+  const lon = parseFloat(requestUrl.searchParams.get('lon'))
 
   // Check cache first
   const cacheKey = (!isNaN(lat) && !isNaN(lon)) ? `${lat},${lon}` : city
@@ -559,6 +563,7 @@ const DZ_WILAYAS = [
 ]
 
 async function fetchPrayerDirect(request) {
+  const requestUrl = new URL(request.url)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -570,9 +575,9 @@ async function fetchPrayerDirect(request) {
     })
   }
   const url = new URL(request.url)
-  const city = String(url.searchParams.get('city') || 'Algiers').slice(0, 80)
-  const lat = parseFloat(url.searchParams.get('lat'))
-  const lon = parseFloat(url.searchParams.get('lon'))
+  const city = String(requestUrl.searchParams.get('city') || 'Algiers').slice(0, 80)
+  const lat = parseFloat(requestUrl.searchParams.get('lat'))
+  const lon = parseFloat(requestUrl.searchParams.get('lon'))
 
   // Check cache first
   const cacheKey = (!isNaN(lat) && !isNaN(lon)) ? `${lat},${lon}` : city
@@ -793,7 +798,7 @@ async function handleWithExpress(app, cfRequest) {
   const req = Readable.from(bodyBuf ? [bodyBuf] : [])
   Object.assign(req, {
     method:            cfRequest.method,
-    url:               url.pathname + url.search,  // WRITABLE — no crash
+    url:               requestUrl.pathname + url.search,  // WRITABLE — no crash
     headers:           reqHeaders,
     httpVersion:       '1.1',
     httpVersionMajor:  1,
@@ -919,10 +924,10 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
     const isApiOrWebSocketPath =
-      url.pathname === '/api' ||
-      url.pathname.startsWith('/api/') ||
-      url.pathname === '/ws' ||
-      url.pathname.startsWith('/ws/')
+      requestUrl.pathname === '/api' ||
+      requestUrl.pathname.startsWith('/api/') ||
+      requestUrl.pathname === '/ws' ||
+      requestUrl.pathname.startsWith('/ws/')
 
     // ── Static assets → ASSETS binding (dist/) ────────────────────────────
     if (!isApiOrWebSocketPath) {
@@ -934,9 +939,9 @@ export default {
         // unchanged.
         if (
           asset.ok &&
-          (url.pathname === '/' ||
-            url.pathname === '/index.html' ||
-            url.pathname === '/manifest.webmanifest')
+          (requestUrl.pathname === '/' ||
+            requestUrl.pathname === '/index.html' ||
+            requestUrl.pathname === '/manifest.webmanifest')
         ) {
           const headers = new Headers(asset.headers)
           const body = (await asset.text()).replaceAll('DZ GPT', 'DZ AGENT')
@@ -947,7 +952,7 @@ export default {
         // refreshes such as /dz-agent. Only fall back for document-like
         // requests or extensionless paths: a missing .js/.css/image must stay
         // a real 404, and /api/* and /ws/* never enter this branch.
-        const lastPathSegment = url.pathname.split('/').pop() || ''
+        const lastPathSegment = requestUrl.pathname.split('/').pop() || ''
         const acceptsHtml = (request.headers.get('accept') || '')
           .toLowerCase()
           .includes('text/html')
@@ -971,19 +976,19 @@ export default {
     // ── API routes → Express ───────────────────────────────────────────────
     try {
       // Direct Worker-native routes (no server.js needed)
-      if (url.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
+      if (requestUrl.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
         return fetchWeatherDirect(request)
       }
-      if (url.pathname === '/api/dz-agent/prayer' && request.method === 'GET') {
+      if (requestUrl.pathname === '/api/dz-agent/prayer' && request.method === 'GET') {
         return fetchPrayerDirect(request)
       }
-      if (url.pathname === '/api/dz-agent-chat' && request.method === 'POST') {
+      if (requestUrl.pathname === '/api/dz-agent-chat' && request.method === 'POST') {
         return fetchChatDirect(request)
       }
-      if (url.pathname === '/api/dz-agent/news' && request.method === 'GET') {
+      if (requestUrl.pathname === '/api/dz-agent/news' && request.method === 'GET') {
         return fetchNewsDirect(request)
       }
-      if (url.pathname === '/api/national-team/news' && request.method === 'GET') {
+      if (requestUrl.pathname === '/api/national-team/news' && request.method === 'GET') {
         return fetchNationalTeamNewsDirect(request)
       }
 
@@ -991,7 +996,7 @@ export default {
       // consumes the original stream before we can inspect its response.
       const newsRequest = (
         request.method === 'POST' &&
-        url.pathname === '/api/dz-agent-chat'
+        requestUrl.pathname === '/api/dz-agent-chat'
       ) ? request.clone() : null
       // Serve the Algeria-news card before loading the Node compatibility
       // bridge. This makes the keyless news path independent of Express,

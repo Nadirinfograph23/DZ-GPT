@@ -799,6 +799,7 @@ async function handleWithExpress(app, cfRequest) {
   Object.assign(req, {
     method:            cfRequest.method,
     url:               url.pathname + url.search,  // WRITABLE — no crash
+    path:              url.pathname,
     headers:           reqHeaders,
     httpVersion:       '1.1',
     httpVersionMajor:  1,

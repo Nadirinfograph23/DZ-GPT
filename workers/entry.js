@@ -240,7 +240,7 @@ async function fetchChatDirect(request) {
     })
   } catch (err) {
     console.error('[Worker:Chat] Error:', err)
-    return new Response(JSON.stringify({ error: 'Server error', message: err.message }), {
+    return new Response(JSON.stringify({ error: 'Server error', message: err.message, stack: err.stack?.split("\\n").slice(0, 10).join("\\n") }), {
       status: 500, headers: {
         'content-type': 'application/json',
         'Access-Control-Allow-Origin': '*',
@@ -909,7 +909,7 @@ async function handleWithExpress(app, cfRequest) {
       })
     } catch (err) {
       resolve(new Response(
-        JSON.stringify({ error: 'Server error', message: err?.message }),
+        JSON.stringify({ error: 'Server error', message: err?.message, stack: err?.stack?.split("\\n").slice(0, 10).join("\\n") }),
         { status: 500, headers: {
         'content-type': 'application/json',
         'Access-Control-Allow-Origin': '*',
@@ -1015,7 +1015,7 @@ export default {
     } catch (err) {
       console.error('[Worker] Fatal:', err?.message, '\n', err?.stack?.split('\n').slice(0,3).join('\n'))
       return new Response(
-        JSON.stringify({ error: 'Server error', message: err?.message }),
+        JSON.stringify({ error: 'Server error', message: err?.message, stack: err?.stack?.split("\\n").slice(0, 10).join("\\n") }),
         { status: 500, headers: {
         'content-type': 'application/json',
         'Access-Control-Allow-Origin': '*',

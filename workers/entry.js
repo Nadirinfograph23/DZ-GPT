@@ -73,8 +73,6 @@ function parseWorkerRss(xml, source) {
   return items
 }
 
-<<<<<<< ours
-=======
 
 
 // ===== CHAT DIRECT (Worker-native, no server.js) =====
@@ -516,7 +514,6 @@ async function fetchPrayerDirect(request) {
   }
 }
 
->>>>>>> theirs
 async function fetchWorkerNewsFallback(request) {
   let payload
   try {
@@ -833,8 +830,6 @@ export default {
 
     // ── API routes → Express ───────────────────────────────────────────────
     try {
-<<<<<<< ours
-=======
       // Direct Worker-native routes (no server.js needed)
       if (url.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
         return fetchWeatherDirect(request)
@@ -852,7 +847,6 @@ export default {
         return fetchNationalTeamNewsDirect(request)
       }
 
->>>>>>> theirs
       // Preserve the body for a Worker-native fallback. The Express bridge
       // consumes the original stream before we can inspect its response.
       const newsRequest = (
@@ -866,10 +860,7 @@ export default {
         const directNews = await fetchWorkerNewsFallback(newsRequest)
         if (directNews) return directNews
       }
-<<<<<<< ours
-=======
 
->>>>>>> theirs
       const app = await getApp(env)
       const response = await handleWithExpress(app, request)
       return response

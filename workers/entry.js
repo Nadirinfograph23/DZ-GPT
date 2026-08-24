@@ -73,6 +73,411 @@ function parseWorkerRss(xml, source) {
   return items
 }
 
+<<<<<<< ours
+=======
+
+
+// ===== CHAT DIRECT (Worker-native, no server.js) =====
+async function fetchChatDirect(request) {
+  try {
+    const payload = await request.json()
+    const messages = Array.isArray(payload?.messages) ? payload.messages : []
+    if (!messages.length) {
+      return new Response(JSON.stringify({ error: 'messages required' }), {
+        status: 400, headers: { 'content-type': 'application/json' }
+      })
+    }
+
+    const lastUser = [...messages].reverse().find(m => m?.role === 'user')?.content?.trim() || ''
+    const lower = lastUser.toLowerCase()
+
+    // Static guards
+    if (/ما هي قدراتك|ما يمكنك|ماذا يمكنك/.test(lower)) {
+      return new Response(JSON.stringify({ content: 'أنا DZ Agent — مساعد ذكي جزائري. أستطيع:\n- 💬 المحادثة والرد على الأسئلة\n- 🌤️ الطقس لجميع ولايات الجزائر\n- 🕌 مواقيت الصلاة\n- 📰 آخر الأخبار الجزائرية\n- 📺 تحميل فيديوهات يوتيوب\n- 📊 تحليل البيانات والرسوم\n- 🔍 البحث على الإنترنت\n- 📄 إنشاء وتعديل الملفات\n\nاطرح أي سؤال!', model: 'static-guard' }), {
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    if (/من أنت|من مطورك|من صانعك/.test(lower)) {
+      return new Response(JSON.stringify({ content: 'أنا DZ Agent، مساعد ذكي مصمم خصيصاً للمستخدمين الجزائريين. أعمل على توفير معلومات دقيقة وخدمات متنوعة.', model: 'static-guard' }), {
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+
+    // Try Pollinations.ai (free, no key)
+    try {
+      const polResp = await fetch('https://text.pollinations.ai/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'openai',
+          messages: [
+            { role: 'system', content: 'أنت DZ Agent — مساعد ذكي جزائري متعدد المهام. تحدث بالعربية الفصحى أو الجزائرية حسب سؤال المستخدم. أجب بشكل مفيد، دقيق، ومختصر.' },
+            ...messages
+          ],
+          seed: Math.floor(Math.random() * 999999),
+          private: true,
+        }),
+        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 30000); return ctrl.signal })()
+      })
+      if (polResp.ok) {
+        const polData = await polResp.json()
+        const reply = polData.choices?.[0]?.message?.content || polData.content || ''
+        if (reply && reply.trim().length > 5) {
+          return new Response(JSON.stringify({ content: reply, model: 'pollinations' }), {
+            headers: { 'content-type': 'application/json' }
+          })
+        }
+      }
+    } catch (e) {
+      console.warn('[Worker:Chat] Pollinations failed:', e.message)
+    }
+
+    return new Response(JSON.stringify({ content: 'عذراً، لم أتمكن من الحصول على رد الآن. يرجى المحاولة مرة أخرى.', model: 'fallback' }), {
+      headers: { 'content-type': 'application/json' }
+    })
+  } catch (err) {
+    console.error('[Worker:Chat] Error:', err)
+    return new Response(JSON.stringify({ error: 'Server error', message: err.message }), {
+      status: 500, headers: { 'content-type': 'application/json' }
+    })
+  }
+}
+
+
+// ===== NEWS DIRECT (Worker-native, no server.js) =====
+const WORKER_NEWS_CACHE = { data: null, ts: 0 }
+const WORKER_NEWS_TTL = 15 * 60 * 1000
+
+const WORKER_NEWS_FEEDS_STANDALONE = [
+  { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
+  { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
+  { name: 'البلاد', url: 'https://www.elbilad.net/feed' },
+]
+
+async function fetchNewsDirect(request) {
+  const now = Date.now()
+  if (WORKER_NEWS_CACHE.data && WORKER_NEWS_CACHE.ts > now - WORKER_NEWS_TTL) {
+    return new Response(JSON.stringify(WORKER_NEWS_CACHE.data), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  }
+
+  try {
+    const settled = await Promise.allSettled(
+      WORKER_NEWS_FEEDS_STANDALONE.map(async (feed) => {
+        const response = await fetch(feed.url, {
+          headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*', 'User-Agent': 'DZ-Agent-Worker/1.0' },
+          signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 8000); return ctrl.signal })()
+        })
+        if (!response.ok) return []
+        const xml = await response.text()
+        return parseWorkerRss(xml, feed.name)
+      }),
+    )
+
+    const seen = new Set()
+    const items = settled
+      .flatMap(result => result.status === 'fulfilled' ? result.value : [])
+      .filter(item => {
+        const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .sort((a, b) => {
+        const aTime = Date.parse(a.pubDate || '') || 0
+        const bTime = Date.parse(b.pubDate || '') || 0
+        return bTime - aTime
+      })
+      .slice(0, 20)
+
+    const data = { items, generatedAt: new Date().toISOString() }
+    WORKER_NEWS_CACHE.data = data
+    WORKER_NEWS_CACHE.ts = now
+    return new Response(JSON.stringify(data), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  } catch (err) {
+    console.error('[Worker:News] Failed:', err.message)
+    return new Response(JSON.stringify({ items: [], error: 'تعذّر جلب الأخبار', generatedAt: new Date().toISOString() }), {
+      headers: { 'content-type': 'application/json' }
+    })
+  }
+}
+
+
+// ===== NATIONAL TEAM NEWS DIRECT (Worker-native, no server.js) =====
+const WORKER_NT_NEWS_CACHE = { items: [], ts: 0 }
+const WORKER_NT_NEWS_TTL = 5 * 60 * 1000
+
+const WORKER_NT_RSS_FEEDS = [
+  { name: 'الهداف', url: 'https://www.elheddaf.com/feed' },
+  { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
+  { name: 'Sport DZ', url: 'https://www.sport-dz.com/feed/' },
+  { name: 'Google الخضر', url: 'https://news.google.com/rss/search?q=%22%D8%A7%D9%84%D8%AE%D8%B6%D8%B1%22+%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+  { name: 'Google محاربو الصحراء', url: 'https://news.google.com/rss/search?q=%22%D9%85%D8%AD%D8%A7%D8%B1%D8%A8%D9%88+%D8%A7%D9%84%D8%B5%D8%AD%D8%B1%D8%A7%D8%A1%22&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+]
+
+function parseWorkerRss(xml, source) {
+  const items = []
+  const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
+  let match
+  while ((match = itemRegex.exec(xml)) !== null && items.length < 12) {
+    const block = match[1]
+    const get = (tag) => {
+      const found = block.match(new RegExp(`<${tag}[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/${tag}>`, 'i'))
+      return found ? decodeXmlText(found[1]) : ''
+    }
+    const title = get('title')
+    if (!title) continue
+    const link = get('link') || (block.match(/<link[^>]+href=["']([^"']+)["']/i) || [])[1] || ''
+    items.push({ title, link, source, pubDate: get('pubDate') || get('dc:date') || get('updated') || '', description: '' })
+  }
+  return items
+}
+
+async function fetchNationalTeamNewsDirect(request) {
+  const url = new URL(request.url)
+  const bypassCache = url.searchParams.get('bypassCache') === '1'
+  const now = Date.now()
+  if (!bypassCache && WORKER_NT_NEWS_CACHE.ts && now - WORKER_NT_NEWS_CACHE.ts < WORKER_NT_NEWS_TTL) {
+    return new Response(JSON.stringify({ items: WORKER_NT_NEWS_CACHE.items, fetchedAt: new Date().toISOString() }), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  }
+
+  try {
+    const settled = await Promise.allSettled(
+      WORKER_NT_RSS_FEEDS.map(async (feed) => {
+        const response = await fetch(feed.url, {
+          headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*', 'User-Agent': 'DZ-Agent-Worker/1.0' },
+          signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 10000); return ctrl.signal })()
+        })
+        if (!response.ok) return []
+        const xml = await response.text()
+        return parseWorkerRss(xml, feed.name)
+      }),
+    )
+
+    const seen = new Set()
+    const items = settled
+      .flatMap(result => result.status === 'fulfilled' ? result.value : [])
+      .filter(item => {
+        const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .sort((a, b) => {
+        const aTime = Date.parse(a.pubDate || '') || 0
+        const bTime = Date.parse(b.pubDate || '') || 0
+        return bTime - aTime
+      })
+      .slice(0, 20)
+
+    WORKER_NT_NEWS_CACHE.items = items
+    WORKER_NT_NEWS_CACHE.ts = now
+    return new Response(JSON.stringify({ items, fetchedAt: new Date().toISOString() }), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  } catch (err) {
+    console.error('[Worker:NationalTeamNews] Failed:', err.message)
+    return new Response(JSON.stringify({ items: [], error: 'تعذّر جلب الأخبار', fetchedAt: new Date().toISOString() }), {
+      headers: { 'content-type': 'application/json' }
+    })
+  }
+}
+
+// ===== WEATHER DIRECT (Worker-native, no server.js) =====
+const WORKER_WEATHER_CACHE = { data: null, ts: 0 }
+const WORKER_WEATHER_TTL = 10 * 60 * 1000 // 10 min
+
+const WILAYA_COORDS = {
+  'الجزائر': { lat: 36.7538, lon: 3.0588 },
+  'وهران': { lat: 35.6969, lon: -0.6331 },
+  'قسنطينة': { lat: 36.365, lon: 6.6147 },
+  'عنابة': { lat: 36.9, lon: 7.7667 },
+  'باتنة': { lat: 35.55, lon: 6.1667 },
+  'بجاية': { lat: 36.75, lon: 5.0833 },
+  'تلمسان': { lat: 34.8783, lon: -1.3167 },
+  'تيزي وزو': { lat: 36.7167, lon: 4.05 },
+  'سطيف': { lat: 36.1911, lon: 5.4136 },
+  'سوق أهراس': { lat: 36.2833, lon: 7.95 },
+}
+
+const WILAYA_ALIASES = {
+  'oran': 'وهران', 'constantine': 'قسنطينة', 'annaba': 'عنابة',
+  'batna': 'باتنة', 'bejaia': 'بجاية', 'béjaïa': 'بجاية',
+  'tlemcen': 'تلمسان', 'tizi ouzou': 'تيزي وزو', 'setif': 'سطيف',
+  'skikda': 'سطيف', 'jijel': 'عنابة', 'algiers': 'الجزائر',
+  'alger': 'الجزائر', 'adrar': 'الأغواط', 'biskra': 'بسكرة',
+}
+
+const AR_CONDITIONS = {
+  0: 'سماء صافية', 1: 'صافية غالباً', 2: 'غيمة جزئية', 3: 'غائمة',
+  45: 'ضباب', 48: 'ضباب مع صقيع',
+  51: 'رذاذ خفيف', 53: 'رذاذ متوسط', 55: 'رذاذ كثيف',
+  61: 'مطر خفيف', 63: 'مطر متوسط', 65: 'مطر غزير',
+  71: 'ثلج خفيف', 73: 'ثلج متوسط', 75: 'ثلج غزير',
+  80: 'زخات مطر خفيفة', 81: 'زخات مطر متوسطة', 82: 'زخات مطر غزيرة',
+  95: 'عاصفة رعدية', 96: 'عاصفة رعدية مع برد', 99: 'عاصفة رعدية قوية',
+}
+
+function getWilayaCoords(city) {
+  const lower = city.toLowerCase()
+  const alias = WILAYA_ALIASES[lower] || WILAYA_ALIASES[lower.split(' ')[0]]
+  if (alias && WILAYA_COORDS[alias]) return { ...WILAYA_COORDS[alias], label: alias }
+  for (const [name, coords] of Object.entries(WILAYA_COORDS)) {
+    if (lower.includes(name.toLowerCase()) || name.toLowerCase().includes(lower)) {
+      return { ...coords, label: name }
+    }
+  }
+  return { lat: 36.7538, lon: 3.0588, label: 'الجزائر العاصمة' }
+}
+
+async function fetchWeatherDirect(request) {
+  const url = new URL(request.url)
+  const city = String(url.searchParams.get('city') || 'Algiers').slice(0, 80)
+  const lat = parseFloat(url.searchParams.get('lat'))
+  const lon = parseFloat(url.searchParams.get('lon'))
+
+  // Check cache first
+  const cacheKey = (!isNaN(lat) && !isNaN(lon)) ? `${lat},${lon}` : city
+  const now = Date.now()
+  if (WORKER_WEATHER_CACHE.data && WORKER_WEATHER_CACHE.ts > now - WORKER_WEATHER_TTL && WORKER_WEATHER_CACHE.key === cacheKey) {
+    const data = { ...WORKER_WEATHER_CACHE.data, city: coords.label || city }
+    return new Response(JSON.stringify(data), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  }
+
+  let coords
+  if (!isNaN(lat) && !isNaN(lon)) {
+    coords = { lat, lon, label: 'موقعك الحالي' }
+  } else {
+    coords = getWilayaCoords(city)
+  }
+
+  try {
+    // Primary: open-meteo (free, no key)
+    const omUrl = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto&forecast_days=1`
+    const omResp = await fetch(omUrl, { headers: { 'User-Agent': 'DZ-Agent-Worker/1.0' }, signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 8000); return ctrl.signal })() })
+    if (!omResp.ok) throw new Error(`open-meteo ${omResp.status}`)
+    const omData = await omResp.json()
+    const current = omData.current || {}
+    const temp = current.temperature_2m ?? null
+    const conditionCode = current.weather_code ?? null
+    const condition = conditionCode !== null ? (AR_CONDITIONS[conditionCode] || `حالة ${conditionCode}`) : null
+    const data = {
+      city: coords.label || city,
+      temp, feels_like: temp, temp_min: temp, temp_max: temp,
+      condition, icon: conditionCode, humidity: current.relative_humidity_2m ?? null,
+      wind: current.wind_speed_10m ?? null, visibility: null,
+      source: 'open-meteo.com', fetchedAt: new Date().toISOString(), status: 'ok'
+    }
+    WORKER_WEATHER_CACHE.data = data
+    WORKER_WEATHER_CACHE.ts = now
+    WORKER_WEATHER_CACHE.key = cacheKey
+    return new Response(JSON.stringify(data), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  } catch (err) {
+    console.error('[Worker:Weather] Failed:', err.message)
+    return new Response(JSON.stringify({
+      city: coords.label || city, temp: null, feels_like: null, temp_min: null, temp_max: null,
+      condition: null, icon: null, humidity: null, wind: null, visibility: null,
+      error: 'تعذّر جلب الطقس حالياً', status: 'unavailable',
+      fetchedAt: new Date().toISOString()
+    }), {
+      status: 200, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  }
+}
+
+
+// ===== PRAYER DIRECT (Worker-native, no server.js) =====
+const WORKER_PRAYER_CACHE = { data: null, ts: 0 }
+const WORKER_PRAYER_TTL = 60 * 60 * 1000 // 1 hour
+
+const DZ_WILAYAS = [
+  'الجزائر','وهران','قسنطينة','عنابة','باتنة','بجاية','تلمسان','تيزي وزو',
+  'سطيف','سوق أهراس','البليدة','بومرداس','المسيلة','ميلة','أم البواقي','خنشلة',
+  'الأغواط','البيض','ورقلة','غرداية','ت撒ات','إليزي','برج بوعريريج','بسكرة',
+  'الوادي','تندوف','الجلفة','الأرزاوي','تيبازة','الشلف','تيارت','سيدي بلعباس',
+  'معسكر','غليزان','تيسمسيلت',' Médéa','Blida','Boumerdès','Tipaza','Chlef',
+]
+
+async function fetchPrayerDirect(request) {
+  const url = new URL(request.url)
+  const city = String(url.searchParams.get('city') || 'Algiers').slice(0, 80)
+  const lat = parseFloat(url.searchParams.get('lat'))
+  const lon = parseFloat(url.searchParams.get('lon'))
+
+  // Check cache first
+  const cacheKey = (!isNaN(lat) && !isNaN(lon)) ? `${lat},${lon}` : city
+  const now = Date.now()
+  if (WORKER_PRAYER_CACHE.data && WORKER_PRAYER_CACHE.ts > now - WORKER_PRAYER_TTL && WORKER_PRAYER_CACHE.key === cacheKey) {
+    const data = { ...WORKER_PRAYER_CACHE.data, city: coords.label || city }
+    return new Response(JSON.stringify(data), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  }
+
+  let coords
+  if (!isNaN(lat) && !isNaN(lon)) {
+    coords = { lat, lon, label: 'موقعك الحالي' }
+  } else {
+    coords = getWilayaCoords(city)
+  }
+
+  try {
+    // Use aladhan API (free, no key)
+    const method = 2 // Islamic Society of North America
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const aladhanUrl = `https://api.aladhan.com/v1/timings/${date}?latitude=${coords.lat}&longitude=${coords.lon}&method=${method}&iso8601=true`
+    const resp = await fetch(aladhanUrl, { headers: { 'User-Agent': 'DZ-Agent-Worker/1.0' }, signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 8000); return ctrl.signal })() })
+    if (!resp.ok) throw new Error(`aladhan ${resp.status}`)
+    const json = await resp.json()
+    const timings = json.data?.timings || {}
+    const hijri = json.data?.date?.hijri || {}
+    const data = {
+      city: coords.label || city,
+      country: 'Algeria',
+      source: 'aladhan.com',
+      date: new Date().toLocaleDateString('ar-DZ'),
+      hijri: hijri.date || '',
+      hijriMonth: hijri.month?.ar || '',
+      times: {
+        'الفجر': timings['Fajr'] || '--',
+        'الشروق': timings['Sunrise'] || '--',
+        'الظهر': timings['Dhuhr'] || '--',
+        'العصر': timings['Asr'] || '--',
+        'المغرب': timings['Maghrib'] || '--',
+        'العشاء': timings['Isha'] || '--',
+      },
+      status: 'ok'
+    }
+    WORKER_PRAYER_CACHE.data = data
+    WORKER_PRAYER_CACHE.ts = now
+    WORKER_PRAYER_CACHE.key = cacheKey
+    return new Response(JSON.stringify(data), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  } catch (err) {
+    console.error('[Worker:Prayer] Failed:', err.message)
+    return new Response(JSON.stringify({
+      city: coords.label || city, country: 'Algeria', source: 'unavailable',
+      date: new Date().toLocaleDateString('ar-DZ'),
+      times: { 'الفجر': '--', 'الشروق': '--', 'الظهر': '--', 'العصر': '--', 'المغرب': '--', 'العشاء': '--' },
+      error: 'تعذّر جلب مواقيت الصلاة حالياً', status: 'unavailable'
+    }), {
+      status: 200, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  }
+}
+
+>>>>>>> theirs
 async function fetchWorkerNewsFallback(request) {
   let payload
   try {
@@ -402,6 +807,27 @@ export default {
         const directNews = await fetchWorkerNewsFallback(newsRequest)
         if (directNews) return directNews
       }
+<<<<<<< ours
+=======
+
+      // Direct Worker-native routes (no server.js needed)
+      if (url.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
+        return fetchWeatherDirect(request)
+      }
+      if (url.pathname === '/api/dz-agent/prayer' && request.method === 'GET') {
+        return fetchPrayerDirect(request)
+      }
+      if (url.pathname === '/api/dz-agent-chat' && request.method === 'POST') {
+        return fetchChatDirect(request)
+      }
+      if (url.pathname === '/api/dz-agent/news' && request.method === 'GET') {
+        return fetchNewsDirect(request)
+      }
+      if (url.pathname === '/api/national-team/news' && request.method === 'GET') {
+        return fetchNationalTeamNewsDirect(request)
+      }
+
+>>>>>>> theirs
       const app = await getApp(env)
       const response = await handleWithExpress(app, request)
       return response

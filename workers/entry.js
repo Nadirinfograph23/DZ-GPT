@@ -106,7 +106,7 @@ async function fetchChatDirect(request) {
       const cityMatch = lastUser.match(/(?:في|عند|مدينة|ولاية)?\s*([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,})?)/)
       const city = cityMatch ? cityMatch[1].trim() : 'الجزائر'
       try {
-        const weatherResp = await fetch(`/api/dz-agent/weather?city=${encodeURIComponent(city)}`)
+        const weatherResp = await fetch(`https://dzagent.app/api/dz-agent/weather?city=${encodeURIComponent(city)}`, { headers: { 'User-Agent': 'DZ-Agent-Worker/1.0' } })
         const weatherData = await weatherResp.json()
         if (weatherData.status === 'ok') {
           const content = `## 🌤️ طقس ${weatherData.city}\n\n- **درجة الحرارة:** ${weatherData.temp}°C\n- **الشعور:** ${weatherData.feels_like}°C\n- **الحالة:** ${weatherData.condition}\n- **الرطوبة:** ${weatherData.humidity}%\n- **الرياح:** ${weatherData.wind} km/h\n\n> 📅 ${weatherData.fetchedAt ? new Date(weatherData.fetchedAt).toLocaleString('ar-DZ') : ''}`
@@ -124,7 +124,7 @@ async function fetchChatDirect(request) {
       const cityMatch = lastUser.match(/(?:في|عند|مدينة|ولاية)?\s*([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,})?)/)
       const city = cityMatch ? cityMatch[1].trim() : 'الجزائر'
       try {
-        const prayerResp = await fetch(`/api/dz-agent/prayer?city=${encodeURIComponent(city)}`)
+        const prayerResp = await fetch(`https://dzagent.app/api/dz-agent/prayer?city=${encodeURIComponent(city)}`, { headers: { 'User-Agent': 'DZ-Agent-Worker/1.0' } })
         const prayerData = await prayerResp.json()
         if (prayerData.status === 'ok') {
           const times = Object.entries(prayerData.times).map(([name, time]) => `- **${name}:** ${time}`).join('\n')
@@ -141,7 +141,7 @@ async function fetchChatDirect(request) {
     // News intent
     if (/أخبار|خبر|مستجدات|عاجل|اليوم.*الجزائر|الجزائر.*اليوم|news/i.test(lower)) {
       try {
-        const newsResp = await fetch('/api/national-team/news')
+        const newsResp = await fetch('https://dzagent.app/api/national-team/news', { headers: { 'User-Agent': 'DZ-Agent-Worker/1.0' } })
         const newsData = await newsResp.json()
         if (newsData.items?.length) {
           const items = newsData.items.slice(0, 10).map(item => `- [${item.title}](${item.link}) — *${item.source}*`).join('\n')

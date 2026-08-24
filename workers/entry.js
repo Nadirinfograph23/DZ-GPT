@@ -834,7 +834,10 @@ export default {
     // ── API routes → Express ───────────────────────────────────────────────
     try {
 <<<<<<< ours
+<<<<<<< ours
 =======
+=======
+>>>>>>> theirs
       // Direct Worker-native routes (no server.js needed)
       if (url.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
         return fetchWeatherDirect(request)
@@ -852,6 +855,9 @@ export default {
         return fetchNationalTeamNewsDirect(request)
       }
 
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
       // Preserve the body for a Worker-native fallback. The Express bridge
       // consumes the original stream before we can inspect its response.
@@ -867,6 +873,10 @@ export default {
         if (directNews) return directNews
       }
 <<<<<<< ours
+<<<<<<< ours
+=======
+
+>>>>>>> theirs
 =======
 
 >>>>>>> theirs

@@ -103,7 +103,7 @@ async function fetchChatDirect(request) {
 
     // Weather intent
     if (/طقس|حرارة|أمطار|جو.*اليوم|تساقط|رياح|weather/i.test(lower)) {
-      const cityMatch = lastUser.match(/(?:في|عند|مدينة|ولاية)?\s*([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,})?)/)
+      const cityMatch = lastUser.match(/(?:في|عند|مدينة|ولاية)\s+([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,})?)/)
       const city = cityMatch ? cityMatch[1].trim() : 'الجزائر'
       try {
         const weatherResult = await fetchWeatherDirect(new Request('https://dzagent.app/api/dz-agent/weather?city=' + encodeURIComponent(city)))
@@ -121,7 +121,7 @@ async function fetchChatDirect(request) {
 
     // Prayer intent
     if (/صلاة|مواقيت|فجر|ظهر|عصر|مغرب|عشاء|أذان|prayer/i.test(lower)) {
-      const cityMatch = lastUser.match(/(?:في|عند|مدينة|ولاية)?\s*([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,})?)/)
+      const cityMatch = lastUser.match(/(?:في|عند|مدينة|ولاية)\s+([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,})?)/)
       const city = cityMatch ? cityMatch[1].trim() : 'الجزائر'
       try {
         const prayerResult = await fetchPrayerDirect(new Request('https://dzagent.app/api/dz-agent/prayer?city=' + encodeURIComponent(city)))

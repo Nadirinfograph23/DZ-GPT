@@ -77,7 +77,6 @@ function parseWorkerRss(xml, source) {
 
 // ===== CHAT DIRECT (Worker-native, no server.js) =====
 async function fetchChatDirect(request) {
-  const url = new URL(request.url)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -264,7 +263,6 @@ const WORKER_NEWS_FEEDS_STANDALONE = [
 ]
 
 async function fetchNewsDirect(request) {
-  const url = new URL(request.url)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -352,7 +350,6 @@ const WORKER_NT_RSS_FEEDS = [
 
 
 async function fetchNationalTeamNewsDirect(request) {
-  const url = new URL(request.url)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -468,7 +465,6 @@ function getWilayaCoords(city) {
 }
 
 async function fetchWeatherDirect(request) {
-  const url = new URL(request.url)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -563,7 +559,6 @@ const DZ_WILAYAS = [
 ]
 
 async function fetchPrayerDirect(request) {
-  const url = new URL(request.url)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,

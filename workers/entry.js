@@ -77,12 +77,28 @@ function parseWorkerRss(xml, source) {
 
 // ===== CHAT DIRECT (Worker-native, no server.js) =====
 async function fetchChatDirect(request) {
+  const url = new URL(request.url)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  }
   try {
     const payload = await request.json()
     const messages = Array.isArray(payload?.messages) ? payload.messages : []
     if (!messages.length) {
       return new Response(JSON.stringify({ error: 'messages required' }), {
-        status: 400, headers: { 'content-type': 'application/json' }
+        status: 400, headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
       })
     }
 
@@ -92,12 +108,22 @@ async function fetchChatDirect(request) {
     // Static guards
     if (/ما هي قدراتك|ما يمكنك|ماذا يمكنك/.test(lower)) {
       return new Response(JSON.stringify({ content: 'أنا DZ Agent — مساعد ذكي جزائري. أستطيع:\n- 💬 المحادثة والرد على الأسئلة\n- 🌤️ الطقس لجميع ولايات الجزائر\n- 🕌 مواقيت الصلاة\n- 📰 آخر الأخبار الجزائرية\n- 📺 تحميل فيديوهات يوتيوب\n- 📊 تحليل البيانات والرسوم\n- 🔍 البحث على الإنترنت\n- 📄 إنشاء وتعديل الملفات\n\nاطرح أي سؤال!', model: 'static-guard' }), {
-        headers: { 'content-type': 'application/json' }
+        headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
       })
     }
     if (/من أنت|من مطورك|من صانعك/.test(lower)) {
       return new Response(JSON.stringify({ content: 'أنا DZ Agent، مساعد ذكي مصمم خصيصاً للمستخدمين الجزائريين. أعمل على توفير معلومات دقيقة وخدمات متنوعة.', model: 'static-guard' }), {
-        headers: { 'content-type': 'application/json' }
+        headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
       })
     }
 
@@ -111,7 +137,12 @@ async function fetchChatDirect(request) {
         if (weatherData.status === 'ok') {
           const content = `## 🌤️ طقس ${weatherData.city}\n\n- **درجة الحرارة:** ${weatherData.temp}°C\n- **الشعور:** ${weatherData.feels_like}°C\n- **الحالة:** ${weatherData.condition}\n- **الرطوبة:** ${weatherData.humidity}%\n- **الرياح:** ${weatherData.wind} km/h\n\n> 📅 ${weatherData.fetchedAt ? new Date(weatherData.fetchedAt).toLocaleString('ar-DZ') : ''}`
           return new Response(JSON.stringify({ content, model: 'weather-api' }), {
-            headers: { 'content-type': 'application/json' }
+            headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
           })
         }
       } catch (e) {
@@ -130,7 +161,12 @@ async function fetchChatDirect(request) {
           const times = Object.entries(prayerData.times).map(([name, time]) => `- **${name}:** ${time}`).join('\n')
           const content = `## 🕌 مواقيت الصلاة في ${prayerData.city}\n\n${times}\n\n> 📅 ${prayerData.date} | 🌙 ${prayerData.hijri} ${prayerData.hijriMonth}`
           return new Response(JSON.stringify({ content, model: 'prayer-api' }), {
-            headers: { 'content-type': 'application/json' }
+            headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
           })
         }
       } catch (e) {
@@ -147,7 +183,12 @@ async function fetchChatDirect(request) {
           const items = newsData.items.slice(0, 10).map(item => `- [${item.title}](${item.link}) — *${item.source}*`).join('\n')
           const content = `## 📰 آخر الأخبار الجزائرية\n\n${items}\n\n> ℹ️ المصدر: RSS مباشر`
           return new Response(JSON.stringify({ content, model: 'news-api' }), {
-            headers: { 'content-type': 'application/json' }
+            headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
           })
         }
       } catch (e) {
@@ -176,7 +217,12 @@ async function fetchChatDirect(request) {
         const reply = polData.choices?.[0]?.message?.content || polData.content || ''
         if (reply && reply.trim().length > 5) {
           return new Response(JSON.stringify({ content: reply, model: 'pollinations' }), {
-            headers: { 'content-type': 'application/json' }
+            headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
           })
         }
       }
@@ -185,12 +231,22 @@ async function fetchChatDirect(request) {
     }
 
     return new Response(JSON.stringify({ content: 'عذراً، لم أتمكن من الحصول على رد الآن. يرجى المحاولة مرة أخرى.', model: 'fallback' }), {
-      headers: { 'content-type': 'application/json' }
+      headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
     })
   } catch (err) {
     console.error('[Worker:Chat] Error:', err)
     return new Response(JSON.stringify({ error: 'Server error', message: err.message }), {
-      status: 500, headers: { 'content-type': 'application/json' }
+      status: 500, headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
     })
   }
 }
@@ -208,6 +264,17 @@ const WORKER_NEWS_FEEDS_STANDALONE = [
 ]
 
 async function fetchNewsDirect(request) {
+  const url = new URL(request.url)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  }
   const now = Date.now()
   if (WORKER_NEWS_CACHE.data && WORKER_NEWS_CACHE.ts > now - WORKER_NEWS_TTL) {
     return new Response(JSON.stringify(WORKER_NEWS_CACHE.data), {
@@ -248,12 +315,23 @@ async function fetchNewsDirect(request) {
     WORKER_NEWS_CACHE.data = data
     WORKER_NEWS_CACHE.ts = now
     return new Response(JSON.stringify(data), {
-      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
     })
   } catch (err) {
     console.error('[Worker:News] Failed:', err.message)
     return new Response(JSON.stringify({ items: [], error: 'تعذّر جلب الأخبار', generatedAt: new Date().toISOString() }), {
-      headers: { 'content-type': 'application/json' }
+      headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
     })
   }
 }
@@ -274,6 +352,17 @@ const WORKER_NT_RSS_FEEDS = [
 
 
 async function fetchNationalTeamNewsDirect(request) {
+  const url = new URL(request.url)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  }
   const url = new URL(request.url)
   const bypassCache = url.searchParams.get('bypassCache') === '1'
   const now = Date.now()
@@ -321,7 +410,12 @@ async function fetchNationalTeamNewsDirect(request) {
   } catch (err) {
     console.error('[Worker:NationalTeamNews] Failed:', err.message)
     return new Response(JSON.stringify({ items: [], error: 'تعذّر جلب الأخبار', fetchedAt: new Date().toISOString() }), {
-      headers: { 'content-type': 'application/json' }
+      headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
     })
   }
 }
@@ -375,6 +469,17 @@ function getWilayaCoords(city) {
 
 async function fetchWeatherDirect(request) {
   const url = new URL(request.url)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  }
+  const url = new URL(request.url)
   const city = String(url.searchParams.get('city') || 'Algiers').slice(0, 80)
   const lat = parseFloat(url.searchParams.get('lat'))
   const lon = parseFloat(url.searchParams.get('lon'))
@@ -385,7 +490,13 @@ async function fetchWeatherDirect(request) {
   if (WORKER_WEATHER_CACHE.data && WORKER_WEATHER_CACHE.ts > now - WORKER_WEATHER_TTL && WORKER_WEATHER_CACHE.key === cacheKey) {
     const data = { ...WORKER_WEATHER_CACHE.data, city: coords.label || city }
     return new Response(JSON.stringify(data), {
-      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
     })
   }
 
@@ -417,7 +528,13 @@ async function fetchWeatherDirect(request) {
     WORKER_WEATHER_CACHE.ts = now
     WORKER_WEATHER_CACHE.key = cacheKey
     return new Response(JSON.stringify(data), {
-      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
     })
   } catch (err) {
     console.error('[Worker:Weather] Failed:', err.message)
@@ -447,6 +564,17 @@ const DZ_WILAYAS = [
 
 async function fetchPrayerDirect(request) {
   const url = new URL(request.url)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  }
+  const url = new URL(request.url)
   const city = String(url.searchParams.get('city') || 'Algiers').slice(0, 80)
   const lat = parseFloat(url.searchParams.get('lat'))
   const lon = parseFloat(url.searchParams.get('lon'))
@@ -457,7 +585,13 @@ async function fetchPrayerDirect(request) {
   if (WORKER_PRAYER_CACHE.data && WORKER_PRAYER_CACHE.ts > now - WORKER_PRAYER_TTL && WORKER_PRAYER_CACHE.key === cacheKey) {
     const data = { ...WORKER_PRAYER_CACHE.data, city: coords.label || city }
     return new Response(JSON.stringify(data), {
-      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
     })
   }
 
@@ -499,7 +633,13 @@ async function fetchPrayerDirect(request) {
     WORKER_PRAYER_CACHE.ts = now
     WORKER_PRAYER_CACHE.key = cacheKey
     return new Response(JSON.stringify(data), {
-      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
     })
   } catch (err) {
     console.error('[Worker:Prayer] Failed:', err.message)
@@ -769,7 +909,12 @@ async function handleWithExpress(app, cfRequest) {
     } catch (err) {
       resolve(new Response(
         JSON.stringify({ error: 'Server error', message: err?.message }),
-        { status: 500, headers: { 'content-type': 'application/json' } }
+        { status: 500, headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      } }
       ))
     }
   })
@@ -870,7 +1015,12 @@ export default {
       console.error('[Worker] Fatal:', err?.message, '\n', err?.stack?.split('\n').slice(0,3).join('\n'))
       return new Response(
         JSON.stringify({ error: 'Server error', message: err?.message }),
-        { status: 500, headers: { 'content-type': 'application/json' } }
+        { status: 500, headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      } }
       )
     }
   },

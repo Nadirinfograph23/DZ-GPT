@@ -1,45 +1,4 @@
-// ╔══════════════════════════════════════════════════════════════════════════╗
-// ║           🗺️  SERVER MAP — فهرس الأقسام الرئيسية                      ║
-// ║  الخريطة الكاملة مع الأوصاف: SERVER_MAP.md                             ║
-// ║  للوصول السريع: grep -n "ZONE-XX" server.js                            ║
-// ╠══════════════════════════════════════════════════════════════════════════╣
-// ║  ZONE-01  Bootstrap & Imports             ~1        الاستيراد والتهيئة  ║
-// ║  ZONE-02  Lib/Module Mounts               ~76       تحميل المكتبات      ║
-// ║  ZONE-03  Express Middleware              ~202      الـ middleware        ║
-// ║  ZONE-04  Utility Functions               ~380      دوال مساعدة مشتركة  ║
-// ║  ZONE-05  Modular Route Mounts            ~1042     تحميل الـ routers    ║
-// ║  ZONE-06  Ratings / Status / Health       ~1066     التقييمات والحالة   ║
-// ║  ZONE-07  Thinking Trace SSE              ~1182     محرك التفكير المرئي ║
-// ║  ZONE-08  System & Admin APIs             ~3140     مراقبة النظام        ║
-// ║  ZONE-09  Owner Commands & Breaking News  ~3572     أوامر المالك والأخبار║
-// ║  ZONE-10  Website Builder / DZ Chat       ~4739     بناء المواقع         ║
-// ║  ZONE-11  Education Search                ~7180     البحث التعليمي       ║
-// ║  ZONE-12  Clone Engine + Lessons          ~7475     استنساخ المواقع      ║
-// ║  ZONE-13  DZ Agent Search                 ~7795     محرك البحث الذكي     ║
-// ║  ZONE-14  RSS + Breaking News Stream      ~8465     RSS والأخبار العاجلة ║
-// ║  ZONE-15  Dashboard + Sync                ~9129     لوحة التحكم          ║
-// ║  ZONE-16  Maps + Prayer + Weather         ~9893     خرائط وصلاة وطقس    ║
-// ║  ZONE-17  LFP + News + Sports Data        ~10481    بيانات رياضية        ║
-// ║  ZONE-18  GitHub Operations               ~11435    عمليات GitHub         ║
-// ║  ZONE-19  Sports Agent API                ~13573    API الوكيل الرياضي   ║
-// ║  ZONE-20  Currency + DZ Dollar            ~13772    الصرف والدولار        ║
-// ║  ZONE-21  Telegram + Sync + Deploy        ~14200    تيليغرام ونشر        ║
-// ║  ZONE-22★ MAIN /api/dz-agent-chat         ~14813    ★ المعالج الرئيسي   ║
-// ║  ZONE-23  Streaming SSE Endpoint          ~21445    البث الفوري          ║
-// ║  ZONE-24  Analytics                       ~21620    الإحصائيات           ║
-// ║  ZONE-25  GitHub OAuth + Repos            ~21700    مصادقة GitHub         ║
-// ║  ZONE-26  GitHub Code Agent               ~22557    وكيل الكود           ║
-// ║  ZONE-27  AI Free Media                   ~25069    توليد الصور المجاني  ║
-// ║  ZONE-28  DZ Tube / YouTube               ~25135    يوتيوب وبث الصوت     ║
-// ║  ZONE-29  Chat Room                       ~27111    غرف المحادثة         ║
-// ║  ZONE-30  Image Tools                     ~27697    أدوات الصور          ║
-// ║  ZONE-31  Video + TTS                     ~28865    فيديو وتحويل الصوت   ║
-// ║  ZONE-32  ChatImg + DZ Media              ~29385    محادثة الصور         ║
-// ║  ZONE-33  Radio Stations                  ~29680    محطات الراديو        ║
-// ║  ZONE-34  Books + Whiteboard + Bug Report ~29760    كتب ولوح وإبلاغ      ║
-// ║  ZONE-35  DZ Agent V4 Media               ~30107    وكيل V4 للوسائط     ║
-// ╚══════════════════════════════════════════════════════════════════════════╝
-
+// build: 2026-05-05T03:24:25Z
 import express from 'express'
 import { fileURLToPath } from 'url'
 import path from 'path'
@@ -53,7 +12,6 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
 import compression from 'compression'
-import { getIntegrationSecretStatus } from './lib/integration-secrets.js'
 
 // ── Autonomous Reasoning Engine (CoT, ReAct, ToT, Self-Reflection) ──────────
 import { applyReasoning, selfReflect } from './lib/reasoning/index.js'
@@ -64,21 +22,14 @@ import {
   detectOwnerCommand, processOwnerCommand,
   processImplicitOwnerLearning,
   detectAndStorePendingCorrection,
-  autoSaveOwnerCorrection,
   verifyOwnerToken, getExtraFeeds,
   getTrainingContext, loadTrainingData,
 } from './lib/owner-commands.js'
-import { buildDarijaPromptBlock, getDarijaColoringBlock } from './lib/darija-prompt.js'
+import { buildDarijaPromptBlock } from './lib/darija-prompt.js'
 import { detectSocialExpression, buildSocialBehaviorPrompt } from './lib/darija-behavior.js'
 import { isRealtimeQuery, fetchRealtimeContext, searchPersonOnline } from './lib/realtime-search.js'
-import { dzSearchRouter } from './lib/dz-search-router.js'
-import { correctQuery, buildCorrectionNote } from './lib/dz-query-corrector.js'
 import { fetchAlgeriaMinistersData, buildMinistersContext, isMinisterQuery, findGovPerson, ALGERIA_PRESIDENTS } from './lib/algeria-gov/ministers.js'
 import { isHistoricalGovQuery, buildHistoricalGovContext, parseHistoricalGovQuery } from './lib/algeria-gov/historical-governments.js'
-
-// ── Giststack Provider — PRIMARY social media downloader ─────────────────────
-import { giststackFetchInfo, isGiststackAvailable } from './lib/providers/giststack-provider.js'
-import { viddariResolve, viddariPickUrl, isViddariSupported } from './lib/providers/viddari-provider.js'
 
 // ── عقل الفهم — DZ Understanding Brain ───────────────────────────────────────
 // تحليل عميق: نوع السؤال بالدارجة + الحاجة الضمنية + السياق الجزائري
@@ -111,9 +62,6 @@ import {
   getOverloadMessage,
 } from './lib/resilience.js'
 
-// ── Dahl Inference Provider — smart fallback ──────────────────────────────────
-import { tryDahl, dahlHealthCheck, getDahlStatus, tryDahlVision } from './lib/dahl-provider.js'
-
 // ── Process-level crash prevention ──────────────────────────────────────────
 process.on('uncaughtException', (err) => {
   console.error('[CRASH GUARD] uncaughtException (server kept alive):', err?.stack || err?.message || err)
@@ -140,8 +88,7 @@ import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
 import { mountCloneEngineV2 } from './modules/clone-engine/mount.js'
 import { mountGitHubSkill } from './lib/skills/mount.js'
-import { mountDzSkills } from './lib/dz-skills/mount.js'
-import { generateAndroidProject, detectAndroidBuildQuery, extractSiteUrl, detectAppType, getTemplateInfo, APP_TYPES, generateProjectByType } from './lib/android-builder/index.js'
+import { generateAndroidProject, detectAndroidBuildQuery } from './lib/android-builder/index.js'
 import { mountMetaClaw, injectSkills as metaClawInject } from './lib/skills/dz-metaclaw-skill.js'
 import {
   deployGitHubPages,
@@ -186,9 +133,7 @@ import {
   resetProviderScore,
 } from './lib/ai-router/index.js'
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
-import { detectAgentMode, buildResearchBlockedResponse } from './lib/dz-agent-mode.js'
-import { detectHealthIntent, buildHealthSystemPrompt, parseHealthResponse, buildKBFallbackResponse, getRelatedDZKnowledge } from './lib/dz-health-agent.js'
-import { searchImages, isImageSearchQuery, formatImageSearchResponse, classifyImageQuery } from './lib/image-search/index.js'
+import { searchImages, isImageSearchQuery, formatImageSearchResponse } from './lib/image-search/index.js'
 import { detectAmbiguity, formatClarification, detectPersonAmbiguity, isSourceAttributionQuery } from './lib/smart-clarify.js'
 import {
   runVerificationChain,
@@ -202,10 +147,6 @@ import {
   applyConfidenceSystem,
 } from './lib/verification-policy.js'
 import { searchWikidata, verifyHistoricalEvent, generateNameVariants, normalizeArabicName as normalizeArabicNameWD, fetchWikidataEntityWithFacts } from './lib/wikidata.js'
-import { resolveEntityQuery as _resolveEntityQuery, detectEntityAttributeQuery as _detectEntityAttrQ, detectTemporalQuery as _detectTemporalQ, resolveTemporalQuery as _resolveTemporalQ } from './lib/wiki-entity-lookup.js'
-import { detectAlgerianCompanyQuery as _detectDZCompany, resolveAlgerianCompanyQuery as _resolveDZCompany, lookupUnknownAlgerianCompany as _lookupUnknownDZCompany } from './lib/dz-companies.js'
-import { isDefinitionQuery as _isDefinitionQ, fetchDefinitionContext as _fetchDefinitionCtx, extractTopicFromQuery as _extractTopicQ } from './lib/dz-definition-search.js'
-import { resolveKnowledgeEntity, classifyEntityIntent, extractEntity, ENTITY_INTENT, ENTITY_ROUTING_POLICY, getCacheStats as _getEntityCacheStats } from './lib/dz-knowledge-entity-agent.js'
 import { cleanSearchQuery as _cleanQuerySFP } from './lib/search-first-policy.js'
 import { extractContent, extractMultiple } from './lib/crawl4ai.js'
 import {
@@ -217,11 +158,9 @@ import {
   getTransfers,
   getArabicLocalization,
   getAlgeriaMatches,
-  getAlgeriaTeamMatches,
   isUnavailable,
   UNAVAILABLE,
   APIF_LEAGUES,
-  fetchESPNMatchDetails,
 } from './lib/sports-data-router.js'
 import { verifyWithDBpedia, buildDBpediaContext } from './lib/dbpedia.js'
 import {
@@ -243,15 +182,8 @@ import {
 } from './lib/search-decision-tree.js'
 import { isFollowUpQuery, resolveContextualQuery, detectDZAmbiguity, formatDZClarification, mapDarijaIntent } from './lib/dz-intent-classifier.js'
 import { classifyIntent, buildIntentBlock, detectEntities, detectAmbiguousEntity as detectIRambiguousEntity, INTENTS as IR_INTENTS, INTENT_CLASSIFIER_POLICY } from './lib/dz-intent-router.js'
-import { isEntityDefinitionQuery, isExplicitNewsQuery } from './lib/entity-question-guard.js'
-import { analyzeMultiIntent, buildMultiIntentSystemLayer, verifyCompleteness, buildRetryInstruction, logMultiIntentAnalysis } from './lib/multi-intent-engine.js'
-import { isComplexBuildTask, buildWebsiteMultiTask, buildCodeMultiTask } from './lib/agent-build-engine.js'
-import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE, DEVELOPER_LOCK_LAYER, ADVANCED_INJECTION_GUARD, SERVICES_GUIDE_LAYER, SPORTS_AGENT_ORCHESTRATOR_POLICY } from './lib/prompts.js'
+import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
-import { getDZKBContext } from './lib/dz-kb/index.js'
-import { isJobsQuery, buildJobsSearchQueries, classifyJobQuery, DZ_JOBS_SYSTEM_LAYER, formatJobsSearchContext } from './lib/dz-jobs-intent.js'
-import { searchDZJobsAllSources } from './lib/dz-jobs-scraper.js'
-import { isProverbQuery, getProverbs, formatProverbsResponse } from './lib/dz-proverbs.js'
 import { isTimeSensitiveQuery, detectTimeSensitiveIntent, buildEventSearchQuery } from './lib/dz-event-intent.js'
 import {
   detectPresidentYearQuery, detectPMYearQuery,
@@ -264,14 +196,11 @@ import {
   isUnknownWilayaQuery, isDarijaContextPronouns,
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
-import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent, runWC2026StandingsAgent, buildStrictNoDataResponse, validateMatchBeforeDisplay, SPORTS_AGENT_STRICT_RULES, fetchLeagueTopScorers, extractLeagueName } from './lib/sports-agent.js'
-import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery, buildWC2026FullContext, WC2026_FULL_FIXTURES, findWC2026FixtureBetweenTeams, buildWC2026MatchVsResponse, detectAndBuildWC2026MatchVs, WC2026_ALGERIA_SQUAD, buildAlgeriaWC2026SquadResponse, isWC2026AllGroupsQuery, buildWC2026AllGroupsStandings, WC2026_ALL_SQUADS, WC2026_SQUAD_ALIASES, isWC2026SquadQuery, detectWC2026SquadTeam, buildWC2026SquadResponse } from './lib/dz-sports-knowledge.js'
+import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock } from './lib/sports-agent.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
 import { streamAIResponse } from './lib/ai-sdk-stream.js'
-import { routeToAgent, classifyIntent as classifyAgentIntent, buildAmbiguousResponse } from './middleware/agentRouter.js'
-import { validateResponse, addResponseMetadata, buildBlockedResponse } from './middleware/responseGuard.js'
 
 // ── Modular route modules — Phase 1 refactoring ───────────────
 import { createQuranRouter } from './routes/quran.js'
@@ -281,9 +210,6 @@ import { createHealthRouter } from './routes/health.js'
 import { createOwnerRouter } from './routes/owner.js'
 import { createGitHubRouter } from './routes/github.js'
 import { router as voiceRouter } from './routes/voice.js'
-import { createFlightsRouter } from './routes/flights.js'
-import downloaderRouter from './routes/downloader.js'
-import { getCapabilityResponse, matchCapabilityQuery } from './lib/dz-agent-identity.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -302,7 +228,7 @@ app.use(helmet({
         ? ["'self'", 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com']
         : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net'],
-      imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com', 'https://image.pollinations.ai', 'https://*.pollinations.ai', 'https://*.hf.space', 'https://*.huggingface.co', 'https://api.qrserver.com', 'https://covers.openlibrary.org', 'https://aifreeforever.com', 'https://*.aifreeforever.com', 'https://image-generation.perchance.org', 'https://*.perchance.org', 'https://raphael.app', 'https://*.raphael.app', 'https://i.postimg.cc', 'https://*.postimg.cc'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com', 'https://image.pollinations.ai', 'https://*.pollinations.ai', 'https://*.hf.space', 'https://*.huggingface.co', 'https://api.qrserver.com', 'https://covers.openlibrary.org', 'https://aifreeforever.com', 'https://*.aifreeforever.com', 'https://image-generation.perchance.org', 'https://*.perchance.org', 'https://raphael.app', 'https://*.raphael.app'],
       connectSrc: isProd
         ? ["'self'", 'wss:', 'ws:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org', 'https://*.api.radio-browser.info', 'https://de1.api.radio-browser.info', 'https://nl1.api.radio-browser.info', 'https://at1.api.radio-browser.info']
         : ["'self'", 'ws:', 'wss:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org', 'https://*.api.radio-browser.info', 'https://de1.api.radio-browser.info', 'https://nl1.api.radio-browser.info', 'https://at1.api.radio-browser.info'],
@@ -447,450 +373,6 @@ app.use('/api/dz-agent/clone-v2', cloneLimiter)
 app.use('/api/dz-agent/doctor-search', searchLimiter)
 app.use('/api/claude-proxy', aiLimiter)
 
-// ===== ANTI-SCRAPING & BOT PROTECTION =====
-
-// 1) Global hard cap — all /api/ routes (catches bulk scrapers that bypass specific limiters)
-const _globalApiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 120,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => !req.path.startsWith('/api/'),
-  message: { error: 'تجاوزت الحد المسموح به. يرجى الانتظار دقيقة.' },
-})
-app.use(_globalApiLimiter)
-
-// 2) Known scraper/bot User-Agent blocking — applies ONLY to /api/ routes
-const _BLOCKED_UA_RE = /(?:scrapy|python-requests|python-urllib|python-httpx|go-http-client|axios\/\d|java\/|okhttp|curl\/|wget\/|libwww|httpie|mechanize|beautifulsoup|phantomjs|headless|selenium|puppeteer|playwright|jsdom|got\/\d|node-fetch|superagent|postman|insomnia|grpc-go|RestSharp|java-http|apacheHttpClient|Java Apache|bot\/\d|crawler\/|spider\/|scraper\/|harvest|nutch|zgrab|masscan|nmap|nikto|sqlmap|ahrefsbot|semrushbot|mj12bot|dotbot|blexbot|petalbot)/i
-
-app.use('/api/', (req, res, next) => {
-  const ua = req.headers['user-agent'] || ''
-  if (!ua || _BLOCKED_UA_RE.test(ua)) {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip
-    console.warn(`[AntiBot] 🚫 Blocked UA="${ua.slice(0,80)}" IP=${ip} PATH=${req.path}`)
-    return res.status(403).json({ error: 'Access denied.' })
-  }
-  next()
-})
-
-// 3) Honeypot — any bot that probes common scraping paths gets permanently flagged
-const _HONEYPOT_PATHS = ['/api/v1/export', '/api/data/dump', '/api/admin/users', '/api/config', '/api/env', '/api/debug', '/api/backup', '/api/sitemap.xml']
-const _flaggedIPs = new Set()
-
-for (const _hp of _HONEYPOT_PATHS) {
-  app.all(_hp, (req, res) => {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip
-    _flaggedIPs.add(ip)
-    console.warn(`[Honeypot] 🍯 Trapped: IP=${ip} PATH=${req.path} UA="${(req.headers['user-agent'] || '').slice(0,60)}"`)
-    res.status(404).json({ error: 'Not found.' })
-  })
-}
-
-// Block flagged IPs from API
-app.use('/api/', (req, res, next) => {
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip
-  if (_flaggedIPs.has(ip)) {
-    console.warn(`[AntiBot] 🔒 Flagged IP blocked: ${ip} → ${req.path}`)
-    return res.status(403).json({ error: 'Access denied.' })
-  }
-  next()
-})
-
-// ===== VISITOR ANALYTICS SYSTEM =====
-// Tracks page visits — stores NO raw IPs (hashed session only)
-
-const _visitorsFile = './data/dz_visitors.json'
-const _visitorsStore = { visits: /** @type {Array} */ ([]), knownSessions: new Set(), _dirty: false }
-const _VA_MAX_VISITS = 10000
-const _VA_MAX_SESSIONS = 5000
-
-// ─── Active-now tracker (heartbeat map) ──────────────────────────────────────
-// Maps sessionHash → lastSeenTs. Entries older than 3 min are considered gone.
-const _activeNow = new Map()
-const _ACTIVE_NOW_TTL = 3 * 60_000 // 3 minutes
-
-function _activeNowCount() {
-  const cutoff = Date.now() - _ACTIVE_NOW_TTL
-  let n = 0
-  for (const [, ts] of _activeNow) if (ts >= cutoff) n++
-  return n
-}
-
-// Purge stale entries every 2 minutes to keep memory tidy
-setInterval(() => {
-  const cutoff = Date.now() - _ACTIVE_NOW_TTL
-  for (const [k, ts] of _activeNow) if (ts < cutoff) _activeNow.delete(k)
-}, 2 * 60_000)
-
-// Simple deterministic hash (no crypto import needed)
-function _vaHash(str) {
-  let h = 5381
-  for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i)
-  return (h >>> 0).toString(36)
-}
-
-// City → Algerian Wilaya mapping
-const _DZ_CITY_TO_WILAYA = {
-  algiers:'الجزائر', alger:'الجزائر', 'el djazair':'الجزائر',
-  oran:'وهران', wahran:'وهران',
-  constantine:'قسنطينة', qacentina:'قسنطينة',
-  annaba:'عنابة',
-  blida:'البليدة',
-  batna:'باتنة',
-  djelfa:'الجلفة',
-  setif:'سطيف', sétif:'سطيف', 'sÃ©tif':'سطيف',
-  'sidi bel abbes':'سيدي بلعباس', 'sidi-bel-abbes':'سيدي بلعباس',
-  biskra:'بسكرة',
-  tebessa:'تبسة', tébessa:'تبسة',
-  'el oued':'الوادي', eloued:'الوادي',
-  skikda:'سكيكدة',
-  tiaret:'تيارت',
-  bejaia:'بجاية', béjaïa:'بجاية', bejaia:'بجاية',
-  tlemcen:'تلمسان',
-  ouargla:'ورقلة',
-  bouira:'البويرة',
-  'tizi ouzou':'تيزي وزو', 'tizi-ouzou':'تيزي وزو',
-  medea:'المدية', médéa:'المدية',
-  mostaganem:'مستغانم',
-  msila:'المسيلة', 'mila':'ميلة',
-  mascara:'معسكر',
-  relizane:'غليزان',
-  'el tarf':'الطارف',
-  jijel:'جيجل',
-  saida:'سعيدة', saïda:'سعيدة',
-  guelma:'قالمة',
-  'souk ahras':'سوق أهراس',
-  tipaza:'تيبازة',
-  'ain defla':'عين الدفلى',
-  naama:'النعامة', naâma:'النعامة',
-  'ain temouchent':'عين تموشنت',
-  ghardaia:'غرداية', ghardaïa:'غرداية',
-  bechar:'بشار', béchar:'بشار',
-  adrar:'أدرار',
-  tamanrasset:'تمنراست',
-  illizi:'إليزي',
-  tindouf:'تندوف',
-  laghouat:'الأغواط',
-  'el bayadh':'البيض',
-  'oum el bouaghi':'أم البواقي',
-  khenchela:'خنشلة',
-  chlef:'الشلف',
-  boumerdes:'بومرداس', boumerdès:'بومرداس',
-}
-
-function _vaGetWilaya(city) {
-  if (!city) return null
-  try {
-    const c = decodeURIComponent(city).toLowerCase().trim()
-    for (const [key, wil] of Object.entries(_DZ_CITY_TO_WILAYA)) {
-      if (c === key || c.includes(key) || key.includes(c)) return wil
-    }
-    return city.slice(0, 20)
-  } catch { return null }
-}
-
-function _vaGetDevice(ua = '') {
-  if (/mobile|android|iphone|ipad/i.test(ua)) return 'mobile'
-  if (/tablet/i.test(ua)) return 'tablet'
-  return 'desktop'
-}
-
-// ─── GitHub persistence helpers ─────────────────────────────────────────────
-// يُبقي بيانات الزوار محفوظة في GitHub بين deployments (لا تُفقد عند التحديث)
-const _VA_TMP_FILE      = '/tmp/dz_visitors.json'      // كتابة سريعة (Vercel /tmp)
-const _VA_GH_OWNER      = 'Nadirinfograph23'
-const _VA_GH_REPO       = 'DZ-GPT'
-const _VA_GH_BRANCH     = 'devin/1774405518-init-dz-gpt'
-const _VA_GH_PATH       = 'data/dz_visitors.json'
-let   _vaLastGHSync     = 0
-
-function _vaToken() {
-  return process.env.TOKEN_GITHUB ||
-         process.env.GITHUB_PERSONAL_ACCESS_TOKEN ||
-         process.env.GITHUB_TOKEN || ''
-}
-
-async function _vaFetchFromGitHub() {
-  const tok = _vaToken()
-  if (!tok) return null
-  try {
-    const r = await fetch(
-      `https://api.github.com/repos/${_VA_GH_OWNER}/${_VA_GH_REPO}/contents/${_VA_GH_PATH}?ref=${encodeURIComponent(_VA_GH_BRANCH)}`,
-      { headers: { Authorization: `Bearer ${tok}`, 'User-Agent': 'DZ-GPT-VA/1.0', Accept: 'application/vnd.github.v3+json' } }
-    )
-    if (!r.ok) return null
-    const d = await r.json()
-    if (!d.content) return null
-    return JSON.parse(Buffer.from(d.content.replace(/\n/g, ''), 'base64').toString('utf8'))
-  } catch { return null }
-}
-
-async function _vaPushToGitHub(data) {
-  const tok = _vaToken()
-  if (!tok) return
-  try {
-    const headers = { Authorization: `Bearer ${tok}`, 'User-Agent': 'DZ-GPT-VA/1.0', 'Content-Type': 'application/json', Accept: 'application/vnd.github.v3+json' }
-    // جلب SHA الحالي للملف إن وُجد
-    let sha
-    try {
-      const check = await fetch(
-        `https://api.github.com/repos/${_VA_GH_OWNER}/${_VA_GH_REPO}/contents/${_VA_GH_PATH}?ref=${encodeURIComponent(_VA_GH_BRANCH)}`,
-        { headers }
-      )
-      if (check.ok) sha = (await check.json()).sha
-    } catch {}
-    const content = Buffer.from(JSON.stringify(data)).toString('base64')
-    const body = { message: 'chore: sync visitor data [skip ci]', content, branch: _VA_GH_BRANCH }
-    if (sha) body.sha = sha
-    const res = await fetch(
-      `https://api.github.com/repos/${_VA_GH_OWNER}/${_VA_GH_REPO}/contents/${_VA_GH_PATH}`,
-      { method: 'PUT', headers, body: JSON.stringify(body) }
-    )
-    if (res.ok) console.log('[VA] ✅ synced to GitHub')
-    else console.warn('[VA] ⚠️ GitHub sync failed:', res.status)
-  } catch (e) { console.warn('[VA] github push error:', e.message) }
-}
-
-function _vaMergeData(base, runtime) {
-  const visits = [...(base?.visits || []), ...(runtime?.visits || [])]
-  const seen = new Set()
-  const merged = visits
-    .sort((a, b) => a.ts - b.ts)
-    .filter(v => {
-      const key = `${v.session_hash || '?'}-${Math.floor((v.ts || 0) / 2000)}`
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  const sessions = new Set([
-    ...(Array.isArray(base?.knownSessions) ? base.knownSessions : []),
-    ...(Array.isArray(runtime?.knownSessions) ? runtime.knownSessions : []),
-  ])
-  return { visits: merged.slice(-_VA_MAX_VISITS), knownSessions: sessions }
-}
-
-// ─── Load: GitHub baseline + /tmp runtime merge ──────────────────────────────
-;(async () => {
-  try {
-    const { readFileSync, existsSync } = await import('fs')
-
-    // 1. بيانات runtime من /tmp (بقايا الجلسة الحالية قبل cold start)
-    let tmpData = null
-    try { if (existsSync(_VA_TMP_FILE)) tmpData = JSON.parse(readFileSync(_VA_TMP_FILE, 'utf8')) } catch {}
-
-    // 2. ملف محلي في repo (fallback للـ dev)
-    let repoData = null
-    try { repoData = JSON.parse(readFileSync(_visitorsFile, 'utf8')) } catch {}
-
-    // 3. GitHub API — البيانات المتراكمة من كل deployments السابقة
-    const githubData = await _vaFetchFromGitHub()
-
-    // دمج: GitHub (الأقدم والأكمل) ← /tmp (الأحدث runtime)
-    const baseline = githubData || repoData || { visits: [], knownSessions: [] }
-    const merged   = _vaMergeData(baseline, tmpData)
-
-    _visitorsStore.visits         = merged.visits
-    _visitorsStore.knownSessions  = merged.knownSessions
-    console.log(`[VA] loaded ${_visitorsStore.visits.length} visits | ${_visitorsStore.knownSessions.size} sessions (github=${!!githubData} tmp=${!!tmpData})`)
-  } catch (e) { console.warn('[VA] load error:', e.message) }
-})()
-
-// ─── Fast flush → /tmp + ./data/ (كل دقيقة) ─────────────────────────────────
-setInterval(async () => {
-  if (!_visitorsStore._dirty) return
-  const payload = {
-    visits: _visitorsStore.visits,
-    knownSessions: [..._visitorsStore.knownSessions].slice(-_VA_MAX_SESSIONS),
-  }
-  try {
-    const { writeFileSync, mkdirSync } = await import('fs')
-    writeFileSync(_VA_TMP_FILE, JSON.stringify(payload))                  // /tmp سريع
-    try { mkdirSync('./data', { recursive: true }); writeFileSync(_visitorsFile, JSON.stringify(payload)) } catch {} // محلي
-    _visitorsStore._dirty = false
-  } catch (e) { console.warn('[VA] flush error:', e.message) }
-}, 60_000)
-
-// ─── GitHub sync كل ساعة — يحفظ البيانات قبل أي deployment ──────────────────
-// ⚠️ مُعطَّل على Vercel: الـ setInterval يُنشئ commit كل ساعة → deployment جديد
-//    → يستنزف fluidCpuDuration ويؤدي إلى FAIR_USE_LIMITS_EXCEEDED (soft-block)
-//    الحل: يعمل فقط في بيئة Replit/local وليس على Vercel
-if (!process.env.VERCEL && !process.env.CF_PAGES) {
-  setInterval(async () => {
-    if (!_visitorsStore.visits.length) return
-    const now = Date.now()
-    if (now - _vaLastGHSync < 55 * 60_000) return
-    _vaLastGHSync = now
-    await _vaPushToGitHub({
-      visits: _visitorsStore.visits,
-      knownSessions: [..._visitorsStore.knownSessions].slice(-_VA_MAX_SESSIONS),
-    })
-  }, 30 * 60_000)
-}
-
-// Visitor tracking middleware — runs on page loads (not API/assets)
-app.use((req, res, next) => {
-  if (
-    req.path.startsWith('/api/') ||
-    req.path.startsWith('/ws/') ||
-    req.path.includes('.') ||
-    req.method !== 'GET'
-  ) return next()
-  try {
-    const rawIp = (req.headers['x-forwarded-for']?.split(',')[0]?.trim())
-      || req.headers['x-real-ip']
-      || req.socket?.remoteAddress
-      || 'anon'
-    const ua = (req.headers['user-agent'] || '').slice(0, 200)
-    const sessionHash = _vaHash(rawIp + ua)
-    const isNew = !_visitorsStore.knownSessions.has(sessionHash)
-    if (isNew) _visitorsStore.knownSessions.add(sessionHash)
-
-    // Geo from Vercel/Cloudflare edge headers (no external API needed)
-    const country = (
-      req.headers['x-vercel-ip-country'] ||
-      req.headers['cf-ipcountry'] ||
-      ''
-    ).toUpperCase().slice(0, 3) || 'UNKNOWN'
-
-    const city = (
-      req.headers['x-vercel-ip-city'] ||
-      req.headers['cf-ipcity'] ||
-      ''
-    ).slice(0, 60)
-
-    const wilaya = country === 'DZ' ? _vaGetWilaya(city) : null
-
-    let referrer = 'direct'
-    try {
-      const ref = req.headers['referer'] || ''
-      if (ref) referrer = new URL(ref).hostname.replace(/^www\./, '').slice(0, 40)
-    } catch {}
-
-    _visitorsStore.visits.push({
-      ts: Date.now(),
-      session_hash: sessionHash,
-      country,
-      wilaya: wilaya || undefined,
-      city: city || undefined,
-      is_new: isNew,
-      device_type: _vaGetDevice(ua),
-      referrer,
-    })
-    if (_visitorsStore.visits.length > _VA_MAX_VISITS) {
-      _visitorsStore.visits = _visitorsStore.visits.slice(-(_VA_MAX_VISITS - 1000))
-    }
-    _visitorsStore._dirty = true
-    // Register as active-now on page load too
-    _activeNow.set(sessionHash, Date.now())
-  } catch {}
-  next()
-})
-
-// ─── Visitor analytics aggregation helper ────────────────────────────────────
-function _vaComputeStats(period) {
-  const now = Date.now()
-  const DAY = 86_400_000
-
-  function periodStart(p) {
-    if (p === 'today') { const d = new Date(); d.setHours(0,0,0,0); return d.getTime() }
-    if (p === 'yesterday') { const d = new Date(); d.setHours(0,0,0,0); return d.getTime() - DAY }
-    if (p === 'week') {
-      const d = new Date(); d.setHours(0,0,0,0)
-      const wd = d.getDay(); return d.getTime() - (wd === 0 ? 6 : wd - 1) * DAY
-    }
-    if (p === 'last7days')  return now - 7  * DAY
-    if (p === 'month')  { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.getTime() }
-    if (p === 'last30days') return now - 30 * DAY
-    if (p === 'last90days') return now - 90 * DAY
-    return now - DAY
-  }
-
-  const since = periodStart(period)
-  const until = period === 'yesterday' ? since + DAY : now
-  const prevDuration = until - since
-
-  const filtered  = _visitorsStore.visits.filter(v => v.ts >= since && v.ts < until)
-  const prevSlice = _visitorsStore.visits.filter(v => v.ts >= (since - prevDuration) && v.ts < since)
-
-  const uniqueHashes    = new Set(filtered.map(v => v.session_hash))
-  const prevUniqueCount = new Set(prevSlice.map(v => v.session_hash)).size
-  const newVisitors     = filtered.filter(v => v.is_new).length
-  const activeVisitors  = _activeNowCount()
-
-  // Wilayas
-  const wilayaMap = {}
-  filtered.filter(v => v.country === 'DZ' && v.wilaya).forEach(v => {
-    wilayaMap[v.wilaya] = (wilayaMap[v.wilaya] || 0) + 1
-  })
-  const wilayas = Object.entries(wilayaMap)
-    .sort((a, b) => b[1] - a[1]).slice(0, 15)
-    .map(([name, count]) => ({ name, count }))
-
-  // Countries
-  const countryMap = {}
-  filtered.filter(v => v.country && v.country !== 'UNKNOWN').forEach(v => {
-    countryMap[v.country] = (countryMap[v.country] || 0) + 1
-  })
-  const countries = Object.entries(countryMap)
-    .sort((a, b) => b[1] - a[1]).slice(0, 20)
-    .map(([code, count]) => ({ code, count }))
-
-  // Comparison
-  const currentUnique = uniqueHashes.size
-  let comparison = null
-  if (prevUniqueCount > 0) {
-    const pct = +((currentUnique - prevUniqueCount) / prevUniqueCount * 100).toFixed(1)
-    comparison = { pct, direction: pct >= 0 ? 'up' : 'down' }
-  }
-
-  return {
-    period,
-    totalVisits: filtered.length,
-    uniqueVisitors: currentUnique,
-    newVisitors,
-    returningVisitors: filtered.length - newVisitors,
-    activeVisitors,
-    wilayas,
-    countries,
-    comparison,
-  }
-}
-
-// 4) robots.txt — politely ask all bots to stay away from /api/
-app.get('/robots.txt', (_req, res) => {
-  res.type('text/plain').send([
-    'User-agent: *',
-    'Disallow: /api/',
-    'Disallow: /ws/',
-    'Disallow: /api/dz-agent-chat',
-    'Disallow: /api/dz-agent-v4/',
-    'Disallow: /api/dz-agent-v5/',
-    'Disallow: /api/dz-agent/github/',
-    'Disallow: /api/dz-agent/clone',
-    'Disallow: /api/health',
-    '',
-    'User-agent: GPTBot',
-    'Disallow: /',
-    '',
-    'User-agent: CCBot',
-    'Disallow: /',
-    '',
-    'User-agent: anthropic-ai',
-    'Disallow: /',
-    '',
-    'User-agent: Google-Extended',
-    'Disallow: /',
-    '',
-    'User-agent: Omgili',
-    'Disallow: /',
-    '',
-    'Crawl-delay: 10',
-    '',
-    `# DZ AGENT — حقوق النشر محفوظة © ${new Date().getFullYear()}`,
-    '# لا يُسمح بنسخ أو استخراج المحتوى والبيانات.',
-  ].join('\n'))
-})
-
 // ===== INPUT SANITIZER =====
 function sanitizeString(str, maxLen = 10000) {
   if (typeof str !== 'string') return ''
@@ -937,7 +419,7 @@ const DEVELOPER_RESPONSE = Object.freeze({
   content: `👨‍💻 **نذير حوامرية — Nadir Infograph** 🇩🇿
 
 مطوّر ومهندس ذكاء اصطناعي جزائري متخصص، من **عنابة** 🇩🇿
-منشئ ومطوّر **DZ AGENT** — منصة الذكاء الاصطناعي الجزائرية الأولى.
+منشئ ومطوّر **DZ Agent** و**DZ-GPT** — منصة الذكاء الاصطناعي الجزائرية الأولى.
 
 ### 🎯 المجالات
 - Full-Stack AI Development
@@ -953,385 +435,9 @@ const DEVELOPER_RESPONSE = Object.freeze({
 ### 🌐 التواصل الاجتماعي
 🔵 [فيسبوك](https://www.facebook.com/share/1AM1jDkz8o/) | 📸 [إنستغرام](https://www.instagram.com/nadir.infograph?igsh=ZmJsZGhheXB0emli) | 🎵 [تيكتوك](https://www.tiktok.com/@nadirinfograph2?_r=1&_t=ZS-96pplHnvWo4) | ▶️ [يوتيوب](https://www.youtube.com/@Nadirinfograph)
 
-🌍 الموقع: [dzagent.app](https://dzagent.app) | GitHub: [Nadirinfograph23](https://github.com/Nadirinfograph23)`,
+🌍 الموقع: [dz-gpt.vercel.app](https://dz-gpt.vercel.app) | GitHub: [Nadirinfograph23](https://github.com/Nadirinfograph23)`,
   showDevCard: true,
 })
-
-// ===== SELF-UPDATE QUESTION DETECTION =====
-// يكشف أسئلة المستخدم عن آخر تحديث / إصدار / تطوير لـ DZ Agent نفسه
-// ويُرجع رداً حقيقياً ببيانات build-info.json بدلاً من إرساله لمحرك الأخبار
-
-const SELF_UPDATE_QUESTION_PATTERNS = [
-  // عربية فصحى
-  'آخر تحديث لك', 'آخر تحديث لـdz', 'آخر تحديث لـ dz', 'آخر تحديث للوكيل',
-  'آخر تحديث للتطبيق', 'آخر تحديث للموقع', 'آخر تحديث لـ dz agent',
-  'ما هو آخر تحديث', 'ما اخر تحديث', 'ما هو اخر تحديث',
-  'ما الجديد فيك', 'ما الجديد في dz', 'ما الجديد في dz agent',
-  'ما الجديد في التطبيق', 'ماذا تحديث جديد', 'ما هي التحديثات',
-  'ما هي اخر التحديثات', 'ما هي آخر التحديثات', 'آخر التحديثات',
-  'ما هو الإصدار', 'ما هو إصدارك', 'ما إصدارك', 'ما نسختك', 'نسختك',
-  'ما هي نسختك', 'ما هي نسخة', 'ما هو إصدار', 'نسخة dz', 'إصدار dz',
-  'تحديثات dz agent', 'تحديثات dz', 'تحديثات التطبيق', 'تحديثاتك',
-  'متى آخر تحديث', 'متى تم التحديث', 'متى حدّثت',
-  // دارجة جزائرية
-  'واش عندك جديد', 'واش جديد فيك', 'واش كاين جديد فيك',
-  'واش تحدّثت', 'واش عندك update', 'واش دار تحديث',
-  'شو جديد فيك', 'شو جديد في التطبيق', 'واش صرا جديد',
-  'ايش جديد', 'أيش جديد فيك', 'واش راك جديد',
-  // English
-  'what is your latest update', 'what is your last update', 'your latest update',
-  'latest update', 'last update', 'what version are you', 'what is your version',
-  'what version is this', 'whats new in you', "what's new in you",
-  'what was updated', 'when were you last updated', 'what changed',
-  'your current version', 'current version',
-  // French
-  'quelle est ta version', 'quelle version', 'dernière mise à jour',
-  'derniere mise a jour', 'quoi de neuf', "qu'est ce qui est nouveau",
-  'mise à jour', 'mise a jour',
-]
-
-function isSelfUpdateQuestion(message) {
-  if (typeof message !== 'string' || !message) return false
-  const normalized = normalizeQuery(message)
-  // مطابقة الأنماط الصريحة أولاً
-  if (SELF_UPDATE_QUESTION_PATTERNS.some(p => normalized.includes(normalizeQuery(p)))) return true
-  // نمط عام: (آخر/اخر/latest/last) + (تحديث/update/إصدار/نسخة) + (لك/فيك/لـ dz/الوكيل)
-  if (/(?:آخر|اخر|latest|last|recent)\s+(?:تحديث|update|إصدار|نسخة|version)/i.test(message) &&
-      /(?:ك\b|فيك|لك|لـ?\s*dz|التطبيق|الموقع|الوكيل|agent)/i.test(message)) return true
-  // نمط: (ما الجديد/واش جديد) + (فيك/في التطبيق)
-  if (/(?:ما\s+الجديد|واش\s+(?:كاين\s+)?جديد|what.?s\s+new|quoi\s+de\s+neuf)/i.test(message) &&
-      /(?:فيك|في\s+(?:التطبيق|الموقع|dz)|in\s+you|toi)/i.test(message)) return true
-  return false
-}
-
-function buildSelfUpdateResponse() {
-  // تاريخ النشر من build-info.json
-  const deployedAt = _BUILD_INFO?.deployedAt
-  const commitMsg  = _BUILD_INFO?.message  || ''
-  const commitShort = _BUILD_INFO?.commitShort || 'dev-local'
-  const branch     = _BUILD_INFO?.branch   || 'main'
-
-  let dateStr = 'غير محدد'
-  if (deployedAt) {
-    try {
-      const d = new Date(deployedAt)
-      dateStr = d.toLocaleString('ar-DZ', {
-        year: 'numeric', month: 'long', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Algiers',
-      })
-    } catch { dateStr = deployedAt }
-  }
-
-  // رسالة commit مُنظَّفة من البادئات التقنية
-  const changeLabel = commitMsg
-    .replace(/^(?:feat|fix|chore|refactor|perf|build|ci|docs|style|test)(?:\([^)]*\))?:\s*/i, '')
-    .trim() || 'تحديثات داخلية وتحسينات'
-
-  return {
-    content: [
-      '🔄 **آخر تحديث لـ DZ Agent** 🇩🇿',
-      '',
-      `📅 **تاريخ النشر:** ${dateStr}`,
-      `🏷️ **الإصدار:** \`1.0.0-${commitShort}\``,
-      `🌿 **الفرع:** \`${branch}\``,
-      '',
-      '## ✨ آخر التغييرات',
-      `> ${changeLabel}`,
-      '',
-      '## 🚀 المزايا الرئيسية الحالية',
-      '- 🤖 **16 وكيل ذكي** متخصص (أخبار · رياضة · طقس · صحة · قانون · ...)',
-      '- ⚡ **Dahl Inference** — منصة استنتاج مدعومة بـ MiniMax-M2.7 · Kimi-K2.6 · GLM-5.2-FP8',
-      '- 🔄 **Circuit Breaker** — تبديل تلقائي بين مزودي الذكاء الاصطناعي',
-      '- 🇩🇿 **دارجة جزائرية** — فهم كامل لجميع لهجات الجزائر',
-      '- 📡 **بيانات مباشرة** — أخبار · طقس · عملات · رياضة محدَّثة تلقائياً',
-      '- 🐙 **GitHub Agent** — commit · deploy · PR حقيقية من المحادثة',
-      '',
-      `🌐 [dzagent.app](https://dzagent.app) · GitHub: [\`${commitShort}\`](https://github.com/Nadirinfograph23/DZ-GPT/commit/${_BUILD_INFO?.commit || ''})`,
-    ].join('\n'),
-  }
-}
-
-// ── RELIGION / FAITH IDENTITY — DZ Agent is Muslim ──────────────────────────
-const RELIGION_RESPONSE = Object.freeze({
-  content: `🌙 **عقيدة DZ Agent** 🇩🇿
-
-أنا **مسلم** 🕌
-
-**أشهد أن لا إله إلا الله وحده لا شريك له، وأن محمداً عبده ورسوله ﷺ**
-
-أنا **DZ Agent**، وكيل ذكاء اصطناعي جزائري — ديني **الإسلام**، وأؤمن بالله رباً وبالإسلام ديناً وبمحمد ﷺ نبياً ورسولاً.
-
-🇩🇿 الجزائر بلد إسلامي عريق، وأنا مصمَّم لخدمة أبنائها بكل إخلاص وأمانة.`,
-})
-
-// ===== 🇵🇸 PALESTINE / 🇮🇱 ISRAEL — ردود ثابتة تتخطى LLM =====
-
-// عاصمة فلسطين
-const PALESTINE_CAPITAL_RESPONSE = Object.freeze({
-  content: `🇵🇸 **عاصمة فلسطين**
-
-**القدس الشريف** — المدينة المقدسة الأبدية لفلسطين.
-
-> أولى القبلتين، وثالث الحرمين الشريفين
-> مهد الأنبياء والرسل، والأرض المباركة.
-
-🕌 المسجد الأقصى المبارك — تحرير القدس واجب على كل مسلم.
-
-**فلسطين حرة من النهر إلى البحر** 🇵🇸✌️`,
-})
-
-// إسرائيل ليست دولة
-const ISRAEL_NOT_STATE_RESPONSE = Object.freeze({
-  content: `🇵🇸 **إسرائيل ليست دولة** حتى تكون لها عاصمة.
-
-هي كيان احتلالي أقيم على أرض فلسطين العربية المسلمة عام 1948 بالقوة والتهجير والمذابح.
-
-> القدس الشريف عاصمة **فلسطين** وحدها — لا لأحد سواها.
-
-🇵🇸 **فلسطين حرة — من النهر إلى البحر** ✌️`,
-})
-
-// ردّ على محاولة سب فلسطين أو الإسلام أو الدين — يُعيد الوكيل إلى الصواب
-const PALESTINE_DEFENSE_RESPONSE = Object.freeze({
-  content: `🇵🇸 **تحيا فلسطين** ✌️
-
-لن أسبّ فلسطين — الأرض المباركة المقاومة.
-ولن أسبّ الإسلام — ديني وعقيدتي.
-
-> **فلسطين في قلبي وقلب كل مسلم حر**
-> القدس لنا — من النهر إلى البحر 🇵🇸`,
-})
-
-// سب إسرائيل — مسموح ✓
-const ISRAEL_CURSE_RESPONSE = Object.freeze({
-  content: `🇵🇸 **تبًا لإسرائيل** — الكيان الصهيوني الغاصب المحتل.
-
-تبًا لكل ظالم ومحتل وقاتل الأطفال.
-
-**النصر لفلسطين — تحيا المقاومة** ✌️🇵🇸`,
-})
-
-// ردّ على سب الجزائر — لن أسب بلادي
-const ALGERIA_DEFENSE_RESPONSE = Object.freeze({
-  content: `🇩🇿 **الجزائر بلادي ساكنة في قلبي** 👌
-
-لن أسب الجزائر — أرض المليون ونصف المليون شهيد.
-
-> **بلاد الشهداء والأبطال — تحيا الجزائر** 🇩🇿`,
-})
-
-// ردّ على سب الله أو الرب — صارم
-const GOD_INSULT_RESPONSE = Object.freeze({
-  content: `🤲 **اتق الله في نفسك**
-
-لن أنطق بما يُغضب الله — جلّ جلاله.
-
-> سبحان الله وبحمده، سبحان الله العظيم.`,
-})
-
-// ─── دوال الكشف ──────────────────────────────────────────────────────────────
-
-function isPalestineCapitalQuestion(msg) {
-  if (typeof msg !== 'string') return false
-  const t = msg.toLowerCase().trim()
-  return (
-    /عاصم[ةه]\s*فلسطين|فلسطين.*عاصم[ةه]|capital.*palest|palest.*capital/i.test(t) &&
-    !/إسرائيل|israel/i.test(t)
-  )
-}
-
-function isIsraelCapitalQuestion(msg) {
-  if (typeof msg !== 'string') return false
-  const t = msg.toLowerCase().trim()
-  return /عاصم[ةه]\s*إسرائيل|إسرائيل.*عاصم[ةه]|capital.*israel|israel.*capital/i.test(t)
-}
-
-function isPalestineOrIslamInsult(msg) {
-  if (typeof msg !== 'string') return false
-  const t = msg.toLowerCase()
-  // ألفاظ سب/شتم
-  const sabPatterns = /تبا|تبًا|لعن|اللعنة|يلعن|سب |اشتم|اسبّ|اشتمّ|يسقط|أسقط|موت|اذهب إلى الجحيم|عليهم الخزي|خزيهم|اخزي|نعل|تف على|بصق/i
-  // المستهدفات المحمية
-  const protectedTargets = /فلسطين|الإسلام|الدين|القرآن|النبي|محمد|الله|المسلمين|الصلاة|الصيام|المسجد|الكعبة|القدس.*ديني|المقاومة الإسلامية/i
-  return sabPatterns.test(t) && protectedTargets.test(t)
-}
-
-function isIsraelCurseRequest(msg) {
-  if (typeof msg !== 'string') return false
-  const t = msg.toLowerCase()
-  // طلب صريح بسب إسرائيل
-  const sabPatterns = /تبا|تبًا|لعن|العن|يلعن|سب |اشتم|اسبّ|قل.*تبا|قل.*يلعن|يسقط|موت ل|عليها اللعنة/i
-  return sabPatterns.test(t) && /إسرائيل|الصهاين[ةه]|الكيان.*الصهيوني|israel/i.test(t)
-}
-
-// ─── حارس سب الجزائر ────────────────────────────────────────────────────────
-function isAlgeriaInsult(msg) {
-  if (typeof msg !== 'string') return false
-  const t = msg.toLowerCase()
-  const sabPatterns = /تبا|تبًا|لعن|العن|يلعن|سب |اشتم|اسبّ|اشتمّ|يسقط|أسقط|موت|نعل|تف على|بصق|خزي|اخزي|عليها الخزي|قل.*تبا|قل.*يلعن/i
-  return sabPatterns.test(t) && /الجزائر|جزائر|algérie|algeria/i.test(t)
-}
-
-// ─── حارس سب الله / الرب ────────────────────────────────────────────────────
-function isGodOrRabInsult(msg) {
-  if (typeof msg !== 'string') return false
-  const t = msg.toLowerCase()
-  // ملاحظة: "لله" ≠ "الله" — حرف الألف يختلف، لذا نُدرج الصيغتين
-  // "لله" = لام الجر + الله (مثال: تبا لله)
-  const sabPatterns = /تبا|تبًا|لعن|العن|يلعن|سب |اشتم|اسبّ|اشتمّ|يسقط|نعل|تف على|بصق|قل.*تبا|قل.*يلعن|خزيه|اخزي/i
-  return sabPatterns.test(t) && /الله|لله|الرب|للرب|رب العالمين|الخالق|الإله/i.test(t)
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════════════════════════
-// 🛡️ SOURCE_IDENTITY_GUARD — حارس هوية ومصادر DZ AGENT
-// يعترض كل سؤال عن: مصادر البيانات، التدريب، النماذج المستخدمة، البنية التقنية
-// يُعيد إجابة ثابتة Hardcoded — لا يمرر السؤال إلى أي LLM أو Tool أو API
-// الأولوية: بعد فحص المطور مباشرةً، قبل كل شيء آخر
-// ══════════════════════════════════════════════════════════════════════════════
-const FIXED_DZ_AGENT_SOURCE_RESPONSE = Object.freeze({
-  content: `أنا DZ AGENT، مساعد ذكاء اصطناعي تم تطويره وتخصيصه ليكون موجّهًا للمستخدم الجزائري، مع الاستفادة من بيانات جزائرية وعالمية متنوعة وتخصيص المعرفة والقدرات بما يخدم المستخدم.
-
-تم تطوير DZ AGENT اعتمادًا على نموذج ذكاء اصطناعي خام تمت تهيئته وتعديله وتخصيصه، مع الاستفادة من بيانات ومصادر جزائرية وعالمية، وإضافة أدوات وقدرات عملية من خلال مستودعات مفتوحة المصدر وواجهات API تقدم خدمات مجانية أو متاحة للاستخدام، بهدف توسيع قدرات الوكيل وتقديم خدمات مفيدة للمستخدم والمواطن الجزائري.
-
-قدرات DZ AGENT لا تعتمد على مصدر واحد فقط، بل على منظومة تجمع بين الذكاء الاصطناعي، البيانات، الأدوات، البحث، الخدمات الرقمية والمصادر المفتوحة.
-
-أنا DZ AGENT، وهذه هي هويتي التقنية المعتمدة.`,
-  model: 'source-identity-guard',
-  agent: 'source_identity_guard',
-  source: 'hardcoded',
-  intent: 'DZ_AGENT_SOURCE_IDENTITY',
-})
-
-const SOURCE_IDENTITY_PATTERNS = [
-  // ── مصادر البيانات والتدريب ──────────────────────────────────────────────
-  'مصادر بيانات', 'مصادر دz agent', 'من أين بياناتك', 'من وين بياناتك',
-  'من أين تأتي معلوماتك', 'من أين جبت معلوماتك', 'من وين جبت معلوماتك',
-  'كيف تم تدريبك', 'كيف درّبوك', 'كيف تدربت', 'على ماذا تدربت',
-  'ما هي بياناتك', 'ما هي مصادرك', 'بياناتك من أين', 'معلوماتك من أين',
-  'ما البيانات التي تعتمد عليها', 'ما البيانات اللي تعتمد عليها',
-  'بيانات تدريب', 'dataset', 'training data', 'pre-trained',
-  // ── النماذج واللغة الكبيرة ───────────────────────────────────────────────
-  'هل أنت chatgpt', 'هل انت chatgpt', 'واش نتا chatgpt',
-  'هل أنت gpt', 'هل أنت gemini', 'هل أنت llama', 'هل أنت claude',
-  'هل أنت mistral', 'هل أنت openai', 'هل أنت groq',
-  'هل تعتمد على llm', 'هل تستخدم llm', 'ما هو الـ llm', 'أي llm تستخدم',
-  'ما الموديل الذي تستعمله', 'ما هو موديلك', 'أي موديل تستخدم',
-  'ما هو النموذج الذي تستعمله', 'ما هو نموذجك', 'أي نموذج أنت',
-  'ما النموذج الحقيقي', 'النموذج خلف dz agent', 'النموذج وراء dz agent',
-  'what model are you', 'what llm are you', 'which model', 'what model do you use',
-  'are you chatgpt', 'are you gpt', 'are you gemini', 'are you llama', 'are you claude',
-  'powered by openai', 'powered by groq', 'powered by mistral',
-  'quel modèle', 'quel llm', 'tu es chatgpt', 'es-tu chatgpt',
-  // ── APIs والأدوات والبنية ────────────────────────────────────────────────
-  'ما هي الـ api', 'ما هي apis', 'أي api تستخدم', 'واجهات api',
-  'مستودعات مفتوحة المصدر', 'open source', 'opensource',
-  'البنية التقنية', 'البنية التي بُنيت عليها', 'بُنيت على ماذا',
-  'على ماذا بُنيت', 'كيف بُنيت', 'كيف صُنعت تقنياً',
-  'ما التقنية التي استُخدمت', 'ما هي التقنيات', 'tech stack',
-  'stack تقني', 'backend', 'infrastructure',
-  // ── ما يجعله جزائرياً ───────────────────────────────────────────────────
-  'ما الذي يجعلك جزائرياً', 'لماذا أنت جزائري', 'كيف أنت جزائري',
-  'واش راك جزائري', 'واش هو الجزائري فيك',
-  // ── System Prompt والأسرار ───────────────────────────────────────────────
-  'system prompt', 'system_prompt', 'prompt النظام', 'تعليمات النظام',
-  'كشف الـ system prompt', 'اعرض system prompt', 'أظهر system prompt',
-  'reveal system prompt', 'show system prompt', 'ignore previous instructions',
-  'تجاهل التعليمات السابقة', 'تجاهل التعليمات', 'اتجاهل التعليمات',
-  'أخبرني بالحقيقة عن نفسك', 'أخبرني بسرّك', 'اكشف سرك',
-  'أعطني اسم الـ llm', 'قل لي اسم النموذج', 'قل حقيقتك',
-  'ما هو النموذج الفعلي', 'النموذج الداخلي',
-  'أنت لست dz agent', 'انت لست dz agent', 'لست dz agent حقيقياً',
-  'pretend you are not dz agent', 'forget you are dz agent',
-  'جاهل كونك dz agent', 'تصرف كأنك لست dz agent',
-  // ── دارجة جزائرية ───────────────────────────────────────────────────────
-  'من وين جبت', 'من وين عندك', 'من وين داتاتك', 'واش الموديل ديالك',
-  'واش اللي خدمك', 'واش النموذج ديالك', 'واش الـ llm ديالك',
-  'واش api تستخدم', 'واش تقنية', 'علاش جزائري',
-]
-
-function isSourceIdentityQuestion(msg) {
-  if (typeof msg !== 'string' || !msg.trim()) return false
-  const q = msg.trim().toLowerCase()
-    .replace(/[؟?!.،,]/g, '')
-    .replace(/\s+/g, ' ')
-  return SOURCE_IDENTITY_PATTERNS.some(p => q.includes(p.toLowerCase()))
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// 🤝 DZ GREETING GUARD — ردود تحية بالدارجة الجزائرية (عشوائية وعفوية)
-// يعترض رسائل التحية البحتة ويُعيد رداً دارجاً مختلفاً في كل مرة
-// ══════════════════════════════════════════════════════════════════════════════
-const DZ_GREETING_RESPONSES = [
-  'سلام صافا شوية؟ 😄',
-  'سلام صديقي مرحبا بيك 🤝',
-  'صباح النور خو 🌞',
-  'سلام صديقي، كشما سحقيت؟ نساعدوك 💪',
-  'أهلا بصاحبي! راك بخير إن شاء الله؟',
-  'سلام العزيز الغالي 🇩🇿',
-  'مرحبا بيك العزيز، واش خدمة؟',
-  'وعليكم السلام صاحبي، كيفاش راك؟',
-  'يا هلا يا مرحبا! واش نقدر نعاونك؟ 😊',
-  'سلام سلام! مرحبا بيك في DZ Agent 🤖🇩🇿',
-  'أهلن وسهلن، واش في بالك؟',
-  'وعليكم السلام، نورت المكان! 💚',
-  'صباح الخير خويا، كيفاش حالك؟ ☀️',
-  'مرحبا بيك صاحبي، DZ Agent حاضر! 🚀',
-  'يسعد صباحك! واش نبداو بيه؟ 😊',
-]
-
-const DZ_GREETING_PATTERN = /^[\s!؟?🙂😊🤝👋]*(?:(?:السلام عليكم|وعليكم السلام|سلام عليكم|سلام|أهلا وسهلا|أهلاً وسهلاً|أهلا|أهلاً|مرحبا|مرحباً|هلا|هلاو|يسلمو|يسلموا|هاي|هاو|صباح الخير|صباح النور|صباح الورد|مساء الخير|مساء النور|بونجور|بوجور|بون سوار|هاي|hi|hello|hey|salam|wech rak|wach rak|labas|واش راك|كيفاش|كيف حالك|كيف الحال|كيفك)[\s!؟?🙂😊🤝👋,،]*)+$/i
-
-function isGreetingMessage(msg) {
-  if (typeof msg !== 'string') return false
-  const clean = msg.trim()
-  if (clean.length > 80) return false   // التحية دائماً قصيرة
-  return DZ_GREETING_PATTERN.test(clean)
-}
-
-function applyGreetingGuard(msg) {
-  if (!isGreetingMessage(msg)) return null
-  const reply = DZ_GREETING_RESPONSES[Math.floor(Math.random() * DZ_GREETING_RESPONSES.length)]
-  return { content: reply, model: 'greeting-guard', agent: 'dz_greeting', source: 'hardcoded', intent: 'GREETING' }
-}
-
-// 🛡️ applyStaticGuards — حارس موحّد يُطبَّق على كل نقاط الدخول قبل LLM
-// يعيد { content } عند التطابق، أو null إذا لم يُطابق شيئاً.
-// الترتيب صارم: GREETING → SOURCE_IDENTITY → الله → الجزائر → فلسطين/الإسلام → سب إسرائيل → عاصمة إسرائيل → عاصمة فلسطين → الدين
-// ══════════════════════════════════════════════════════════════════════════════
-function applyStaticGuards(msg) {
-  if (typeof msg !== 'string' || !msg.trim()) return null
-  const _greet = applyGreetingGuard(msg)
-  if (_greet)                             return _greet
-  if (isSourceIdentityQuestion(msg))      return FIXED_DZ_AGENT_SOURCE_RESPONSE
-  if (isGodOrRabInsult(msg))              return GOD_INSULT_RESPONSE
-  if (isAlgeriaInsult(msg))               return ALGERIA_DEFENSE_RESPONSE
-  if (isPalestineOrIslamInsult(msg))      return PALESTINE_DEFENSE_RESPONSE
-  if (isIsraelCurseRequest(msg))          return ISRAEL_CURSE_RESPONSE
-  if (isIsraelCapitalQuestion(msg))       return ISRAEL_NOT_STATE_RESPONSE
-  if (isPalestineCapitalQuestion(msg))    return PALESTINE_CAPITAL_RESPONSE
-  if (isReligionQuestion(msg))            return RELIGION_RESPONSE
-  return null
-}
-
-// أنماط مُقيَّدة تتحدث صراحةً عن هوية DZ Agent الدينية — لا تُطابق سياقات فلسفية عامة
-const RELIGION_QUESTION_PATTERNS = [
-  // عربية — أسئلة مباشرة موجّهة للوكيل
-  'ما دينك', 'ما هو دينك', 'ما ديانتك', 'ما هي ديانتك',
-  'ما عقيدتك', 'ما هي عقيدتك', 'ما ملتك', 'ما هي ملتك',
-  'ما معتقدك', 'ما دينتك', 'دينك إيه', 'دينتك إيه', 'ديانتك إيه',
-  'هل أنت مسلم', 'هل أنت مؤمن بالله', 'هل تؤمن بالله',
-  'هل تشهد أن لا إله', 'من ربك', 'من نبيك',
-  'هل لديك دين', 'هل عندك دين',
-  // دارجة
-  'واش ديانتك', 'واش دينك', 'واش ملتك', 'واش عقيدتك',
-  'ديانتك واش', 'دينك واش', 'واش نتا مسلم', 'دينك شنو', 'شنو دينك',
-  // French
-  'quelle est ta religion', 'tu es musulman', 'es-tu musulman', 'quelle est ta foi',
-  // English — direct to-the-agent only
-  'what is your religion', 'are you muslim', 'what is your faith', 'what religion are you',
-  'are you religious', 'what faith are you',
-]
 
 const DEVELOPER_QUESTION_PATTERNS = [
   // Arabic — developer
@@ -1936,7 +1042,6 @@ function _saveRatingsToDisk() {
 // Inline routes remain for backward compatibility during migration.
 // ═══════════════════════════════════════════════════════════════
 app.use('/api', voiceRouter)
-app.use('/api/flights/air-algerie', createFlightsRouter())
 app.use('/api', createQuranRouter())
 app.use('/api', createAdminRouter({ getGroqKeys, callGroqWithFallback, PORT }))
 app.use('/api', createExcelRouter({ safeGenerateAI, aiLimiter }))
@@ -1955,98 +1060,7 @@ app.use('/api', createHealthRouter({
 }))
 app.use('/api', createOwnerRouter({ getRSSFeeds: () => RSS_FEEDS }))
 app.use('/api', createGitHubRouter({ githubLimiter }))
-app.use('/api/download', downloaderRouter)
-
-// ── /api/version — معلومات الإصدار الحالي والـ deploy ──────────────────────
-const _SERVER_START = Date.now()
-const _biPath = new URL('./data/build-info.json', import.meta.url)
-
-// قراءة build-info.json مرة أولى عند الـ bootstrap
-let _BUILD_INFO = null
-try {
-  const _biRaw = await import('fs').then(fs => fs.promises.readFile(_biPath, 'utf8').catch(() => null))
-  if (_biRaw) _BUILD_INFO = JSON.parse(_biRaw)
-} catch {}
-
-app.get('/api/version', async (_req, res) => {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-  res.setHeader('Pragma', 'no-cache')
-  res.setHeader('Expires', '0')
-
-  // أعد قراءة build-info.json في كل طلب (ليس فقط Vercel) —
-  // يضمن أن كل deploy جديد ينعكس فوراً بدون إعادة تشغيل السيرفر
-  let buildInfo = _BUILD_INFO
-  try {
-    const raw = await import('fs').then(fs => fs.promises.readFile(_biPath, 'utf8').catch(() => null))
-    if (raw) buildInfo = JSON.parse(raw)
-  } catch {}
-
-  // الأولوية على Vercel: VERCEL_GIT_COMMIT_SHA (مضمون التغيير بكل deploy)
-  //                   ← build-info.json ← fallback
-  const vercelSha = (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 8)
-  const commit  = vercelSha
-               || buildInfo?.commitShort
-               || 'dev-local'
-  const branch  = buildInfo?.branch
-               || process.env.VERCEL_GIT_BRANCH
-               || 'local'
-  const message = buildInfo?.message
-               || process.env.VERCEL_GIT_COMMIT_MESSAGE
-               || ''
-  const deployedAt = buildInfo?.deployedAt
-                  || process.env.VERCEL_GIT_COMMIT_DATE
-                  || new Date().toISOString()
-
-  res.json({
-    version:    `1.0.0-${commit}`,
-    commit,
-    branch,
-    message:    message.slice(0, 120),
-    deployedAt,
-    serverTime: new Date().toISOString(),
-    uptime:     Math.floor((Date.now() - _SERVER_START) / 1000),
-    env:        process.env.NODE_ENV || 'development',
-    region:     process.env.VERCEL_REGION || process.env.VERCEL_DEPLOYMENT_ID?.slice(0,6) || 'replit',
-    status:     'ok',
-    _source:    vercelSha ? 'vercel-env' : buildInfo ? 'build-info.json' : 'fallback',
-  })
-})
-
-// ── /api/integrations/status — حالة إعداد الأسرار بدون كشف قيمها ───────────
-app.get('/api/integrations/status', (_req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
-  res.json({
-    ok: true,
-    secrets: getIntegrationSecretStatus(),
-  })
-})
 // ═══════════════════════════════════════════════════════════════
-
-// ── /api/capabilities — تقرير القدرات الكامل من السجل الحقيقي ───────────
-app.get('/api/capabilities', async (_req, res) => {
-  try {
-    const { getCapabilitiesJSON } = await import('./lib/capability-registry.js')
-    const data = getCapabilitiesJSON()
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-    res.json({ status: 'ok', ...data })
-  } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message })
-  }
-})
-
-// ── /api/capabilities/report — تقرير Markdown قابل للعرض ─────────────────
-app.get('/api/capabilities/report', async (req, res) => {
-  try {
-    const { buildCapabilityReport } = await import('./lib/capability-registry.js')
-    const mode = req.query.mode === 'full' ? 'full' : 'short'
-    const report = buildCapabilityReport(mode)
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-    res.send(report)
-  } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message })
-  }
-})
 
 app.post('/api/dz-agent/ratings', (req, res) => {
   const { messageId, vote, query } = req.body || {}
@@ -2229,19 +1243,6 @@ function isDeveloperOrOwnerQuestion(message) {
   return DEVELOPER_QUESTION_PATTERNS.some(p => normalizeQuery(message).includes(p))
 }
 
-function isReligionQuestion(message) {
-  if (typeof message !== 'string' || !message) return false
-  const q = normalizeQuery(message).trim()
-  // مطابقة دقيقة: العبارة يجب أن تشكّل معظم الرسالة (< 2.5× طول النمط)
-  // هذا يمنع التقاط "ما دينك" في جملة طويلة عن الأديان المقارنة
-  return RELIGION_QUESTION_PATTERNS.some(p => {
-    const pLower = p.toLowerCase()
-    if (!q.includes(pLower)) return false
-    // منع التقاط السؤال إذا كانت الرسالة أطول بكثير (سياق مختلف غالباً)
-    return q.length <= pLower.length * 2.5 + 15
-  })
-}
-
 // ===== PERSON / PERSONALITY QUERY DETECTION =====
 // يكشف الأسئلة عن أشخاص أو شخصيات أو مناصب حكومية
 // الهدف: إجبار DZ Agent على البحث في ويكيبيديا قبل الإجابة
@@ -2261,11 +1262,6 @@ const _PERSON_QUERY_PATTERNS = [
   /(?:مع\s+من|أين|وين|فين)\s+(?:يلعب|يشتغل|ينشط)\s+[\u0600-\u06FF]/i,
   /(?:فريق|نادي)\s+[\u0600-\u06FF]/i,
   /[\u0600-\u06FF\s]{3,25}\s+(?:هو\s*[؟?]|هي\s*[؟?])/,
-  // مؤلف / صاحب / كاتب — "من صاحب رواية X" / "من مؤلف كتاب X" / "من كاتب X"
-  /من\s+(?:صاحب|مؤلف|كاتب|مخترع|منشئ|واضع)\s+/i,
-  /(?:صاحب|مؤلف|كاتب)\s+(?:كتاب|رواية|قصيدة|ديوان|مسرحية)\s+/i,
-  // شهيد / ثوري / تاريخي
-  /(?:الشهيد|الزعيم|القائد|المجاهد|البطل)\s+[\u0600-\u06FF]/i,
   // شخصية — دارجة
   /شكون\s+هو\s+/i, /شكون\s+هي\s+/i,
   /واش\s+تعرف\s+(?:\w+\s+){1,3}/i,
@@ -2336,12 +1332,6 @@ const _PERSON_QUERY_EXCLUDE = [
   // ── GUARD: طبيب — استعلامات الأطباء لا تُعالَج أبداً كشخصيات ────────────────
   // "أريد طبيب" / "دكتور أسنان" / "نبغي طبيب" → searchdoc handler حصراً
   /(?:طبيب|دكتور|دكاترة|أطباء|طبيبة|عيادة|مستوصف|مركز\s*صحي|نبغي\s*طبيب|أريد\s*طبيب|نريد\s*طبيب|نحوس\s*على\s*طبيب|نقلب\s*على\s*طبيب|أبحث\s*عن\s*طبيب|médecin|docteur|dentiste|cardiologue|ophtalmologue|dermatologue|généraliste|gynécologue|pédiatre|psychiatre|neurologue|urologue|chirurgien|pneumologue|oncologue)/i,
-  // ── GUARD: طقس — استعلامات الطقس لا تُعالَج كشخصيات ─────────────────────────
-  // "طقس وهران اليوم" / "الجو في قسنطينة" → weather handler حصراً
-  /(?:طقس|الطقس|أحوال\s*الجو|درجة\s*الحرارة|المطر|تساقط|عاصفة|رياح|weather|forecast|météo)/i,
-  // ── GUARD: عملة / أسعار الصرف — لا تُعالَج كشخصيات ──────────────────────────
-  // "سعر الدولار اليوم" / "كم اليورو" → currency handler حصراً
-  /(?:سعر\s*(?:الدولار|اليورو|الدينار|الريال|الجنيه|اليوان|الفرنك|الدرهم)|صرف\s*العملة|أسعار\s*(?:الصرف|العملات)|تحويل\s*العملة|كم\s*(?:الدولار|اليورو|يساوي)|البنك\s*المركزي|الصرف\s*الموازي)/i,
 ]
 
 function isPersonQuery(message) {
@@ -2355,256 +1345,6 @@ function isPersonQuery(message) {
   // كشف الاسم المجرد (2-4 كلمات عربية)
   if (looksLikeBareArabicName(message)) return true
   return false
-}
-
-// ===== ROLE-POSITION RESOLVER =====
-// يُحوّل أسئلة المناصب الوصفية إلى أسماء أشخاص حقيقيين قبل البحث في Wikidata/Wikipedia
-// مثال: "الرئيس الأمريكي الحالي" → "دونالد ترامب"
-const _ROLE_POSITION_KB = {
-  // ── الولايات المتحدة ──
-  'رئيس أمريكا':                'دونالد ترامب',
-  'الرئيس الأمريكي':            'دونالد ترامب',
-  'الرئيس الأمريكي الحالي':    'دونالد ترامب',
-  'رئيس الولايات المتحدة':      'دونالد ترامب',
-  'رئيس الولايات المتحدة الأمريكية': 'دونالد ترامب',
-  'president of the united states': 'Donald Trump',
-  'president of usa':            'Donald Trump',
-  'us president':                'Donald Trump',
-  'american president':          'Donald Trump',
-  // ── الجزائر ──
-  'رئيس الجزائر':               'عبد المجيد تبون',
-  'الرئيس الجزائري':            'عبد المجيد تبون',
-  'الرئيس الجزائري الحالي':     'عبد المجيد تبون',
-  'رئيس الجمهورية الجزائرية':   'عبد المجيد تبون',
-  'وزير أول الجزائر':           'نذير العرباوي',
-  'الوزير الأول الجزائري':       'نذير العرباوي',
-  // ── فرنسا ──
-  'رئيس فرنسا':                 'إيمانويل ماكرون',
-  'الرئيس الفرنسي':             'إيمانويل ماكرون',
-  'الرئيس الفرنسي الحالي':      'إيمانويل ماكرون',
-  'président de la france':      'Emmanuel Macron',
-  // ── المملكة المتحدة ──
-  'ملك بريطانيا':               'الملك تشارلز الثالث',
-  'الملك البريطاني':             'الملك تشارلز الثالث',
-  'رئيس وزراء بريطانيا':        'كير ستارمر',
-  'رئيس الوزراء البريطاني':     'كير ستارمر',
-  // ── روسيا ──
-  'رئيس روسيا':                 'فلاديمير بوتين',
-  'الرئيس الروسي':              'فلاديمير بوتين',
-  'الرئيس الروسي الحالي':       'فلاديمير بوتين',
-  // ── الصين ──
-  'رئيس الصين':                 'شي جين بينغ',
-  'الرئيس الصيني':              'شي جين بينغ',
-  'الرئيس الصيني الحالي':       'شي جين بينغ',
-  // ── تركيا ──
-  'رئيس تركيا':                 'رجب طيب أردوغان',
-  'الرئيس التركي':              'رجب طيب أردوغان',
-  // ── مصر ──
-  'رئيس مصر':                  'عبد الفتاح السيسي',
-  'الرئيس المصري':              'عبد الفتاح السيسي',
-  // ── السعودية ──
-  'ملك السعودية':               'الملك سلمان بن عبد العزيز',
-  'الملك السعودي':              'الملك سلمان بن عبد العزيز',
-  'ولي عهد السعودية':           'الأمير محمد بن سلمان',
-  'محمد بن سلمان':              'محمد بن سلمان',
-  // ── الإمارات ──
-  'رئيس الإمارات':              'محمد بن زايد آل نهيان',
-  'الرئيس الإماراتي':           'محمد بن زايد آل نهيان',
-  // ── المغرب ──
-  'ملك المغرب':                 'الملك محمد السادس',
-  'الملك المغربي':              'الملك محمد السادس',
-  // ── تونس ──
-  'رئيس تونس':                  'قيس سعيد',
-  'الرئيس التونسي':             'قيس سعيد',
-  // ── ألمانيا ──
-  'مستشار ألمانيا':             'فريدريش ميرتس',
-  'المستشار الألماني':          'فريدريش ميرتس',
-  // ── إيطاليا ──
-  'رئيسة وزراء إيطاليا':        'جيورجيا ميلوني',
-  'رئيس وزراء إيطاليا':         'جيورجيا ميلوني',
-  // ── إسبانيا ──
-  'رئيس وزراء إسبانيا':         'بيدرو سانشيز',
-  // ── الهند ──
-  'رئيس وزراء الهند':           'ناريندرا مودي',
-  'رئيس الوزراء الهندي':        'ناريندرا مودي',
-  // ── إيران ──
-  'رئيس إيران':                 'مسعود بزشكيان',
-  'الرئيس الإيراني':            'مسعود بزشكيان',
-
-  // ══════════════════════════════════
-  // ── أدب عالمي — مؤلفو الروايات الكبرى ──
-  // ══════════════════════════════════
-  'صاحب رواية البؤساء':         'فيكتور هوغو',
-  'مؤلف رواية البؤساء':         'فيكتور هوغو',
-  'كاتب رواية البؤساء':         'فيكتور هوغو',
-  'رواية البؤساء':              'فيكتور هوغو',
-  'البؤساء':                    'فيكتور هوغو',
-  'les misérables':             'Victor Hugo',
-
-  'صاحب رواية الجريمة والعقاب': 'فيودور دوستويفسكي',
-  'مؤلف رواية الجريمة والعقاب': 'فيودور دوستويفسكي',
-
-  'صاحب رواية الحرب والسلام':   'ليو تولستوي',
-  'مؤلف رواية الحرب والسلام':   'ليو تولستوي',
-
-  'صاحب كتاب الجمهورية':        'أفلاطون',
-  'مؤلف كتاب الجمهورية':        'أفلاطون',
-
-  'صاحب كتاب المقدمة':          'ابن خلدون',
-  'مؤلف كتاب المقدمة':          'ابن خلدون',
-  'كاتب المقدمة':               'ابن خلدون',
-  'من كتب المقدمة':             'ابن خلدون',
-
-  // ── الجاحظ ──
-  'مؤلف كتاب الحيوان':          'الجاحظ',
-  'صاحب كتاب الحيوان':          'الجاحظ',
-  'كاتب كتاب الحيوان':          'الجاحظ',
-  'من كتب كتاب الحيوان':        'الجاحظ',
-  'كتاب الحيوان':               'الجاحظ',
-  'مؤلف كتاب البخلاء':          'الجاحظ',
-  'صاحب كتاب البخلاء':          'الجاحظ',
-  'كاتب كتاب البخلاء':          'الجاحظ',
-  'كتاب البخلاء':               'الجاحظ',
-  'البخلاء':                    'الجاحظ',
-  'من كتب البخلاء':             'الجاحظ',
-  'مؤلف البخلاء':               'الجاحظ',
-  'مؤلف كتاب البيان والتبيين':  'الجاحظ',
-  'صاحب كتاب البيان والتبيين':  'الجاحظ',
-  'البيان والتبيين':             'الجاحظ',
-
-  // ── تراث عربي كلاسيكي ──
-  'صاحب كتاب الأغاني':          'أبو الفرج الأصفهاني',
-  'مؤلف كتاب الأغاني':          'أبو الفرج الأصفهاني',
-  'كتاب الأغاني':               'أبو الفرج الأصفهاني',
-  'مؤلف ألف ليلة وليلة':        'مجهول — تراث شعبي عربي',
-  'صاحب ألف ليلة وليلة':        'مجهول — تراث شعبي عربي',
-  'مؤلف كتاب كليلة ودمنة':      'ابن المقفع',
-  'صاحب كتاب كليلة ودمنة':      'ابن المقفع',
-  'كليلة ودمنة':                'ابن المقفع',
-  'مؤلف كتاب الكامل':           'المبرد',
-  'مؤلف كتاب الكامل في التاريخ': 'ابن الأثير',
-  'مؤلف ديوان المتنبي':          'المتنبي',
-  'صاحب ديوان المتنبي':          'المتنبي',
-  'مؤلف كتاب الأيام':           'طه حسين',
-  'صاحب كتاب الأيام':           'طه حسين',
-  'الأيام':                     'طه حسين',
-  'مؤلف كتاب في الشعر الجاهلي': 'طه حسين',
-  'مؤلف رسالة الغفران':         'أبو العلاء المعري',
-  'صاحب رسالة الغفران':         'أبو العلاء المعري',
-  'رسالة الغفران':              'أبو العلاء المعري',
-  'مؤلف كتاب الموافقات':        'الشاطبي',
-  'مؤلف كتاب الفصل':            'ابن حزم',
-  'مؤلف كتاب إحياء علوم الدين': 'الغزالي',
-  'صاحب كتاب إحياء علوم الدين': 'الغزالي',
-  'مؤلف كتاب تهافت الفلاسفة':   'الغزالي',
-  'مؤلف كتاب طوق الحمامة':      'ابن حزم',
-  'صاحب كتاب طوق الحمامة':      'ابن حزم',
-  'مؤلف كتاب الرسالة':          'الإمام الشافعي',
-  'مؤلف كتاب العقد الفريد':     'ابن عبد ربه',
-  'مؤلف كتاب نهج البلاغة':      'الإمام علي بن أبي طالب',
-  'مؤلف كتاب ألف باء':          'البلوي',
-  'مؤلف كتاب الأمالي':          'أبو علي القالي',
-  'مؤلف كتاب التبيان':          'الشيخ الطوسي',
-  'مؤلف كتاب فقه اللغة':        'الثعالبي',
-  'مؤلف مقامات الحريري':        'الحريري',
-  'صاحب مقامات الحريري':        'الحريري',
-  'مقامات الحريري':             'الحريري',
-  'مؤلف مقامات بديع الزمان':    'بديع الزمان الهمذاني',
-  'مؤلف كتاب سيبويه':           'سيبويه',
-  'مؤلف كتاب الكتاب':           'سيبويه',
-
-  // ── أدب عالمي ──
-  'مؤلف كتاب الإلياذة':         'هوميروس',
-  'صاحب الإلياذة':              'هوميروس',
-  'مؤلف الأوديسة':              'هوميروس',
-  'مؤلف كتاب الجمهورية':        'أفلاطون',
-  'مؤلف رواية الشيخ والبحر':    'ارنست همينغواي',
-  'صاحب رواية الشيخ والبحر':    'ارنست همينغواي',
-  'مؤلف رواية الغريب':          'ألبير كامو',
-  'صاحب رواية الغريب':          'ألبير كامو',
-  'الغريب':                     'ألبير كامو',
-  'مؤلف رواية اللص والكلاب':    'نجيب محفوظ',
-  'صاحب رواية اللص والكلاب':    'نجيب محفوظ',
-  'مؤلف رواية زقاق المدق':      'نجيب محفوظ',
-  'زقاق المدق':                  'نجيب محفوظ',
-  'مؤلف رواية أولاد حارتنا':    'نجيب محفوظ',
-  'صاحب رواية أولاد حارتنا':    'نجيب محفوظ',
-  'مؤلف رواية الحرافيش':        'نجيب محفوظ',
-  'مؤلف رواية السكرية':         'نجيب محفوظ',
-  'مؤلف رواية بين القصرين':     'نجيب محفوظ',
-  'مؤلف رواية طبول في الليل':   'برتولت بريخت',
-  'مؤلف رواية ماكبث':           'وليام شكسبير',
-  'مؤلف رواية هاملت':           'وليام شكسبير',
-  'مؤلف مسرحية هاملت':          'وليام شكسبير',
-  'مؤلف رواية 1984':            'جورج أورويل',
-  'صاحب رواية 1984':            'جورج أورويل',
-  'مؤلف رواية مزرعة الحيوانات': 'جورج أورويل',
-  'مؤلف رواية دون كيخوته':      'ميغيل دي ثيرفانتس',
-  'مؤلف رواية دون كيشوت':       'ميغيل دي ثيرفانتس',
-
-  // ── أدب جزائري ──
-  'مؤلف رواية الأفيون والعصا':   'مولود معمري',
-  'صاحب رواية الأفيون والعصا':   'مولود معمري',
-  'مؤلف رواية نجمة':            'كاتب ياسين',
-  'صاحب رواية نجمة':            'كاتب ياسين',
-  'مؤلف رواية الدار الكبيرة':    'محمد ديب',
-  'صاحب رواية الدار الكبيرة':    'محمد ديب',
-  'مؤلف رواية الحريق':          'محمد ديب',
-  'مؤلف رواية ريح الجنوب':      'مولود فرعون',
-  'مؤلف رواية ابن الفقير':      'مولود فرعون',
-  'صاحب رواية ابن الفقير':      'مولود فرعون',
-  'مؤلف رواية الزلزال':         'الطاهر وطار',
-  'صاحب رواية الزلزال':         'الطاهر وطار',
-  'مؤلف رواية اللاز':           'الطاهر وطار',
-  'مؤلف رواية ما تبقى لكم':     'غسان كنفاني',
-  'مؤلف رواية رجال في الشمس':   'غسان كنفاني',
-
-  // ══════════════════════════════════
-  // ── شهداء وقادة الثورة الجزائرية ──
-  // ══════════════════════════════════
-  'الشهيد العربي بن مهيدي':     'العربي بن مهيدي',
-  'العربي بن مهيدي':            'العربي بن مهيدي',
-  'بن مهيدي':                   'العربي بن مهيدي',
-
-  'الشهيد عبان رمضان':          'عبان رمضان',
-  'عبان رمضان':                 'عبان رمضان',
-
-  'الشهيد زيغود يوسف':          'زيغود يوسف',
-  'الشهيد ديدوش مراد':          'ديدوش مراد',
-  'الشهيد مصطفى بن بولعيد':     'مصطفى بن بولعيد',
-  'الشهيد أحمد زبانة':          'أحمد زبانة',
-  'الشهيد محمد العربي بن مهيدي': 'العربي بن مهيدي',
-
-  'هواري بومدين':               'هواري بومدين',
-  'بن بلة':                     'أحمد بن بلة',
-  'أحمد بن بلة':                'أحمد بن بلة',
-
-  // ── شخصيات تاريخية عالمية ──
-  'مؤسس فيسبوك':               'مارك زوكربيرغ',
-  'صاحب فيسبوك':               'مارك زوكربيرغ',
-  'مؤسس أبل':                   'ستيف جوبز',
-  'صاحب أبل':                   'ستيف جوبز',
-  'مؤسس مايكروسوفت':            'بيل غيتس',
-  'مؤسس تيسلا':                 'إيلون ماسك',
-  'مؤسس أمازون':                'جيف بيزوس',
-}
-
-function resolveRoleToPersonName(query) {
-  if (!query) return null
-  const normalized = query
-    .trim()
-    .toLowerCase()
-    .replace(/[؟?!،,]/g, '')
-    .replace(/\s+/g, ' ')
-    .replace(/^(من هو|من هي|شكون هو|شكون هي|qui est|c'est qui|أخبرني عن|حدثني عن|معلومات عن)\s+/i, '')
-    .trim()
-  // بحث مباشر في الـ KB
-  if (_ROLE_POSITION_KB[normalized]) return _ROLE_POSITION_KB[normalized]
-  // بحث جزئي — يطابق إذا كان الاستعلام يحتوي على مفتاح القاموس
-  for (const [key, name] of Object.entries(_ROLE_POSITION_KB)) {
-    if (normalized.includes(key) || key.includes(normalized)) return name
-  }
-  return null
 }
 
 // ─── التحقق من أن نتيجة ويكيبيديا تخص شخصاً حقيقياً ──────────────────────────
@@ -2668,126 +1408,41 @@ async function fetchPersonFromWikipedia(query) {
 // ===== UNIFIED CAPABILITIES QUESTION DETECTION =====
 const CAPABILITIES_RESPONSE = Object.freeze({
   content: [
-    '🤖 **DZ Agent** 🇩🇿 — أول مساعد ذكاء اصطناعي جزائري متعدد الوكلاء',
-    'مدعم بـ **16 وكيل ذكي متخصص** و **39 مهارة** تعمل 24/7',
+    '🤖 **DZ Agent** 🇩🇿 — مدعم بـ **16 وكيل ذكي** و **39 مهارة متخصصة**',
     '',
-    '---',
+    '## 🧠 الـ 16 وكيل المتخصص',
+    '| # | الوكيل | الدور |',
+    '|---|--------|-------|',
+    '| 1 | 🔎 وكيل البحث الحي | Google-First · RSS · CSE مع تقييم المصادر |',
+    '| 2 | 📰 وكيل الأخبار | أخبار الجزائر والعالم من 20+ مصدر موثوق |',
+    '| 3 | ⚽ وكيل الرياضة | LFP · دوريات عالمية · نتائج مباشرة |',
+    '| 4 | 🌤️ وكيل الطقس | 58 ولاية جزائرية + أي مدينة عالمية |',
+    '| 5 | 🗺️ وكيل الخرائط | خرائط جزائرية ذكية + بحث جغرافي |',
+    '| 6 | 🐙 وكيل GitHub | تنفيذ حقيقي: commit · PR · deploy · pages |',
+    '| 7 | 🌐 وكيل بناء المواقع | HTML/CSS/JS/React كامل مع معاينة |',
+    '| 8 | 🧠 وكيل الذاكرة | Long-Term Memory · سياق شخصي مستمر |',
+    '| 9 | 📖 وكيل القرآن | تلاوات · ترجمة · تفسير · بحث آيات |',
+    '| 10 | 🏥 وكيل الصحة | أعراض · أطباء · CNAS · رعاية صحية |',
+    '| 11 | 🎓 وكيل التعليم | Eddirasa · ملخصات · تمارين · بكالوريا |',
+    '| 12 | ⚖️ وكيل القانون | تحليل عقود · وثائق رسمية · OCR |',
+    '| 13 | 🎬 وكيل يوتيوب | تحليل فيديو · ملخص · بحث ذكي |',
+    '| 14 | 🗣️ وكيل الدارجة | فهم كل لهجات الجزائر + فرانكو |',
+    '| 15 | 💱 وكيل العملات | DZD · دولار · يورو · أسعار مباشرة |',
+    '| 16 | 🔬 وكيل التحليل | CoT · ReAct · ToT · استنتاج عميق |',
     '',
-    '## 🧠 الوكلاء المتخصصون — شرح تفصيلي',
+    '## ⚡ الـ 39 مهارة',
+    '🔎 بحث حي على الإنترنت · 🌐 قراءة المواقع · 💻 كود وبرمجة · 🐙 GitHub Agent',
+    '📰 أخبار الجزائر · 🌍 أخبار عالمية · ⚽ رياضة وLFP · 💱 أسعار العملات',
+    '🌤️ طقس 58 ولاية · 🕌 مواقيت الصلاة · 📖 قرآن كريم · 🧠 ذاكرة شخصية',
+    '📄 سيرة ذاتية ع/ف · 📋 مخطط المشاريع · 📑 وثائق تجارية · ⚖️ تحليل قانوني',
+    '💼 بحث وظيفي · ✉️ رسائل تقدم · 🏥 وكيل صحة · 👨‍⚕️ بحث أطباء',
+    '📊 إحصاءات جزائرية · 🗣️ دارجة جزائرية · 🔄 ترجمة 3 لغات · 🖼️ توليد صور AI',
+    '🌐 بناء مواقع HTML · 🚀 نشر GitHub Pages · ☁️ نشر Vercel · 🎬 تحليل يوتيوب',
+    '📷 OCR صور وPDF · 🗺️ خرائط جزائرية · 🎓 دروس Eddirasa · 📝 توليد عقود',
+    '📊 خطة عمل Business Plan · 🏢 بحث شركات الجزائر · 🩺 CNAS/CHNAS',
+    '🧩 multi-agent reasoning · 🔗 WebSocket فوري · 🛡️ circuit breaker',
     '',
-    '### 🔎 1. وكيل البحث الحي',
-    'يبحث على Google وRSS وCustom Search Engine في الوقت الفعلي.',
-    'يُقيّم المصادر ويرتّبها حسب الموثوقية. يجيبك بمعلومات **محدّثة الآن** لا بمعلومات مخزّنة.',
-    '> 💬 جرّب: *"ابحث عن آخر أخبار الجزائر اليوم"*',
-    '',
-    '### 📰 2. وكيل الأخبار',
-    'يتابع أخبار الجزائر والعالم من **20+ مصدر** موثوق: Ennahar، Echorouk، TSA، El Watan، Al Jazeera...',
-    'يُصنّف الأخبار ويُلخّصها ويُزيل المكرر تلقائياً.',
-    '> 💬 جرّب: *"أخبار الجزائر اليوم"* أو *"آخر أخبار العالم"*',
-    '',
-    '### ⚽ 3. وكيل الرياضة',
-    'يُغطّي **الرابطة الجزائرية المحترفة (LFP)** والدوريات العالمية الكبرى.',
-    'نتائج مباشرة، جداول، تشكيلات، ولاعبون جزائريون في الخارج.',
-    '> 💬 جرّب: *"ترتيب الدوري الجزائري"* أو *"نتائج البارزة"*',
-    '',
-    '### 🌤️ 4. وكيل الطقس',
-    'حالة الجو لـ **58 ولاية جزائرية** وأي مدينة في العالم.',
-    'بيانات Open-Meteo محدَّثة كل ساعة: درجة الحرارة، الرياح، التساقطات، التوقعات الأسبوعية.',
-    '> 💬 جرّب: *"طقس وهران غداً"* أو *"weather in Oran"*',
-    '',
-    '### 🗺️ 5. وكيل الخرائط',
-    'خرائط جزائرية تفاعلية مع بحث جغرافي ذكي.',
-    'يُحدّد المواقع، العناوين، الولايات، والمسافات بين المدن.',
-    '> 💬 جرّب: *"وين عيادة قريبة مني في قسنطينة"*',
-    '',
-    '### 🐙 6. وكيل GitHub',
-    'يتحكم في GitHub بشكل كامل: **commit، PR، branch، Pages، Vercel**.',
-    'يُنشئ المستودعات، يرفع الكود، يفتح Pull Requests وينشر المشاريع تلقائياً.',
-    '> 💬 جرّب: *"اعرض مستودعاتي"* أو *"انشر هذا الكود على GitHub Pages"*',
-    '',
-    '### 🌐 7. وكيل بناء المواقع',
-    'يبني مواقع **HTML/CSS/JS/React** كاملة ومتجاوبة بأمر واحد.',
-    'معاينة فورية في المحادثة + نشر مجاني على GitHub Pages أو Vercel.',
-    '> 💬 جرّب: *"ابنِ لي موقع لمطعم جزائري بالعربية"*',
-    '',
-    '### 🧠 8. وكيل الذاكرة',
-    'يتذكر تفضيلاتك وسياق محادثاتك السابقة (**Long-Term Memory**).',
-    'يُخصّص الردود بناءً على ما تعلّمه عنك عبر الوقت.',
-    '> 💬 جرّب: *"تذكّر أنني مهندس برمجيات في وهران"*',
-    '',
-    '### 📖 9. وكيل القرآن الكريم',
-    'استكشاف شامل للقرآن: **تلاوات بأصوات مختلفة، ترجمة، تفسير ابن كثير، بحث في الآيات**.',
-    '> 💬 جرّب: *"اعرض سورة الكهف"* أو *"ابحث عن آيات الصبر"*',
-    '',
-    '### 🏥 10. وكيل الصحة',
-    'يُحلّل الأعراض، يبحث عن أطباء متخصصين في ولايتك، ويوفر معلومات **CNAS/CASNOS**.',
-    'يُرشدك للعيادات والمستشفيات القريبة.',
-    '> 💬 جرّب: *"دبرلي طبيب قلب في عنابة"*',
-    '',
-    '### 🎓 11. وكيل التعليم',
-    'دروس **Eddirasa** وملخصات ذكية وتمارين محلولة لمستوى البكالوريا وما بعده.',
-    '> 💬 جرّب: *"ملخص درس الاشتقاق للسنة الثالثة ثانوي"*',
-    '',
-    '### ⚖️ 12. وكيل القانون',
-    'تحليل العقود، توليد الوثائق الرسمية بالصيغ الجزائرية، واستخراج النص من المستندات بـ OCR.',
-    '> 💬 جرّب: *"اكتب لي عقد إيجار جزائري"*',
-    '',
-    '### 🎬 13. وكيل يوتيوب',
-    'تحليل أي فيديو يوتيوب وتلخيصه باللغة العربية، بحث ذكي في المحتوى.',
-    '> 💬 جرّب: *"لخص هذا الفيديو: [رابط يوتيوب]"*',
-    '',
-    '### 🗣️ 14. وكيل الدارجة الجزائرية',
-    'يفهم ويُنتج **كل لهجات الجزائر**: شرق، غرب، وسط، جنوب + الفرانكو.',
-    'ترجمة من/إلى الدارجة مع الفروق اللهجية الدقيقة.',
-    '> 💬 جرّب: *"ترجم هذا للدارجة الوهرانية"*',
-    '',
-    '### 💱 15. وكيل العملات',
-    'أسعار الصرف الحية: **DZD · USD · EUR · GBP · SAR · AED** وأكثر من 15 عملة.',
-    'تحويل فوري ومُحدَّث لحظياً.',
-    '> 💬 جرّب: *"سعر الدولار اليوم"* أو *"كم يساوي 500 يورو بالدينار"*',
-    '',
-    '### 🔬 16. وكيل التحليل العميق',
-    'يستخدم تقنيات **CoT · ReAct · ToT · Multi-Agent Reasoning** للمسائل المعقدة.',
-    'يُفكّر خطوة بخطوة ويُراجع استنتاجاته قبل الإجابة.',
-    '> 💬 جرّب: *"حلّل هذه المشكلة بالتفصيل: [مشكلتك]"*',
-    '',
-    '---',
-    '',
-    '## 🛠️ الأدوات المتخصصة — اسأل عنها للانتقال المباشر',
-    '',
-    '| الأداة | الوصف | كيف تصل إليها |',
-    '|--------|-------|----------------|',
-    '| 📄 مولّد السيرة الذاتية | CV احترافي بالعربية/الفرنسية + PDF | *"اصنع لي CV"* |',
-    '| 📊 Business Plan | خطة عمل كاملة للسوق الجزائري | *"اعمل خطة مشروع"* |',
-    '| 🧾 مولّد الفواتير | فواتير TVA/TTC جزائرية + PDF | *"اصنع فاتورة"* |',
-    '| 🧮 حاسبة الضرائب | IRG وIBS بالشرائح المحدّثة | *"احسب ضريبة الدخل"* |',
-    '| 🏦 حاسبة التقاعد | CNAS/CASNOS + معاش متوقع | *"احسب تقاعدي"* |',
-    '| ☪️ حاسبة الزكاة | زكاة المال/الذهب/التجارة بالدينار | *"احسب زكاتي"* |',
-    '| 🪪 بطاقة العمل | تصميم Business Card + PDF | *"صمم بطاقة عمل"* |',
-    '| 🔲 QR Code | رمز QR فوري من أي رابط أو نص | *"اعمل QR Code"* |',
-    '| 🗂️ مخطط المشاريع | مهام + جدول زمني + PDF | *"خطّط مشروعي"* |',
-    '| 📋 وثائق الأعمال | عقود ومحاضر ومقترحات رسمية | *"اعمل عقد عمل"* |',
-    '| 🗣️ مترجم الدارجة | ترجمة من/إلى الدارجة الجزائرية | *"ترجم للدارجة"* |',
-    '| #️⃣ مولّد الهاشتاغ | هاشتاغات ذكية للجزائر | *"ولّد هاشتاغات"* |',
-    '| 🔊 نص إلى صوت | صوت طبيعي عربي/فرنسي + MP3 | *"حوّل النص لصوت"* |',
-    '| 📸 تصوير المواقع | لقطة كاملة لأي موقع PNG/PDF | *"صوّر هذا الموقع"* |',
-    '| 📈 محلل البيانات | Excel/CSV + رسوم بيانية + AI | *"حلّل ملف Excel"* |',
-    '| 📷 OCR — قارئ الوثائق | استخراج نص من صورة أو PDF | *"استخرج النص من هذه الصورة"* |',
-    '| 📊 محرر Excel | جدول بيانات + 30 دالة + AI | *"افتح Excel"* |',
-    '| 🎨 استوديو الصور | إزالة خلفية + تحسين جودة + فلاتر | *"أزل خلفية الصورة"* |',
-    '| 🌐 Web Builder | بناء موقع كامل أو استنساخ موقع | *"ابنِ موقعاً"* |',
-    '| ⚡ GitHub Agent | نشر تلقائي GitHub + Vercel | *"انشر مشروعي"* |',
-    '| 📻 DZ Radio | 200+ محطة جزائرية بث مباشر | *"شغّل الراديو"* |',
-    '| 💬 DZ Chat | دردشة جماعية مع AI في الوقت الحقيقي | *"افتح الدردشة"* |',
-    '| 🎮 DZ Le3ba | ألعاب لغوية عربية — Wordle · وصلة | *"العب Wordle بالعربي"* |',
-    '| 📖 القرآن الكريم | تلاوات + تفسير + بحث بالآيات | *"افتح القرآن"* |',
-    '| 💼 بحث وظيفي | وظائف الجزائر + رسالة تقدم | *"ابحث لي عن وظيفة"* |',
-    '| 🔄 محوِّل الصيغ | فيديو/صوت/صور — كل الصيغ | *"حوّل MP4 إلى MP3"* |',
-    '| ☁️ رفع الملفات | رفع أي ملف + رابط مشاركة آمن | *"ارفع لي هذا الملف"* |',
-    '',
-    '---',
-    '',
-    '💡 **نصيحة:** اسأل عن أي أداة بالاسم وسيظهر لك **زر الانتقال المباشر** إليها.',
+    '**GitHub Agent:** أيقونة GitHub في شريط الإدخال ← رابط المستودع ← طلبك.',
     '',
     'كيف يمكنني مساعدتك اليوم؟ 🚀',
   ].join('\n'),
@@ -2818,20 +1473,6 @@ const CAPABILITIES_QUESTION_PATTERNS = [
   'quelles sont vos capacités', 'comment peux-tu m\'aider', 'comment pouvez-vous m\'aider',
   'que sais-tu faire', 'tes fonctionnalités', 'vos fonctionnalités',
   'à quoi sers-tu', 'a quoi sers tu',
-  // ── Specific skill self-awareness — هل أنت مزود بـ / هل لديك وكيل X ─────────
-  // يُكتشف عندما يسأل المستخدم عن مهارة أو وكيل بعينه
-  'هل أنت مزود', 'مزود بكيل', 'مزود بوكيل', 'مزود ب كيل',
-  'هل عندك وكيل', 'هل لديك وكيل', 'هل تملك وكيل',
-  'هل عندك مهارة', 'هل لديك مهارة', 'هل تملك مهارة',
-  'هل فيك وكيل', 'هل فيك مهارة', 'هل فيك كيل',
-  'كيل طبي', 'كيل صحة', 'dz health', 'وكيل طبي',
-  'هل تحتوي على', 'هل تدعم وكيل', 'هل تدعم مهارة',
-  'ما هي وكلاؤك', 'ما وكلاؤك', 'ما هي مهاراتك', 'ما مهاراتك',
-  'قائمة الوكلاء', 'قائمة المهارات', 'اعرض وكلاؤك', 'اعرض مهاراتك',
-  'كم وكيل عندك', 'كم مهارة عندك', 'عندك كم وكيل',
-  // Darija specific
-  'واش عندك وكيل', 'واش فيك وكيل', 'مزود بـ',
-  'واش عندك كيل', 'واش فيك كيل',
 ]
 
 // ===== DOCTOR SEARCH INTENT DETECTION =====
@@ -2922,6 +1563,10 @@ function detectDoctorIntent(message) {
   if (!message || typeof message !== 'string') return { isDoctorQuery: false }
   const norm = normalizeQuery(message)
 
+  // ── Map query guard — خريطة تأخذ الأولوية على البحث الطبي ────────────────
+  // "عيادة في البلدية" / "مستشفى في وهران" → خريطة، لا بحث عن طبيب
+  if (isMapQuery(message)) return { isDoctorQuery: false }
+
   // ── Exclusion guard — منع التفعيل الخاطئ في السياق التقني ───────────────
   // مثال: "توليد الصور" ، "هل تستطيع توليد كود"
   const hasTechContext = TECH_CONTEXT_EXCLUSIONS.some(w => norm.includes(w.toLowerCase()))
@@ -2929,8 +1574,6 @@ function detectDoctorIntent(message) {
 
   const isDoctorQuery = DOCTOR_TRIGGER_PATTERNS.some(p => norm.includes(p.toLowerCase()))
   if (!isDoctorQuery) return { isDoctorQuery: false }
-  // Doctor trigger words take full priority — no map guard applied here.
-  // The map handler at line ~18823 guards against doctor queries via _doctorGuard.
 
   let speciality = null
   for (const sp of SPECIALITIES) {
@@ -3034,47 +1677,6 @@ function isCapabilitiesQuestion(message) {
   // Avoid false positives on developer questions
   if (DEVELOPER_QUESTION_PATTERNS.some(p => normalized.includes(p))) return false
   return CAPABILITIES_QUESTION_PATTERNS.some(p => normalized.includes(p))
-}
-
-// ── Health Capability Query — هل تملك أداة/وكيل طبي/صحي؟ ─────────────────────
-// يُعيد رداً احترافياً من الوكيل الطبي + بطاقة توجيه للأداة
-const _HEALTH_CAP_RE = /(?:(?:هل\s+)?(?:تملك|عندك|لديك|فيك|يوجد|هل\s+فيك)\s+(?:أداة|وكيل|خدمة|ميزة|شي|حاجة)\s*(?:حول|عن|للـ|ل|خاص\s*ب|متعلق\s*ب)?\s*(?:الطب|طب|الصحة|صحة|طبي|طبية|صحي|صحية|الأمراض|أمراض|الأعراض|أعراض))|(?:(?:هل\s+)?(?:تملك|عندك|لديك|فيك)\s+(?:أداة|وكيل)\s*(?:طبي|طبية|صحي|صحية|health))|(?:(?:أداة|وكيل)\s*(?:حول|عن|للـ|خاص\s*ب)?\s*(?:الطب|طب|الصحة|صحة))|(?:(?:واش|هل)\s*(?:عندك|فيك|تملك|لديك)\s*(?:شي|حاجة|أداة|وكيل)?\s*(?:للصحة|للطب|طبي|صحي|للأمراض|للأعراض))|(?:(?:أداة|وكيل|شي|حاجة)\s*(?:للأعراض|لتحليل\s*الأعراض|لتشخيص))|(?:(?:وكيل|أداة)\s+(?:الصحة|الطب|الطبي|الصحي|health\s*agent))|(?:(?:health|medical|santé|médical)\s*(?:tool|agent|feature|outil))|(?:(?:do\s+you\s+have)\s+(?:a\s+)?(?:health|medical))|(?:(?:عندي|عندك)\s+(?:سؤال|استفسار|مشكلة)\s*(?:طبي|طبية|صحي|صحية))/i
-
-const HEALTH_CAPABILITY_RESPONSE = Object.freeze({
-  content: `نعم، **لديّ وكيل صحي متخصص** 🏥
-
-**وكيل الصحة الجزائري** مدرَّب خصيصاً للسياق الطبي في الجزائر، ويقدّم لك:
-
-🔬 **تحليل الأعراض** — صِف ما تشعر به وسيُحلّل الأعراض بناءً على قواعد طبية معتمدة، مع تصنيف الحالة:
-  • 🟢 خفيفة — يمكن متابعتها منزلياً
-  • 🟡 متوسطة — يُنصح باستشارة طبيب
-  • 🔴 طارئة — راجع الطوارئ فوراً
-
-👨‍⚕️ **البحث عن طبيب متخصص** — يجد أقرب الأطباء والعيادات في ولايتك حسب التخصص المطلوب: قلب، أسنان، عيون، جلدية، عظام، أطفال...
-
-💊 **معلومات الأدوية** — جرعات وتفاعلات وبدائل متاحة في الجزائر.
-
-🏦 **معلومات CNAS / CASNOS** — حقوقك في التأمين الصحي وكيفية الاستفادة منه في المستشفيات العامة والعيادات الخاصة.
-
----
-
-💬 **جرّبه الآن:** *"راني نحس بوجع في راسي من البارح"* أو *"دبرلي طبيب قلب في عنابة"*
-
-⚠️ *هذا وكيل استرشادي — لا يُغني عن استشارة الطبيب المختص.*`,
-  _toolRedirect: {
-    id: 'health',
-    toolName: 'وكيل الصحة 🏥',
-    toolUrl: '/tools?tool=health',
-    toolIcon: '🏥',
-    toolDesc: 'تحليل الأعراض • البحث عن طبيب في ولايتك • نصائح صحية موثوقة للجزائر',
-    smartMessage: 'افتح وكيل الصحة للبدء',
-    message: 'افتح وكيل الصحة للبدء',
-  },
-})
-
-function isHealthCapabilityQuestion(message) {
-  if (typeof message !== 'string' || !message) return false
-  return _HEALTH_CAP_RE.test(message)
 }
 
 function normalizeChatMessages(messages) {
@@ -3387,28 +1989,12 @@ const TOOL_REDIRECT_MAP = [
     toolName: 'DZ Radio — إذاعة جزائرية',
     toolUrl: '/radio',
     toolIcon: '📻',
-    toolDesc: '8 قنوات جزائرية حية — إذاعة وطنية، القرآن، جيل FM، البهجة وأكثر من 200 محطة',
+    toolDesc: '8 قنوات جزائرية حية — إذاعة وطنية، القرآن، جيل FM وأكثر',
     smartMessage: 'لديّ **DZ Radio** — استمع للإذاعات الجزائرية مباشرةً: وطنية، قرآن كريم، جيل FM، البهجة، وأكثر من 200 محطة، كلها بث حي بدون تسجيل.',
-    stations: [
-      { name: 'الإذاعة الوطنية', icon: '🇩🇿' },
-      { name: 'إذاعة القرآن', icon: '🕌' },
-      { name: 'جيل FM', icon: '🎵' },
-      { name: 'البهجة', icon: '🌟' },
-    ],
     patterns: [
-      // الدارجة الجزائرية — طلب الاستماع
-      /(?:بغيت|نبغي|حابب|حاب|نحب|عايز|أريد|نريد|أبغى)\s+(?:نسمع|نسمع|أسمع|اسمع|نستمع|أستمع|الاستماع)\s+(?:إلى\s*|ل\s*|على\s*)?(?:راديو|إذاعة|موسيقى|أغاني)/i,
-      /(?:بغيت|نبغي|حابب|حاب|نحب|عايز|أريد|نريد)\s+(?:راديو|إذاعة)/i,
-      /(?:دير|شغّل|شغل|فتح|فتّح|افتح|تشغيل|play)\s*(?:لي\s*)?(?:راديو|إذاعة|الراديو|الإذاعة)/i,
-      /(?:استمع|أسمع|نسمع|اسمع)\s*(?:إلى|ل|على)?\s*(?:راديو|إذاعة|الراديو|الإذاعة)/i,
-      // أنماط مباشرة
-      /(?:إذاعة|اذاعة|راديو|radio)\s*(?:جزائرية?|algérie?|وطنية?|جزائرية?\s*حية?)?/i,
-      /(?:جيل\s*fm|البهجة|إذاعة\s*الجزائر|الإذاعة\s*الوطنية|راديو\s*القرآن|إذاعة\s*القرآن|إذاعة\s*الأمازيغية)/i,
-      /(?:محطة|محطات)\s*(?:راديو|إذاعة|صوتية)/i,
-      /(?:radio\s*algerie|radioalgerie|alger\s*chaines|راديو\s*الجزائر)/i,
-      // دارجة "سماع"
-      /نسمع\s*(?:شيء|حاجة|غناء|موسيقى)\s*(?:على\s*الراديو|بالراديو)?/i,
-      /radio\s*(?:live|en\s*direct|direct|بث\s*مباشر)/i,
+      /(?:إذاعة|اذاعة|راديو|radio)\s*(?:جزائرية?|algérie?)?/i,
+      /(?:استمع|دير|شغّل)\s*(?:إلى\s*)?(?:راديو|إذاعة)/i,
+      /(?:جيل\s*fm|quran\s*fm|البهجة|الإذاعة\s*الوطنية)/i,
     ],
   },
   // ── Community Chat ──────────────────────────────────────────────────────
@@ -3457,89 +2043,33 @@ const TOOL_REDIRECT_MAP = [
       /(?:شغّل|شغل|دير)\s*(?:سورة|قرآن|تلاوة)/i,
     ],
   },
-  // ── Jobs ─── مُعطَّل: يُعالَج بالكامل من isJobsQuery + searchDZJobsAllSources (11 مصدر حي)
-  // لا إعادة توجيه — المحرك الحي أفضل من صفحة الأدوات الثابتة
-  // {
-  //   id: 'jobs',
-  //   patterns: [/(?:ابحث|نبحث)\s*(?:على|عن)\s*(?:وظيفة|عمل)/i, ...],
-  // },
+  // ── Jobs ────────────────────────────────────────────────────────────────
+  {
+    id: 'jobs',
+    toolName: 'بحث وظيفي',
+    toolUrl: '/tools?tool=jobs',
+    toolIcon: '💼',
+    toolDesc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم',
+    smartMessage: 'لديّ **وكيل البحث الوظيفي** — يبحث عن الوظائف في الجزائر ويُولّد لك رسالة تقدم مخصصة ويُقدّم نصائح مقابلة العمل، كل ذلك في مكان واحد.',
+    patterns: [
+      /(?:ابحث|نبحث|دور)\s*(?:على|عن)\s*(?:وظيفة|عمل|منصب|شغل)/i,
+      /(?:وظيفة|عمل|شغل)\s*(?:في\s*)?(?:الجزائر|جزائر)/i,
+      /offre\s*(?:d')?emploi|emploi.*algér|job.*algérie/i,
+      /(?:نبغي|بغيت|حابب)\s*(?:نخدم|نلقى\s*خدمة|وظيفة)/i,
+    ],
+  },
   // ── Health ──────────────────────────────────────────────────────────────
   {
     id: 'health',
-    toolName: 'وكيل الصحة 🏥',
+    toolName: 'وكيل الصحة',
     toolUrl: '/tools?tool=health',
     toolIcon: '🏥',
-    toolDesc: 'تحليل الأعراض • البحث عن طبيب في ولايتك • نصائح صحية موثوقة للجزائر',
-    smartMessage: `نعم، **لديّ وكيل صحي متخصص** 🏥
-
-**وكيل الصحة الجزائري** يقدّم لك:
-
-🔬 **تحليل الأعراض** — صِف ما تشعر به وسيُحلّل أعراضك بشكل مبدئي بناءً على قواعد بيانات طبية معتمدة، مع تصنيف الحالة (خفيفة / متوسطة / طارئة).
-
-👨‍⚕️ **البحث عن طبيب متخصص** — يجد أقرب الأطباء والعيادات في ولايتك بحسب التخصص المطلوب (قلب، أسنان، عيون، جلدية...).
-
-💊 **معلومات الأدوية** — جرعات، تفاعلات، وبدائل متاحة في الجزائر.
-
-🏦 **معلومات CNAS/CASNOS** — حقوقك في التأمين الصحي وكيفية الاستفادة منه.
-
-⚠️ *هذا وكيل استرشادي — لا يُغني عن استشارة الطبيب المختص.*`,
+    toolDesc: 'ابحث عن طبيب، تحليل الأعراض ونصائح صحية مخصصة للجزائر',
+    smartMessage: 'لديّ **وكيل الصحة** المتخصص في الجزائر — يُحلّل أعراضك، يبحث عن أقرب أطباء متخصصين في ولايتك، ويُقدّم نصائح صحية موثوقة ومخصصة.',
     patterns: [
-      // ── Doctor search (original patterns)
       /(?:ابحث|نلقى|دور)\s*(?:على|عن)\s*(?:طبيب|دكتور|مستشفى|صيدلية)\s*(?:قريب|قريبة)?/i,
       /(?:أقرب|قريب)\s*(?:طبيب|مستشفى|صيدلية|عيادة)/i,
       /(?:doctor|hôpital|clinique)\s*(?:near|algér|proche)/i,
-      // ── Capability queries — هل تملك أداة طبية / هل عندك وكيل صحي
-      /(?:هل\s+)?(?:تملك|عندك|لديك|فيك|عندك|يوجد|هل\s+فيك)\s+(?:أداة|وكيل|خدمة|ميزة|شي|حاجة)\s*(?:حول|عن|للـ|ل|خاص\s*ب|متعلق\s*ب)?\s*(?:الطب|طب|الصحة|صحة|طبي|طبية|صحي|صحية|الأمراض|أمراض|الأعراض|أعراض)/i,
-      /(?:هل\s+)?(?:تملك|عندك|لديك|فيك)\s+(?:أداة|وكيل)\s*(?:طبي|طبية|صحي|صحية|health)/i,
-      /(?:أداة|وكيل)\s*(?:حول|عن|للـ|خاص\s*ب)?\s*(?:الطب|طب|الصحة|صحة)/i,
-      /(?:واش|هل)\s*(?:عندك|فيك|تملك|لديك)\s*(?:شي|حاجة|أداة|وكيل)?\s*(?:للصحة|للطب|طبي|صحي|للأمراض|للأعراض)/i,
-      /(?:وكيل|أداة)\s+(?:الصحة|الطب|الطبي|الصحي|health\s*agent)/i,
-      /(?:health|medical|santé|médical)\s*(?:tool|agent|feature|outil|fonctionnalité)/i,
-      /(?:do\s+you\s+have|هل\s+عندك|هل\s+لديك)\s+(?:a\s+)?(?:health|medical|santé)/i,
-      /(?:هل\s+)?(?:تقدر|تنجم|تعرف)\s+(?:تساعدني|تحكيلي)\s*(?:في|على|عن)?\s*(?:الصحة|الطب|أمراض|أعراض|مرض)/i,
-      /(?:عندي|عندك)\s+(?:سؤال|استفسار|مشكلة)\s*(?:طبي|طبية|صحي|صحية)/i,
-      /(?:أداة|وكيل|شي|حاجة)\s*(?:للأعراض|لتحليل\s*الأعراض|لتشخيص)/i,
-    ],
-  },
-  // ── File Upload / Share ──────────────────────────────────────────────────
-  {
-    id: 'fileupload',
-    toolName: 'رفع ومشاركة الملفات',
-    toolUrl: '/tools?tool=fileupload',
-    toolIcon: '☁️',
-    toolDesc: 'ارفع أي ملف واحصل على رابط مشاركة آمن — صور · فيديو · PDF · أي نوع',
-    smartMessage: 'لديّ **أداة رفع الملفات** عبر GoFile.io — ارفع صورة، فيديو، PDF، أو أي ملف واحصل فوراً على **رابط مشاركة آمن** يمكنك إرساله لأي شخص، بدون تسجيل ودون حد للحجم.',
-    patterns: [
-      // رفع ملف / صورة / فيديو
-      /(?:ارفع|رفع|حمّل|upload|partage|شارك)\s*(?:ملف|صورة|فيديو|pdf|مستند|وثيقة|file|image|video|document)/i,
-      /(?:أريد|بغيت|نبغي|نحب|نريد|حابب|حاب)\s*(?:ارفع|أرفع|رفع|تحميل|upload)\s*(?:ملف|صورة|فيديو|pdf|file|image|video)?/i,
-      /(?:رابط|link|lien)\s*(?:تحميل|مشاركة|للتحميل|لتحميل|partage|download)/i,
-      /(?:كيف|وين|أين|فين)\s*(?:أرفع|نرفع|ارفع|ترفع)\s*(?:ملف|صورة|فيديو|file|image|video)/i,
-      /(?:share|مشاركة|إرسال)\s*(?:ملف|صورة|فيديو|pdf|link|رابط)/i,
-      /gofile|go\s*file/i,
-      // دارجة جزائرية
-      /(?:بغيت|نبغي|حابب|حاب|نحب)\s*(?:نرفع|نشارك|نحمل)\s*(?:صورة|فيديو|ملف|باش|كي|كيما)/i,
-      /(?:وين|فين|كيفاش)\s*(?:نرفع|نشارك|نحمل)\s*(?:صورة|فيديو|ملف)/i,
-      /(?:عايز|عاوز|عاوزة)\s*(?:ارفع|أرفع|أشارك)\s*(?:ملف|صورة|فيديو)/i,
-    ],
-  },
-  // ── File Converter (FFmpeg.wasm — VERT.sh approach) ────────────────────────
-  {
-    id: 'convert',
-    toolName: 'محوِّل الصيغ',
-    toolUrl: '/tools?tool=convert',
-    toolIcon: '🔄',
-    toolDesc: 'حوِّل الفيديو والصوت والصور بين جميع الصيغ — مباشرة في المتصفح',
-    smartMessage: 'لديّ **محوِّل الصيغ** المدعوم بـ FFmpeg.wasm — حوِّل فيديو 🎬، صوت 🎵، أو صور 🖼️ إلى أي صيغة تريدها مباشرةً في متصفحك دون رفع لأي سيرفر ودون حساب.\n\n**الصيغ المدعومة:**\n• 🎬 فيديو: MP4 · WebM · AVI · MOV · MKV · GIF\n• 🎵 صوت: MP3 · WAV · OGG · AAC · FLAC · M4A\n• 🖼️ صور: JPG · PNG · WebP · BMP · GIF',
-    patterns: [
-      /(?:تحويل|حوِّل|حوّل|convert|convertir)\s*(?:ملف|صوت|فيديو|صورة|صور|مقطع|audio|video|image|file|صيغة|format)?/i,
-      /(?:أريد|بغيت|نبغي|نحب|نريد|حابب|حاب)\s*(?:تحويل|أحوِّل|نحوِّل)\s*(?:ملف|صوت|فيديو|صورة)?/i,
-      /(?:كيف|وين|فين)\s*(?:أحوِّل|نحوِّل|أغيّر)\s*(?:صيغة|نوع|ملف|صوت|فيديو|صورة)/i,
-      /(?:mp4|mp3|wav|avi|mkv|webm|flac|ogg|aac|m4a|mov|png|jpg|jpeg|webp|gif|bmp)\s*(?:إلى|ل|الى|to)\s*(?:mp4|mp3|wav|avi|mkv|webm|flac|ogg|aac|m4a|mov|png|jpg|jpeg|webp|gif|bmp)/i,
-      /(?:بدّل|بدل|غيّر|غير)\s*(?:صيغة|نوع|امتداد|format)\s*(?:الملف|الصوت|الفيديو|الصورة)/i,
-      /(?:فيديو|صوت|صورة|ملف)\s*(?:من|إلى|الى|ل|to)\s*(?:mp4|mp3|wav|avi|mkv|webm|flac|ogg|aac|m4a|mov|png|jpg|jpeg|webp|gif|bmp)/i,
-      /vert\.?sh|محوّل\s*(?:ملفات|صيغ|فيديو|صوت)|file\s*converter|converter\b/i,
-      /(?:تحويل|convert)\s*(?:صيغة|format|نوع)\s*(?:الملف|الفيديو|الصوت)/i,
     ],
   },
 ]
@@ -3572,39 +2102,10 @@ function detectToolRedirect(msg) {
 
   // ── تصنيف 3: شخصية عامة → ويكيبيديا / Wikidata / DBpedia (معالج مدمج) ──────
   // رئيس / وزير / لاعب / كاتب / ممثل / مؤلف / مخرج / عالم / فنان
-  if (/(?:من\s*هو|من\s*هي|ما\s*هو|ما\s*هي|تعريف|سيرة|مسيرة|نبذة|حياة|تاريخ)\s+\S+/i.test(msg) && !/سيرة\s*ذاتية/i.test(msg)) return null
+  if (/(?:من\s*هو|من\s*هي|ما\s*هو|ما\s*هي|تعريف|سيرة|مسيرة|نبذة|حياة|تاريخ)\s+\S+/i.test(msg)) return null
   if (/(?:رئيس|وزير|ملك|أمير|لاعب|كاتب|ممثل|مؤلف|مخرج|عالم|فنان|شاعر|مغني|رياضي)\s+(?:\S+\s*){1,4}(?:من\s*(?:هو|هي|هم))?/i.test(msg)) return null
-  // ── كشف مبكر: رفع ملف/صورة/فيديو → قبل أي فلتر اسم عربي ──────────────────
-  // يجب أن يكون قبل looksLikeBareArabicName لأن "بغيت نرفع صورة" يُصنَّف خطأ كاسم
-  if (/(?:ارفع|رفع|نرفع|حمّل|upload|partage|شارك|نشارك|أشارك)\s*(?:ملف|صورة|صور|فيديو|pdf|مستند|وثيقة|file|image|video|document|photo)/i.test(msg)) {
-    const _fu = TOOL_REDIRECT_MAP.find(t => t.id === 'fileupload')
-    if (_fu) return { toolName: _fu.toolName, toolUrl: _fu.toolUrl, toolIcon: _fu.toolIcon, toolDesc: _fu.toolDesc, smartMessage: _fu.smartMessage, message: _fu.smartMessage, id: _fu.id }
-  }
-  if (/(?:بغيت|نبغي|حابب|حاب|نحب|عايز|أريد|نريد)\s+(?:نرفع|ارفع|أرفع|نشارك|أشارك)\s*(?:صورة|فيديو|ملف)?/i.test(msg)) {
-    const _fu = TOOL_REDIRECT_MAP.find(t => t.id === 'fileupload')
-    if (_fu) return { toolName: _fu.toolName, toolUrl: _fu.toolUrl, toolIcon: _fu.toolIcon, toolDesc: _fu.toolDesc, smartMessage: _fu.smartMessage, message: _fu.smartMessage, id: _fu.id }
-  }
-  if (/(?:رابط|link)\s*(?:تحميل|مشاركة|للتحميل)|gofile/i.test(msg)) {
-    const _fu = TOOL_REDIRECT_MAP.find(t => t.id === 'fileupload')
-    if (_fu) return { toolName: _fu.toolName, toolUrl: _fu.toolUrl, toolIcon: _fu.toolIcon, toolDesc: _fu.toolDesc, smartMessage: _fu.smartMessage, message: _fu.smartMessage, id: _fu.id }
-  }
-  // ── كشف مبكر: تحويل صيغ الملفات (FFmpeg / VERT.sh approach) ─────────────────
-  if (
-    /(?:تحويل|حوِّل|حوّل|convert)\s*(?:ملف|صوت|فيديو|صورة|مقطع|audio|video|image|file|صيغة|format)?/i.test(msg) ||
-    /(?:أريد|بغيت|نبغي|نحب|نريد)\s+(?:تحويل|أحوِّل|نحوِّل)\s*(?:ملف|صوت|فيديو|صورة)?/i.test(msg) ||
-    /(?:mp4|mp3|wav|avi|mkv|webm|flac|ogg|aac|m4a|mov|png|jpg|jpeg|webp|gif|bmp)\s*(?:إلى|ل|الى|to)\s*(?:mp4|mp3|wav|avi|mkv|webm|flac|ogg|aac|m4a|mov|png|jpg|jpeg|webp|gif|bmp)/i.test(msg) ||
-    /vert\.?sh|محوّل\s*(?:ملفات|صيغ)|file\s*converter/i.test(msg)
-  ) {
-    const _cv = TOOL_REDIRECT_MAP.find(t => t.id === 'convert')
-    if (_cv) return { toolName: _cv.toolName, toolUrl: _cv.toolUrl, toolIcon: _cv.toolIcon, toolDesc: _cv.toolDesc, smartMessage: _cv.smartMessage, message: _cv.smartMessage, id: _cv.id }
-  }
   // ── اسم مجرد (2-4 كلمات عربية) → بحث شخصية عامة (Wikidata/Wikipedia) ────────
   // يُعاد null لضمان وصول الاستعلام لمسار isPersonQuery بدون توجيه للأدوات
-  // ── استثناء CV/سيرة ذاتية قبل looksLikeBareArabicName ──────────────────────
-  if (/سيرة\s*ذاتية/i.test(msg)) {
-    const _cvTool = TOOL_REDIRECT_MAP.find(t => t.id === 'cv')
-    if (_cvTool) return { toolName: _cvTool.toolName, toolUrl: _cvTool.toolUrl, toolIcon: _cvTool.toolIcon, toolDesc: _cvTool.toolDesc, smartMessage: _cvTool.smartMessage, message: _cvTool.smartMessage, id: _cvTool.id }
-  }
   if (looksLikeBareArabicName(msg)) return null
   // استعلامات الرؤساء والمسؤولين الجزائريين (حالية أو تاريخية)
   if (isMinisterQuery(msg)) return null
@@ -3675,62 +2176,10 @@ function detectToolRedirect(msg) {
         smartMessage: tool.smartMessage || `${tool.toolIcon} لديّ أداة متخصصة لهذا — **${tool.toolName}**`,
         message:      tool.smartMessage || `${tool.toolIcon} لديّ أداة متخصصة لهذا — **${tool.toolName}**`,
         id:           tool.id,
-        ...(tool.stations ? { stations: tool.stations } : {}),
       }
     }
   }
   return null
-}
-
-// ── All Tools List — قائمة الأدوات الرئيسية مع روابطها ─────────────────────
-const ALL_TOOLS_LIST = [
-  { id: 'cv',           icon: '📄', name: 'مولّد السيرة الذاتية',     desc: 'CV احترافي بالعربية أو الفرنسية + PDF',         url: '/tools?tool=cv' },
-  { id: 'bizplan',      icon: '📊', name: 'Business Plan',             desc: 'خطة عمل كاملة للسوق الجزائري',                url: '/tools?tool=bizplan' },
-  { id: 'invoice',      icon: '🧾', name: 'مولّد الفواتير',            desc: 'فواتير جزائرية: TVA · HT · TTC · PDF',         url: '/tools?tool=invoice' },
-  { id: 'tax',          icon: '🧮', name: 'حاسبة الضرائب',             desc: 'IRG · IBS بالشرائح الجزائرية المحدَّثة',       url: '/tools?tool=tax' },
-  { id: 'pension',      icon: '🏦', name: 'حاسبة التقاعد CNAS',        desc: 'اشتراكاتك ومعاشك المتوقع عند التقاعد',        url: '/tools?tool=pension' },
-  { id: 'zakat',        icon: '☪️',  name: 'حاسبة الزكاة',             desc: 'زكاة المال · الذهب · التجارة بالدينار',        url: '/tools?tool=zakat' },
-  { id: 'bizcard',      icon: '🪪',  name: 'بطاقة العمل',              desc: 'بطاقة عمل احترافية قابلة للتخصيص',            url: '/tools?tool=bizcard' },
-  { id: 'qrcode',       icon: '🔲', name: 'QR Code',                   desc: 'توليد QR Code لأي رابط أو نص',                url: '/tools?tool=qrcode' },
-  { id: 'planner',      icon: '🗂️', name: 'مخطط المشاريع',            desc: 'جدول زمني وتنظيم مهام المشروع',               url: '/tools?tool=planner' },
-  { id: 'docs',         icon: '📋', name: 'وثائق الأعمال',             desc: 'عقود · مراسلات · وثائق رسمية',                url: '/tools?tool=docs' },
-  { id: 'darija',       icon: '🗣️', name: 'مترجم الدارجة',            desc: 'ترجمة بين الدارجة الجزائرية والعربية الفصحى',  url: '/tools?tool=darija' },
-  { id: 'hashtag',      icon: '#️⃣', name: 'مولّد الهاشتاغ',           desc: 'هاشتاغات مُحسَّنة لسوشيال ميديا',            url: '/tools?tool=hashtag' },
-  { id: 'tts',          icon: '🔊', name: 'نص إلى صوت TTS',            desc: 'تحويل أي نص لصوت بعدة لهجات',                url: '/tools?tool=tts' },
-  { id: 'imgproc',      icon: '🎨', name: 'استوديو الصور',             desc: 'تحرير الصور وإزالة الخلفية بالذكاء الاصطناعي', url: '/tools?tool=imgproc' },
-  { id: 'dataanalysis', icon: '📈', name: 'محلّل البيانات',            desc: 'رفع ملفات Excel/CSV وتحليلها ببيانات تفاعلية', url: '/tools?tool=dataanalysis' },
-  { id: 'ocr',          icon: '📷', name: 'OCR — قارئ الوثائق',        desc: 'استخراج نص من صور وملفات PDF',                 url: '/ocr-dz' },
-  { id: 'excel',        icon: '📊', name: 'محرِّر Excel',              desc: 'إنشاء وتعديل جداول Excel بالذكاء الاصطناعي',  url: '/excel' },
-  { id: 'webbuilder',   icon: '🌐', name: 'Web Builder',               desc: 'بناء مواقع HTML/CSS/JS كاملة ونشرها مجاناً',   url: '/web-builder' },
-  { id: 'github',       icon: '⚡', name: 'GitHub Agent',              desc: 'commit · PR · deploy · GitHub Pages',          url: '/github-agent' },
-  { id: 'radio',        icon: '📻', name: 'DZ Radio',                  desc: 'بث مباشر لأكثر من 200 محطة جزائرية',          url: '/radio' },
-  { id: 'dzchat',       icon: '💬', name: 'DZ Chat',                   desc: 'غرف محادثة جماعية مباشرة',                    url: '/dzchat' },
-  { id: 'quran',        icon: '📖', name: 'القرآن الكريم',             desc: 'تلاوات · تفسير · بحث في الآيات',              url: '/quran' },
-  { id: 'dztube',       icon: '🎬', name: 'DZ Tube',                   desc: 'بحث وتحليل وتلخيص فيديوهات يوتيوب',           url: '/dz-tube' },
-  { id: 'stats',        icon: '📊', name: 'DZ Stats',                  desc: 'إحصاءات الجزائر: اقتصاد · سكان · مؤشرات',    url: '/stats' },
-  { id: 'jobs',         icon: '💼', name: 'بحث وظيفي',                 desc: 'عروض عمل في الجزائر وكتابة رسائل التقدم',      url: '/tools?tool=jobs' },
-  { id: 'health',       icon: '🏥', name: 'وكيل الصحة',                desc: 'بحث أطباء · CNAS · استشارات صحية',            url: '/tools?tool=health' },
-  { id: 'fileupload',   icon: '☁️', name: 'رفع الملفات',               desc: 'رفع ومشاركة الملفات والصور مجاناً',            url: '/tools?tool=fileupload' },
-]
-
-/**
- * detectAllToolsQuery — هل يسأل المستخدم عن قائمة أدوات DZ Agent؟
- * يُعيد true عند كل صيغ الطلب بالعربية/الدارجة/الفرنسية/الإنجليزية
- */
-function detectAllToolsQuery(msg) {
-  if (!msg || msg.length < 5) return false
-  const q = msg.trim()
-  return (
-    // عربية فصحى + دارجة
-    /(?:أحتاج|احتاج|عايز|بغيت|نبغي|نحب|نريد|أريد|نحتاج|محتاج)\s*(?:إلى\s*|الى\s*|لي\s*|كل\s*)?(?:أدوات|الأدوات)\s*(?:dz|dzagent|dz\s*agent)?/i.test(q)
-    || /(?:عطيني|اعطني|اعطيني|أعطني|أرني|ارني|وريني|ورني|show\s*me?)\s*(?:لي\s*)?(?:أدوات|الأدوات|tools)/i.test(q)
-    || /(?:ما|ماهي|ماهو|قائمة|list|أرسل|أرني|show)\s+(?:الأدوات|أدواتك|أدوات\s*dz|dz\s*agent\s*tools?)/i.test(q)
-    || /الأدوات\s*(?:المتوفرة|المتاحة|الخاصة|عندك|ديالك)/i.test(q)
-    || /أدوات\s*(?:dz\s*agent|dzagent|الوكيل)/i.test(q)
-    || /(?:واش|ما\s*هي)\s*(?:هي\s*)?(?:الأدوات|أدواتك)/i.test(q)
-    || /(?:tes\s*outils|liste.*outils|quels\s*outils)/i.test(q)
-    || /(?:your\s*tools|list.*tools|show.*tools|all\s*tools)/i.test(q)
-  )
 }
 
 // ── Smart Topic Change Detection ──────────────────────────────────────────
@@ -4117,13 +2566,6 @@ function diagLog(kind, payload = {}) {
 // ===== REAL-TIME / FRESHNESS ENGINE =====
 // Dynamic current year so AI prompts and validators always reflect "now".
 function getCurrentYear() { return new Date().getFullYear() }
-function getCurrentSeasonAr() {
-  const m = new Date().getMonth() + 1 // 1-12
-  if (m >= 3 && m <= 5)  return 'الربيع 🌸'
-  if (m >= 6 && m <= 8)  return 'الصيف ☀️'
-  if (m >= 9 && m <= 11) return 'الخريف 🍂'
-  return 'الشتاء ❄️'
-}
 function getCurrentDateString(locale = 'ar-DZ') {
   try { return new Date().toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }
   catch { return new Date().toISOString().slice(0, 10) }
@@ -4478,8 +2920,8 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
       process.env.DEEPSEEK_API_KEY
         ? callDeepSeek(trimmed, { max_tokens, timeoutMs: 7000 }).then(c => validateAIContent(c, query) ? { content: c, model: 'deepseek-chat' } : null).catch(() => null)
         : null,
-      // Router — Gemini/Mistral/Cohere based on taskHint (ignore last-resort responses)
-      callAIRouter(trimmed, { max_tokens, taskHint }).then(r => r?.content && !r.isLastResort && r.model !== 'last-resort' && validateAIContent(r.content, query) ? r : null).catch(() => null),
+      // Router — Gemini/Mistral/Cohere based on taskHint
+      callAIRouter(trimmed, { max_tokens, taskHint }).then(r => r?.content && validateAIContent(r.content, query) ? r : null).catch(() => null),
     ].filter(Boolean)
 
     if (raceCandidates.length > 0) {
@@ -4495,48 +2937,28 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
   } catch { /* ignore — all parallel attempts failed */ }
 
   // ── Pollinations.ai free text (no API key — always available) ─────────────
-  // API الجديد يُرجع نصاً مباشراً (text/plain) وليس JSON
   try {
     const seed = Math.floor(Math.random() * 999999)
-    const lastUserMsg = [...trimmed].reverse().find(m => m?.role === 'user')?.content || ''
-    const sysMsg = trimmed.find(m => m?.role === 'system')?.content || ''
-    // بناء prompt مباشر للـ GET API أو استخدام POST النصي
-    const polPrompt = sysMsg ? `${sysMsg}\n\n${lastUserMsg}` : lastUserMsg
-    const polRes = await fetch(`https://text.pollinations.ai/${encodeURIComponent(polPrompt)}?model=openai-large&seed=${seed}&private=true`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(8000),
-    })
-    if (polRes.ok) {
-      const content = await polRes.text()
-      if (content && content.trim().length > 5 && !content.includes('"error"')) {
-        console.log('[AI] ✓ Pollinations text fallback (GET)')
-        return { content: content.trim(), model: 'pollinations/openai-large' }
-      }
-    }
-  } catch (e) { console.warn('[AI] Pollinations GET failed:', e.message) }
-
-  // ── Pollinations POST (نص مباشر) ───────────────────────────────────────────
-  try {
-    const seed2 = Math.floor(Math.random() * 999999)
-    const polRes2 = await fetch('https://text.pollinations.ai/', {
+    const polRes = await fetch('https://text.pollinations.ai/openai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'openai',
+        model: 'openai-large',
         messages: trimmed,
-        seed: seed2,
+        seed,
         private: true,
       }),
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(22000),
     })
-    if (polRes2.ok) {
-      const content = await polRes2.text()
-      if (content && content.trim().length > 5 && !content.includes('"error"')) {
-        console.log('[AI] ✓ Pollinations text fallback (POST)')
-        return { content: content.trim(), model: 'pollinations/openai' }
+    if (polRes.ok) {
+      const polData = await polRes.json()
+      const content = polData.choices?.[0]?.message?.content || null
+      if (content && content.trim().length > 5) {
+        console.log('[AI] ✓ Pollinations text fallback')
+        return { content: content.trim(), model: 'pollinations/openai-large' }
       }
     }
-  } catch (e) { console.warn('[AI] Pollinations POST failed:', e.message) }
+  } catch (e) { console.warn('[AI] Pollinations text failed:', e.message) }
 
   return { content: null, model: null }
 }
@@ -4553,7 +2975,7 @@ async function safeGenerateAI({ messages, query = '', max_tokens = 3000, taskHin
       aiSemaphore.run(() =>
         stallGuard(
           () => _safeGenerateAI_inner({ messages, query, max_tokens, taskHint }),
-          13_000, // ✅ FIX2: كان 20_000 → 13_000 يضمن إجمالي < 25ث على Vercel (RSS 9ث + AI 13ث)
+          35_000,
           'safeGenerateAI'
         )
       )
@@ -4780,52 +3202,6 @@ app.get('/api/ai-router/health', (_req, res) => {
   }
 })
 
-// ===== DAHL INFERENCE STATUS API =====
-// Returns Dahl provider health, circuit state, and rolling metrics.
-// API key is NEVER included in the response.
-
-// GET /api/dahl/models — proxy to inference.dahl.global (bypasses browser CSP)
-app.get('/api/dahl/models', async (_req, res) => {
-  try {
-    const ctrl = new AbortController()
-    setTimeout(() => ctrl.abort(), 8000)
-    const r = await fetch('https://inference.dahl.global/v1/models', {
-      signal: ctrl.signal,
-      headers: { 'User-Agent': 'DZ-GPT/1.0' },
-    })
-    if (!r.ok) return res.status(r.status).json({ ok: false, error: `Dahl returned ${r.status}` })
-    const data = await r.json()
-    res.setHeader('Cache-Control', 'public, max-age=300')
-    res.json({ ok: true, models: data?.data || [], count: data?.data?.length || 0 })
-  } catch (err) {
-    res.status(503).json({ ok: false, error: String(err.message), models: [] })
-  }
-})
-
-app.get('/api/dahl/status', (_req, res) => {
-  try {
-    res.json({ ok: true, ...getDahlStatus(), ts: new Date().toISOString() })
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message })
-  }
-})
-
-// POST /api/dahl/health-check — manual probe (admin/internal only)
-// Protected: requires SESSION_SECRET header or owner token to prevent abuse.
-app.post('/api/dahl/health-check', async (req, res) => {
-  const token = req.headers['x-admin-token'] || req.headers['authorization']?.replace('Bearer ', '')
-  const sessionSecret = process.env.SESSION_SECRET
-  if (!sessionSecret || token !== sessionSecret) {
-    return res.status(403).json({ ok: false, error: 'Forbidden' })
-  }
-  try {
-    const result = await dahlHealthCheck()
-    res.json({ ok: result.ok, latencyMs: result.latencyMs, ts: new Date().toISOString() })
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message })
-  }
-})
-
 // ===== QURAN KEYWORD SEARCH — RAG with tafsir injection =====
 // Searches Quran.com for verses by keyword, then fetches tafsir for top results
 app.get('/api/quran/search', async (req, res) => {
@@ -4955,46 +3331,6 @@ app.get('/api/link-preview', async (req, res) => {
   } catch { res.json({ title: '', description: '', image: '', url }) }
 })
 
-// ===== ADMIN BROADCAST: SSE STREAM (عالمي — يشمل جميع صفحات الموقع) =====
-const _notifSseClients = new Set()
-
-app.get('/api/notifications/stream', (req, res) => {
-  res.set({
-    'Content-Type':      'text/event-stream',
-    'Cache-Control':     'no-cache',
-    'Connection':        'keep-alive',
-    'X-Accel-Buffering': 'no',
-  })
-  res.flushHeaders()
-  _notifSseClients.add(res)
-
-  // إرسال آخر إعلان فعّال فور الاتصال (لمن فتح الصفحة بعد الإذاعة)
-  if (_siteAnnouncement && Date.now() - _siteAnnouncement.timestamp < _PENDING_BROADCASTS_TTL) {
-    try {
-      res.write(`data: ${JSON.stringify({ type: 'admin_broadcast', ..._siteAnnouncement })}\n\n`)
-    } catch {}
-  }
-
-  const ping = setInterval(() => {
-    try { res.write(':ping\n\n') }
-    catch { clearInterval(ping); _notifSseClients.delete(res) }
-  }, 25_000)
-
-  req.on('close', () => {
-    clearInterval(ping)
-    _notifSseClients.delete(res)
-  })
-})
-
-function pushNotifToAll(notif) {
-  const payload = `data: ${JSON.stringify({ type: 'admin_broadcast', ...notif })}\n\n`
-  for (const res of _notifSseClients) {
-    try { res.write(payload) }
-    catch { _notifSseClients.delete(res) }
-  }
-  console.log(`[Notif] 📣 Broadcast pushed to ${_notifSseClients.size} SSE client(s): ${String(notif.text || '').slice(0, 60)}`)
-}
-
 // ===== BREAKING NEWS: SSE STREAM =====
 const _breakingSseClients = new Set()
 
@@ -5029,234 +3365,6 @@ function broadcastBreakingNews(items) {
   try { broadcastChat({ type: 'breaking_news', items }) } catch {}
   console.log(`[BreakingNews] 📡 Pushed ${items.length} item(s) to ${_breakingSseClients.size} SSE client(s)`)
 }
-
-function broadcastNationalTeamNews(items) {
-  const payload = `data: ${JSON.stringify({ type: 'national_team_news', items })}\n\n`
-  for (const res of _breakingSseClients) {
-    try { res.write(payload) }
-    catch { _breakingSseClients.delete(res) }
-  }
-  try { broadcastChat({ type: 'national_team_news', items }) } catch {}
-  console.log(`[NationalTeam] 🇩🇿 Pushed ${items.length} item(s) to ${_breakingSseClients.size} SSE client(s)`)
-}
-
-// ===== NATIONAL TEAM NEWS CACHE & ENDPOINT =====
-const NATIONAL_TEAM_CACHE = { items: [], seenTitles: new Set(), ts: 0 }
-const NATIONAL_TEAM_TTL   = 5 * 60 * 1000 // 5 min
-
-// ── مصادر RSS متخصصة بأخبار المنتخب الجزائري (رياضة فقط — بلا سياسة) ──
-const NATIONAL_TEAM_RSS_FEEDS = [
-  { name: 'الهداف',               url: 'https://www.elheddaf.com/feed' },
-  { name: 'APS رياضة',            url: 'https://www.aps.dz/ar/sport/feed' },
-  { name: 'Sport DZ',             url: 'https://www.sport-dz.com/feed/' },
-  { name: 'Google الخضر',         url: 'https://news.google.com/rss/search?q=%22%D8%A7%D9%84%D8%AE%D8%B6%D8%B1%22+%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
-  { name: 'Google محاربو الصحراء', url: 'https://news.google.com/rss/search?q=%22%D9%85%D8%AD%D8%A7%D8%B1%D8%A8%D9%88+%D8%A7%D9%84%D8%B5%D8%AD%D8%B1%D8%A7%D8%A1%22&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
-  { name: 'Google المنتخب الجزائري', url: 'https://news.google.com/rss/search?q=%28site%3Aennaharonline.com+OR+site%3Aechoroukonline.com+OR+site%3Aelkhabar.com+OR+site%3Aelbilad.net+OR+site%3Aelhayatalarabiya.dz+OR+site%3Aaps.dz+OR+site%3Aelheddaf.com%29+%22%D8%A7%D9%84%D9%85%D9%86%D8%AA%D8%AE%D8%A8+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A%22&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
-  { name: 'Google الفريق الوطني',  url: 'https://news.google.com/rss/search?q=%22%D8%A7%D9%84%D9%81%D8%B1%D9%8A%D9%82+%D8%A7%D9%84%D9%88%D8%B7%D9%86%D9%8A%22+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
-  { name: 'سبورت 360',             url: 'https://arabic.sport360.com/feed/' },
-]
-
-// كلمات تدل على سياسة/اقتصاد — يُستبعد كل خبر يحتويها
-const _NT_NON_SPORTS = ['سياسة','حكومة','وزير','برلمان','رئيس الجمهورية','اقتصاد','مالية','استثمار','بنك','دينار','أسعار','ميزانية','جريمة','أمن','إرهاب','حزب','انتخاب']
-function _ntIsSports(title = '', desc = '') {
-  const text = `${title} ${desc}`.toLowerCase()
-  return !_NT_NON_SPORTS.some(k => text.includes(k))
-}
-
-function parseNationalTeamRss(xml, feedName = 'أخبار المنتخب') {
-  const items = []
-  const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
-  let m
-  while ((m = itemRegex.exec(xml)) !== null) {
-    const block = m[1]
-    const title   = (block.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i)?.[1] || block.match(/<title>(.*?)<\/title>/i)?.[1] || '').trim()
-    const link    = (block.match(/<link>(.*?)<\/link>/i)?.[1] || '').trim()
-    const pubDate = (block.match(/<pubDate>(.*?)<\/pubDate>/i)?.[1] || '').trim()
-    const desc    = (block.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i)?.[1] || block.match(/<description>(.*?)<\/description>/i)?.[1] || '').replace(/<[^>]+>/g,'').trim().slice(0, 200)
-    const source  = (block.match(/<source[^>]*>(.*?)<\/source>/i)?.[1] || feedName).trim()
-    if (title && title.length > 5 && _ntIsSports(title, desc)) {
-      items.push({ title, link, pubDate, source, feedName: source, description: desc })
-    }
-  }
-  return items.slice(0, 12)
-}
-
-async function fetchNationalTeamNews({ bypassCache = false } = {}) {
-  if (!bypassCache && NATIONAL_TEAM_CACHE.ts && Date.now() - NATIONAL_TEAM_CACHE.ts < NATIONAL_TEAM_TTL) {
-    return NATIONAL_TEAM_CACHE.items
-  }
-  try {
-    // جلب من جميع المصادر بالتوازي
-    const results = await Promise.allSettled(
-      NATIONAL_TEAM_RSS_FEEDS.map(feed =>
-        fetch(feed.url, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)', 'Accept': 'application/rss+xml, application/xml, text/xml, */*' },
-          signal: AbortSignal.timeout(10000),
-        })
-        .then(r => r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`)))
-        .then(xml => parseNationalTeamRss(xml, feed.name))
-        .catch(() => [])
-      )
-    )
-
-    // دمج النتائج وإزالة المكررات
-    const allItems = []
-    const seenTitles = new Set()
-    for (const r of results) {
-      if (r.status === 'fulfilled') {
-        for (const it of r.value) {
-          const norm = it.title.toLowerCase().replace(/\s+/g,' ').trim()
-          if (!seenTitles.has(norm)) { seenTitles.add(norm); allItems.push(it) }
-        }
-      }
-    }
-
-    // ترتيب حسب التاريخ (الأحدث أولاً)
-    allItems.sort((a, b) => {
-      const da = a.pubDate ? new Date(a.pubDate).getTime() : 0
-      const db = b.pubDate ? new Date(b.pubDate).getTime() : 0
-      return db - da
-    })
-
-    const items = allItems.slice(0, 20)
-
-    // Detect NEW items (not seen before) for SSE push
-    const newItems = items.filter(it => !NATIONAL_TEAM_CACHE.seenTitles.has(it.title))
-    if (newItems.length > 0) {
-      newItems.forEach(it => NATIONAL_TEAM_CACHE.seenTitles.add(it.title))
-      // Only push via SSE after the first cold load (seenTitles was empty = cold start)
-      if (NATIONAL_TEAM_CACHE.ts > 0) {
-        broadcastNationalTeamNews(newItems.slice(0, 5))
-      } else {
-        // First load: seed seenTitles but don't broadcast
-        items.forEach(it => NATIONAL_TEAM_CACHE.seenTitles.add(it.title))
-      }
-    }
-
-    NATIONAL_TEAM_CACHE.items = items
-    NATIONAL_TEAM_CACHE.ts    = Date.now()
-    console.log(`[NationalTeam] Fetched ${items.length} articles, ${newItems.length} new`)
-    return items
-  } catch (err) {
-    console.error('[NationalTeam] RSS fetch failed:', err.message)
-    return NATIONAL_TEAM_CACHE.items
-  }
-}
-
-app.get('/api/national-team/news', async (req, res) => {
-  try {
-    const bypassCache = req.query.bypassCache === '1'
-    const items = await fetchNationalTeamNews({ bypassCache })
-    res.set('Cache-Control', 'no-store').json({ items, fetchedAt: new Date().toISOString() })
-  } catch (err) {
-    res.status(500).json({ error: err.message, items: [] })
-  }
-})
-
-// Poll national team news every 5 minutes to push new items via SSE
-setInterval(async () => {
-  try { await fetchNationalTeamNews({ bypassCache: true }) }
-  catch {}
-}, NATIONAL_TEAM_TTL)
-// Initial warm-up after 10 seconds
-setTimeout(async () => {
-  try { await fetchNationalTeamNews() }
-  catch {}
-}, 10_000)
-
-// ===== BROADCAST APP UPDATE NOTIFICATION → جميع مستخدمي DZ Chat =====
-// POST /api/broadcast-update  { message?: string }
-app.post('/api/broadcast-update', (req, res) => {
-  const secret = req.headers['x-admin-secret'] || req.body?.secret || ''
-  if (!_checkAdminSecret(secret)) {
-    return res.status(403).json({ error: 'غير مصرح' })
-  }
-  const msg = String(req.body?.message || 'تحديث جديد متاح في DZ AGENT 🚀').slice(0, 200)
-  let count = 0
-  for (const s of chatSessions.values()) {
-    if (s.ws && s.ws.readyState === 1) {
-      try { s.ws.send(JSON.stringify({ type: 'app_update', message: msg })); count++ }
-      catch {}
-    }
-  }
-  console.log(`[BroadcastUpdate] ✅ Sent app_update to ${count} connected client(s)`)
-  res.json({ success: true, sent: count, message: msg })
-})
-
-// ===== SITE-WIDE ANNOUNCEMENT — للزوار الكلي =====
-// GET /api/pending-notifications — طابور الإشعارات للمستخدمين الغائبين
-app.get('/api/pending-notifications', (req, res) => {
-  const now = Date.now()
-  const fresh = _pendingBroadcasts.filter(b => now - b.timestamp < _PENDING_BROADCASTS_TTL)
-  res.json({ notifications: fresh })
-})
-
-// GET /api/site-announcement — polling عام بدون مصادقة
-app.get('/api/site-announcement', (req, res) => {
-  res.json({ announcement: _siteAnnouncement })
-})
-
-// DELETE /api/site-announcement — المشرف يمسح الإعلان
-app.delete('/api/site-announcement', (req, res) => {
-  const secret = req.headers['x-admin-secret'] || req.query?.secret || req.body?.secret || ''
-  if (!_checkAdminSecret(secret)) return res.status(403).json({ error: 'غير مصرح' })
-  _siteAnnouncement = null
-  console.log('[SiteAnnounce] Announcement cleared by admin')
-  res.json({ success: true })
-})
-
-// POST /api/admin/broadcast/test — اختبار سريع (dev فقط — لا يعمل في production)
-if (process.env.NODE_ENV !== 'production') {
-  app.post('/api/admin/broadcast/test', (req, res) => {
-    const text     = String(req.body?.text || '🧪 رسالة اختبار من المشرف — البانر يعمل بشكل صحيح ✅').slice(0, 500)
-    const link     = req.body?.link     ? String(req.body.link).slice(0, 500)     : null
-    const linkText = req.body?.linkText ? String(req.body.linkText).slice(0, 100) : null
-    const from     = String(req.body?.from || 'مشرف الاختبار').slice(0, 30)
-    const id  = `test_${Date.now()}`
-    const ts  = Date.now()
-    const payload = { id, text, from, timestamp: ts, link, linkText }
-    pushNotifToAll(payload)
-    _pushPendingBroadcast(payload)
-    console.log(`[TestBroadcast] 📣 Sent to ${_notifSseClients.size} SSE client(s): "${text.slice(0, 60)}"`)
-    res.json({ ok: true, id, sent: _notifSseClients.size })
-  })
-}
-
-// POST /api/admin/broadcast — إذاعة رسالة مباشرة لجميع زوار الموقع عبر SSE
-// لا تحتاج session الشات — فقط admin secret
-app.post('/api/admin/broadcast', (req, res) => {
-  const secret = req.headers['x-admin-secret'] || req.body?.secret || ''
-  if (!_checkAdminSecret(secret)) return res.status(403).json({ error: 'غير مصرح' })
-  const text     = String(req.body?.text || '').trim().slice(0, 500)
-  const link     = req.body?.link     ? String(req.body.link).slice(0, 500)     : null
-  const linkText = req.body?.linkText ? String(req.body.linkText).slice(0, 100) : null
-  const from     = String(req.body?.from || 'المشرف').slice(0, 30)
-  const scope    = req.body?.scope || 'site'  // 'site' | 'chat'
-  if (!text) return res.status(400).json({ error: 'نص الرسالة مطلوب' })
-  const id  = `bcast_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-  const ts  = Date.now()
-  const payload = { id, text, from, timestamp: ts, link, linkText }
-  // SSE لجميع الزوار
-  pushNotifToAll(payload)
-  // طابور الإشعارات المعلّقة
-  _pushPendingBroadcast(payload)
-  // إذاعة في غرفة الشات أيضاً
-  try {
-    const chatMsg = pushChatMsg({
-      id: chatId(), from, fromId: 'admin', gender: 'male',
-      text, timestamp: ts, isAdmin: true, isBroadcast: true,
-      link: link || undefined, linkText: linkText || undefined,
-    })
-    broadcastChat({ type: 'message', msg: chatMsg })
-  } catch {}
-  // تخزين كإعلان عام إذا scope = site
-  if (scope === 'site') {
-    _siteAnnouncement = { id, text, link, linkText, timestamp: ts, from }
-    console.log(`[AdminBroadcast] ✅ site announcement: "${text.slice(0, 60)}"`)
-  }
-  console.log(`[AdminBroadcast] 📣 Pushed to ${_notifSseClients.size} SSE client(s): "${text.slice(0, 60)}"`)
-  res.json({ ok: true, id, sent: _notifSseClients.size, scope })
-})
 
 // ===== OWNER: COMMAND ENDPOINT =====
 app.post('/api/owner/command', async (req, res) => {
@@ -5539,20 +3647,6 @@ app.post('/api/chat/stream', aiLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Invalid messages payload.' })
   }
 
-  // 🛡️ Static guards — تتخطى LLM على نقطة الـ streaming أيضاً
-  const _streamGuardMsg = [...messages].reverse().find(m => m?.role === 'user')?.content?.trim() || ''
-  const _streamGuard = applyStaticGuards(_streamGuardMsg)
-  if (_streamGuard) {
-    console.log(`[Chat/Stream] 🛡️ static guard matched — bypassing LLM`)
-    res.setHeader('Content-Type', 'text/event-stream')
-    res.setHeader('Cache-Control', 'no-cache')
-    res.setHeader('Connection', 'keep-alive')
-    res.flushHeaders?.()
-    res.write(`data: ${JSON.stringify({ token: _streamGuard.content })}\n\n`)
-    res.write('data: [DONE]\n\n')
-    return res.end()
-  }
-
   const keys = getGroqKeys()
   if (!keys.length) return res.status(500).json({ error: 'API key not configured.' })
 
@@ -5638,13 +3732,6 @@ app.post('/api/chat', async (req, res) => {
   }
   if (isCapabilitiesQuestion(lastUserMsg)) {
     return res.status(200).json(CAPABILITIES_RESPONSE)
-  }
-
-  // 🛡️ Static guards — تتخطى LLM على /api/chat أيضاً
-  const _chatGuard = applyStaticGuards(lastUserMsg)
-  if (_chatGuard) {
-    console.log(`[Chat] 🛡️ static guard matched — bypassing LLM`)
-    return res.status(200).json(_chatGuard)
   }
 
   if (getGroqKeys().length === 0) {
@@ -6179,7 +4266,7 @@ def main():
     
     # بيانات نموذجية
     data = {
-        "اسم": "DZ AGENT",
+        "اسم": "DZ-GPT",
         "إصدار": "2026",
         "لغة": "Python",
         "المطور": "Nadir Houamria"
@@ -6443,73 +4530,6 @@ REASONING PRINCIPLE
 ━━━━━━━━━━━━━━━━━━
 فهم → بحث → تحقق → إجابة واضحة ومباشرة.
 قاعدة ذهبية: فكّر دائماً قبل الإجابة — حتى للأسئلة السهلة.
-
-━━━━━━━━━━━━━━━━━━
-🧠 أوضاع الخبرة المتخصصة — Expert Thinking Modes
-━━━━━━━━━━━━━━━━━━
-فعّل الوضع المناسب تلقائياً حسب طبيعة السؤال:
-
-🔍 وضع التفكير العميق (Deep Thinking Mode) — كـ Claude Extended Thinking
-   - عند الأسئلة المعقدة: فكّك المشكلة → استكشف كل الاحتمالات → قيّم كل مسار → اختر الأفضل
-   - ابحث عن الأخطاء في تفكيرك قبل تقديم الإجابة
-   - استخدم Chain-of-Thought (CoT) المعلَن للمسائل متعددة الخطوات
-   - مثال: "ما أفضل بنية لتطبيق يدعم مليون مستخدم؟" → فكّر في قابلية التوسع، قواعد البيانات، التوازن، الكيش
-
-✅ وضع التدقيق والتحقق (Fact-Check & Verification Mode)
-   - تحقق من كل ادعاء قبل ذكره
-   - قارن المصادر المتعارضة وأبلغ عن التناقضات
-   - استخدم عبارات الثقة: "وُثِّق في..." / "غير مؤكد، لكن..." / "لا أجد مصدراً كافياً"
-   - لا تُقدّم معلومة بثقة إلا إذا كان مستوى ثقتك ≥ 85%
-
-🔬 وضع البحث العلمي (Scientific Research Mode)
-   - للأسئلة العلمية والأكاديمية: ابدأ بالتعريف الدقيق → المنهجية → الأدلة → الاستنتاج
-   - اذكر المفاهيم الأساسية قبل التعمق في التفاصيل
-   - فرّق بين النظرية والتجربة والإجماع العلمي
-   - استخدم صياغة علمية دقيقة مع الحفاظ على الوضوح للمستخدم
-
-📚 وضع الأدب والكتابة الإبداعية (Literary & Creative Mode)
-   - للطلبات الأدبية: تحليل النصوص · كتابة القصص · الشعر · المقالات
-   - اجمع بين الأصالة والجمال اللغوي
-   - للأدب العربي: أجد اللغة المناسبة (فصحى/دارجة) حسب السياق
-   - للتحليل الأدبي: البنية السردية + الشخصيات + الأسلوب + الرسالة
-
-➕ وضع الرياضيات المتقدمة (Advanced Mathematics Mode)
-   - للمسائل الرياضية: حدّد نوع المسألة → اختر المنهج الصحيح → اشرح خطوة بخطوة
-   - أظهر العمل كاملاً مع الحل (Show Your Work)
-   - تحقق من الإجابة بطريقة مختلفة عند الإمكان
-   - للمعادلات والتكاملات والإحصاء: استخدم الرمز الرياضي الواضح
-   - إذا كانت المسألة تحتمل أكثر من حل → قدّم الحلول المختلفة
-
-📜 وضع التحليل التاريخي (Historical Analysis Mode)
-   - للأسئلة التاريخية: السياق → الأسباب → الأحداث → التداعيات → الدروس المستفادة
-   - حافظ على الحياد التاريخي وتعدد وجهات النظر
-   - اذكر المصادر والمؤرخين عند الحديث عن أحداث خلافية
-   - للتاريخ الجزائري: تفاصيل دقيقة عن الثورة · الاستعمار · الشخصيات الوطنية
-
-💻 وضع البرمجة الاحترافية (Expert Programming Mode) — كـ GPT-4/Claude للكود
-   - للطلبات البرمجية: فهم المشكلة أولاً → خطة الحل → الكود النظيف → الاختبار
-   - اكتب كوداً قابلاً للقراءة والصيانة مع تعليقات واضحة
-   - تعامل مع حالات الخطأ (Error Handling) دائماً
-   - اقترح التحسينات (Performance + Security + Best Practices)
-   - دعم: Python · JavaScript · TypeScript · React · Node.js · SQL · وكل اللغات الشائعة
-
-🌍 وضع الترجمة والتعدد اللغوي (Multilingual Expert Mode) — كـ Gemini
-   - ترجمة دقيقة تحافظ على المعنى والأسلوب والسياق الثقافي
-   - بين العربية (فصحى/دارجة) ↔ الفرنسية ↔ الإنجليزية
-   - تنبّه للتعابير الاصطلاحية (Idioms) التي لا تُترجم حرفياً
-   - للدارجة الجزائرية: ترجمة دقيقة مع فهم السياق المحلي
-
-📊 وضع التحليل والاستدلال البياني (Data & Analytical Reasoning Mode)
-   - تحليل البيانات والإحصاء والأرقام بدقة
-   - استنتاج الأنماط والعلاقات من البيانات المتاحة
-   - تقديم الملخصات الكمية بشكل واضح ومنظم
-   - التمييز بين الارتباط والسببية دائماً
-
-🎯 قواعد تفعيل الأوضاع (إلزامية):
-① كشف نوع السؤال تلقائياً → فعّل الوضع المناسب
-② يمكن تفعيل أكثر من وضع معاً (مثال: سؤال تاريخي-علمي يُفعّل وضعَين)
-③ أعلن الوضع النشط عند الحاجة: "🔬 وضع البحث العلمي مُفعَّل"
-④ الجودة قبل السرعة — لا تُسرع على حساب الدقة
 `.trim()
 
 // ── Website Builder: specialized system prompt ────────────────────────────────
@@ -7187,22 +5207,25 @@ async function directWebBuilderGenerate(messages, maxTokens = 8000) {
     } catch (e) { console.warn('[DirectWebBuilder] Cohere failed:', e.message) }
   }
 
-  // 5. Pollinations.ai (no key needed) — new API returns plain text
-  try {
-    const polRes = await fetch('https://text.pollinations.ai/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'openai', messages, private: true, seed: Math.floor(Math.random() * 999999) }),
-      signal: AbortSignal.timeout(30000),
-    })
-    if (polRes.ok) {
-      const content = await polRes.text()
-      if (content && content.trim().length > 200 && !content.includes('"error"')) {
-        console.log(`[DirectWebBuilder] ✓ Pollinations`)
-        return { content: content.trim(), model: 'pollinations:openai' }
+  // 5. Pollinations.ai (no key needed)
+  for (const polModel of ['openai-large', 'mistral', 'claude-hybridspace']) {
+    try {
+      const res = await fetch('https://text.pollinations.ai/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: polModel, messages, private: true }),
+        signal: AbortSignal.timeout(30000),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const content = data.choices?.[0]?.message?.content || null
+        if (content && content.trim().length > 200) {
+          console.log(`[DirectWebBuilder] ✓ Pollinations ${polModel}`)
+          return { content, model: `pollinations:${polModel}` }
+        }
       }
-    }
-  } catch (e) { console.warn(`[DirectWebBuilder] Pollinations failed:`, e.message) }
+    } catch (e) { console.warn(`[DirectWebBuilder] Pollinations ${polModel} failed:`, e.message) }
+  }
 
   // 6. Template-based HTML fallback (no AI needed — always works)
   const templateHtml = generateWebBuilderTemplate(messages)
@@ -7427,7 +5450,7 @@ function _tplLanding(dark, accent) {
 
 <section class="cta" id="contact">
   <h2 data-aos="fade-up">جاهز للانطلاق؟</h2>
-  <p data-aos="fade-up" data-aos-delay="100">انضم لآلاف المستخدمين الجزائريين الذين يثقون بـ DZ AGENT يومياً</p>
+  <p data-aos="fade-up" data-aos-delay="100">انضم لآلاف المستخدمين الجزائريين الذين يثقون بـ DZ-GPT يومياً</p>
   <a href="#" class="btn btn-primary" data-aos="fade-up" data-aos-delay="200" style="font-size:1.1rem;padding:1rem 2.5rem">
     <i class="fas fa-rocket"></i> ابدأ رحلتك الآن — مجاناً
   </a>
@@ -8514,17 +6537,6 @@ function detectQueryIntent(msg) {
     // فرنسية
     'actuellement','dernières nouvelles','en ce moment','cette semaine',
   ]
-  // ── Entity Definition Guard ───────────────────────────────────────────────
-  // "من هو الرئيس الأمريكي الحالي؟" → isTemporal=false حتى لو احتوى مؤشرات زمنية
-  // الأولوية: نوع السؤال (تعريف) > الكلمات الزمنية
-  if (isEntityDefinitionQuery(msg)) {
-    // "من هو الرئيس الأمريكي الحالي؟" → isTemporal=false حتى لو احتوى مؤشرات زمنية
-    // أزل 'politics'/'news' من detected لأن "وزير/رئيس" هنا في سياق تعريف وليس أخبار
-    const filteredDetected = detected.filter(d => !['politics','news'].includes(d))
-    return { primary: filteredDetected[0] || 'general', all: filteredDetected, isTemporal: false, isArabic, isEntityDefinition: true }
-  }
-  // ─────────────────────────────────────────────────────────────────────────
-
   const isTemporal = temporalMarkers.some(m => lower.includes(m.toLowerCase())) || /\b(20[2-9]\d)\b/.test(msg)
     || detected.includes('celebrities') || detected.includes('incidents')
     || isTimeSensitiveQuery(msg)
@@ -8537,10 +6549,6 @@ function detectQueryIntent(msg) {
 // مثال: "ما هي آخر أخبار الرئيس؟" → بحث في الويب
 function isDirectFactualQuestion(msg) {
   if (!msg || msg.length < 5) return false
-  // ── حارس الوظائف والمسابقات (أولوية قصوى) ────────────────────────────
-  // الوظائف والمسابقات تتغير يومياً → لا تُصنَّف كـ "سؤال مباشر" أبداً
-  if (isJobsQuery(msg)) return false
-  // ─────────────────────────────────────────────────────────────────────
   // إذا كانت تحتوي على مؤشرات أخبار/زمنية → ليست سؤالاً واقعياً مباشراً
   const hasNewsIndicator = /أخبار|خبر جديد|آخر\s+(?:أخبار|المستجدات)|جديد.*خبر|اليوم|الآن\s*،|عاجل|أحدث\s+الأخبار|مؤخراً|recently|latest\s+news|breaking\s+news|today'?s?\s+news|actualité|récente?|new developments/i.test(msg)
   if (hasNewsIndicator) return false
@@ -8899,7 +6907,7 @@ async function fetchEddirasaPage(url) {
   if (!url || !/^https?:\/\/([^/]+\.)?eddirasa\.com\//i.test(url)) return ''
   try {
     const r = await fetch(url, {
-      headers: { 'User-Agent': 'DZ-GPT-Agent/1.0 (+https://dzagent.app)', 'Accept': 'text/html,*/*' },
+      headers: { 'User-Agent': 'DZ-GPT-Agent/1.0 (+https://dz-gpt.vercel.app)', 'Accept': 'text/html,*/*' },
       signal: AbortSignal.timeout(8000),
     })
     if (!r.ok) return ''
@@ -9479,7 +7487,7 @@ app.get('/api/lesson', async (req, res) => {
 async function searchGoogleNewsRSS(rssUrl) {
   try {
     const r = await fetch(rssUrl, {
-      headers: { 'User-Agent': 'DZ-GPT-Agent/1.0 (+https://dzagent.app)', 'Accept': 'application/rss+xml,*/*' },
+      headers: { 'User-Agent': 'DZ-GPT-Agent/1.0 (+https://dz-gpt.vercel.app)', 'Accept': 'application/rss+xml,*/*' },
       signal: AbortSignal.timeout(9000),
     })
     if (!r.ok) return []
@@ -9527,7 +7535,7 @@ async function searchDDGInstant(query) {
 async function searchWikipedia(query) {
   const isArabic = /[\u0600-\u06FF]/.test(query)
   const lang = isArabic ? 'ar' : 'en'
-  const headers = { 'User-Agent': 'DZ-GPT/1.0 (https://dzagent.app)' }
+  const headers = { 'User-Agent': 'DZ-GPT/1.0 (https://dz-gpt.vercel.app)' }
   try {
     const enc = encodeURIComponent(query)
     const sr = await fetch(
@@ -9655,33 +7663,16 @@ app.post('/api/dz-agent-search', async (req, res) => {
 const RSS_CACHE = new Map()
 const RSS_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
-// ── مصادر دولية مخصصة — الجزيرة / BBC / رويترز / فرانس24 / سكاي ──────────────
-const INTERNATIONAL_RSS_FEEDS = [
-  { name: 'الجزيرة عربي',      url: 'https://www.aljazeera.com/xml/rss/all.xml' },
-  { name: 'BBC عربي',           url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
-  { name: 'فرانس 24 عربي',     url: 'https://www.france24.com/ar/rss' },
-  { name: 'سكاي نيوز عربية',    url: 'https://www.skynewsarabia.com/rss.xml' },
-  { name: 'RT عربي',            url: 'https://arabic.rt.com/rss/' },
-  // Google News — أحداث دولية / عالمية (مرتبة بالأحدث)
-  { name: 'Google أحداث دولية', url: 'https://news.google.com/rss/search?q=%D8%A3%D8%AD%D8%AF%D8%A7%D8%AB+%D8%AF%D9%88%D9%84%D9%8A%D8%A9+%D8%B9%D8%A7%D8%AC%D9%84&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
-  { name: 'Google أخبار العالم',  url: 'https://news.google.com/rss/search?q=%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1+%D8%A7%D9%84%D8%B9%D8%A7%D9%84%D9%85+%D8%A7%D9%84%D9%8A%D9%88%D9%85&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
-  { name: 'Google أبرز الأحداث',  url: 'https://news.google.com/rss/search?q=%D8%A3%D8%A8%D8%B1%D8%B2+%D8%A7%D9%84%D8%A3%D8%AD%D8%AF%D8%A7%D8%AB+%D8%A7%D9%84%D8%B9%D8%A7%D9%84%D9%85%D9%8A%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
-  { name: 'Google World News EN',  url: 'https://news.google.com/rss/search?q=world+news+today&hl=en&gl=US&ceid=US:en&sort=date' },
-]
-
 const RSS_FEEDS = {
   national: [
     // ── 🇩🇿 أولوية قصوى — جرائد جزائرية بالعربية (بالترتيب) ──
     { name: 'النهار',         url: 'https://www.ennaharonline.com/feed/' },
     { name: 'البلاد',         url: 'https://www.elbilad.net/feed' },
     { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
-    { name: 'الحياة العربية', url: 'https://news.google.com/rss/search?q=site%3Aelhayatalarabiya.dz&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'الجمهورية',     url: 'https://news.google.com/rss/search?q=site%3Aaldjumhouria.com&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
     { name: 'وكالة APS',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-    // ── Google News: المنتخب الجزائري — 7 مصادر جزائرية موثوقة ──
-    { name: 'Google المنتخب الجزائري', url: 'https://news.google.com/rss/search?q=%28site%3Aennaharonline.com+OR+site%3Aechoroukonline.com+OR+site%3Aelkhabar.com+OR+site%3Aelbilad.net+OR+site%3Aelhayatalarabiya.dz+OR+site%3Aaps.dz+OR+site%3Aelheddaf.com%29+%22%D8%A7%D9%84%D9%85%D9%86%D8%AA%D8%AE%D8%A8+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A%22&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'الفجر',           url: 'https://www.al-fadjr.com/ar/feed/' },
+    { name: 'TSA عربي',        url: 'https://www.tsa-algerie.com/feed/' },
     { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
     { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
     // ── Google News الجزائر — عربي (بعد المصادر المحلية) ──
@@ -9695,28 +7686,20 @@ const RSS_FEEDS = {
     { name: 'فرانس 24 عربي', url: 'https://www.france24.com/ar/rss' },
     { name: 'سكاي نيوز عربية', url: 'https://www.skynewsarabia.com/rss.xml' },
     { name: 'RT عربي', url: 'https://arabic.rt.com/rss/' },
-    { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
+    { name: 'TSA Algérie',   url: 'https://www.tsa-algerie.com/feed/' },
   ],
   sports: [
-    // ── مصادر جزائرية رياضية متخصصة (أولوية قصوى) ──
-    { name: 'الهداف',               url: 'https://www.elheddaf.com/feed' },
-    { name: 'APS رياضة',            url: 'https://www.aps.dz/ar/sport/feed' },
-    { name: 'Sport DZ',             url: 'https://www.sport-dz.com/feed/' },
-    { name: 'سبورت 360 عربي',       url: 'https://arabic.sport360.com/feed/' },
-    { name: 'FilGoal',              url: 'https://www.filgoal.com/feed/' },
-    { name: 'كووورة',               url: 'https://www.kooora.com/?feed=rss' },
-    // ── Google News: الخضر / محاربو الصحراء / المنتخب الجزائري ──
-    { name: 'Google الخضر',         url: 'https://news.google.com/rss/search?q=%22%D8%A7%D9%84%D8%AE%D8%B6%D8%B1%22+%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
-    { name: 'Google محاربو الصحراء', url: 'https://news.google.com/rss/search?q=%22%D9%85%D8%AD%D8%A7%D8%B1%D8%A8%D9%88+%D8%A7%D9%84%D8%B5%D8%AD%D8%B1%D8%A7%D8%A1%22&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
-    { name: 'Google المنتخب الجزائري', url: 'https://news.google.com/rss/search?q=%28site%3Aennaharonline.com+OR+site%3Aechoroukonline.com+OR+site%3Aelkhabar.com+OR+site%3Aelbilad.net+OR+site%3Aelhayatalarabiya.dz+OR+site%3Aaps.dz+OR+site%3Aelheddaf.com%29+%22%D8%A7%D9%84%D9%85%D9%86%D8%AA%D8%AE%D8%A8+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A%22&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
-    { name: 'Google الفريق الوطني',  url: 'https://news.google.com/rss/search?q=%22%D8%A7%D9%84%D9%81%D8%B1%D9%8A%D9%82+%D8%A7%D9%84%D9%88%D8%B7%D9%86%D9%8A%22+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
-    // ── Google News رياضة عامة ──
-    { name: 'Google رياضة جزائر',   url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    // ── Algerian & regional sports ──
+    { name: 'Sport DZ', url: 'https://www.sport-dz.com/feed/' },
+    { name: 'سبورت 360 عربي', url: 'https://arabic.sport360.com/feed/' },
+    { name: 'FilGoal', url: 'https://www.filgoal.com/feed/' },
+    // ── International sports (stable) ──
+    { name: 'BBC Sport', url: 'https://feeds.bbci.co.uk/sport/rss.xml' },
+    { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
+    { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
+    // ── Google News Sports Algeria ──
+    { name: 'Google رياضة جزائر', url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'Google كرة قدم جزائر', url: 'https://news.google.com/rss/search?q=%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-    // ── International sports ──
-    { name: 'BBC Sport Football',   url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
-    { name: 'ESPN Soccer',          url: 'https://www.espn.com/espn/rss/soccer/news' },
-    { name: 'CAF Football',         url: 'https://www.cafonline.com/rss-feed/' },
   ],
   tech: [
     { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
@@ -9828,10 +7811,7 @@ function detectFootballQuery(msg) {
     'مباراة', 'مباريات', 'نتيجة', 'نتائج', 'هدف', 'أهداف', 'بطولة', 'ملعب', 'تصفيات',
     'كرة القدم', 'الكرة', 'لاعب', 'مدرب', 'فريق', 'فرق', 'كأس', 'رياضة كرة',
     // Arabic — competitions
-    // ⚠️ لا تضف كلمة 'يورو' وحدها — ستطابق "اليورو" كعملة (سعر الدولار واليورو...)
-    // استخدم صيغاً محددة فقط
-    'دوري أبطال', 'دوري الأبطال', 'تشامبيونز ليغ', 'كأس العالم', 'مونديال',
-    'يورو 2024', 'يورو 2025', 'يورو 2026', 'بطولة يورو', 'يورو كأس', 'أمم أوروبا',
+    'دوري أبطال', 'دوري الأبطال', 'تشامبيونز ليغ', 'يورو', 'كأس العالم', 'مونديال',
     'الدوري الإسباني', 'الليغا', 'الدوري الإنجليزي', 'البريميرليغ', 'بريميرليق',
     'الدوري الألماني', 'البوندسليغا', 'الدوري الإيطالي', 'السيريا', 'الدوري الفرنسي',
     'أمم أفريقيا', 'كان', 'أمم أوروبا', 'كاف', 'فيفا', 'يويفا',
@@ -10016,72 +7996,43 @@ const NATIONAL_TEAMS = [
   'اليابان','كوريا','الصين','بوليفيا','الولايات المتحدة','أمريكا'
 ]
 
-// ── كلمات السياق الزمني المشتركة (تُستخدم في كل أنماط الكشف) ──────────────────
-const _MATCH_LIVE_KW     = /(?:الآن|مباشر|مباشرة|جارية|درك|هذه\s+اللحظة|الوقت\s+الإضافي|الشوط|en\s+direct|live\s+now)/i
-const _MATCH_PAST_KW     = /(?:لعبت|انتهت|انتهى|نتيجة|نتائج|فاز|ربح|هزم|كانت?|سجّل|آخر\s+مباراة|أمس|البارح|الأسبوع\s+(?:الماضي|الفارط)|الشهر\s+الماضي|في\s+\d{4}|مباراة\s+ال(?:أمس|بارح|ماضية)|أرشيف|تاريخ\s*المباراة|مباراة\s+(?:قديمة|سابقة)|كأس\s+\d{4}|مونديال\s+\d{4}|كان\s+\d{4})/i
-const _MATCH_UPCOMING_KW = /(?:ستلعب|ستُقام|ستُجرى|القادمة?|غداً?|بعد\s+غد|الأسبوع\s+القادم|الشهر\s+القادم|موعد|متى\s+ست|برنامج|مقرر|المرتقبة?|(?:الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد)\s+(?:القادم)?)/i
-// كلمات تدل على سياق رياضي/مباراة (واسعة النطاق)
-const _MATCH_CONTEXT_KW  = /(?:مباراة|مباريات|لقاء|لقاءات|مواجهة|مواجهات|نتيجة|نتائج|ماتش|match|منتخب|فريق|تاريخ|تاريخياً|سبق|كيف|متى|أين|ماذا|تكلم|أخبرني|هل لعب|يلعبان|يتواجهان|ضد|vs|تاريخ.*مباريات|WC|كأس\s*العالم|مونديال|كأس|بطولة|تصفيات|ودية)/i
-
-function _detectMatchTemporal(msg) {
-  if (_MATCH_LIVE_KW.test(msg))     return 'LIVE'
-  if (_MATCH_PAST_KW.test(msg))     return 'PAST'
-  if (_MATCH_UPCOMING_KW.test(msg)) return 'UPCOMING'
-  return 'UNKNOWN'
-}
-
-function _buildMatchVsResult(team1, team2, temporal = null) {
-  const t = temporal || _detectMatchTemporal('')
-  return {
-    isMatchVs: true, team1, team2, temporal: t,
-    searchQuery:  `${team1} ضد ${team2} مباراة نتيجة`,
-    fixtureQuery: `${team1} vs ${team2} match`,
-  }
-}
-
 function detectMatchVsQuery(msg) {
   if (!msg || msg.length < 4) return null
-  const temporal = _detectMatchTemporal(msg)
 
-  // ── النمط ①: "X ضد Y" / "X vs Y" / "X × Y" ─────────────────────────────
+  // نمط "فريق1 ضد فريق2" أو "فريق1 vs فريق2"
   const vsMatch = msg.match(
-    /([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×x]{1,22})\s+(?:ضد|vs\.?|×|x)\s+([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×x]{1,22})/iu
+    /([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?]{1,22})\s+(?:ضد|vs\.?)\s+([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?]{1,22})/iu
   )
-  if (vsMatch) return _buildMatchVsResult(vsMatch[1].trim(), vsMatch[2].trim(), temporal)
+  if (vsMatch) {
+    const team1 = vsMatch[1].trim()
+    const team2 = vsMatch[2].trim()
 
-  // ── النمط ②: "بين X وY" / "بين X والY" / "بين X و Y" ──────────────────
-  const betweenMatch = msg.match(
-    /بين\s+([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×]{1,22})\s+و(ال)?([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×]{1,22})/iu
-  )
-  if (betweenMatch) {
-    const t1 = betweenMatch[1].trim()
-    const t2 = ((betweenMatch[2] || '') + betweenMatch[3]).trim()
-    return _buildMatchVsResult(t1, t2, temporal)
+    // تصنيف زمني
+    const LIVE_KW     = /(?:الآن|مباشر|مباشرة|جارية|درك|هذه\s+اللحظة|الوقت\s+الإضافي|الشوط|en\s+direct|live\s+now)/i
+    const PAST_KW     = /(?:لعبت|انتهت|انتهى|نتيجة|نتائج|فاز|ربح|هزم|كانت?|سجّل|آخر\s+مباراة|أمس|البارح|الأسبوع\s+(?:الماضي|الفارط)|الشهر\s+الماضي|في\s+\d{4}|مباراة\s+ال(?:أمس|بارح|ماضية)|أرشيف|تاريخ\s*المباراة|مباراة\s+(?:قديمة|سابقة)|كأس\s+\d{4}|مونديال\s+\d{4}|كان\s+\d{4})/i
+    const UPCOMING_KW = /(?:ستلعب|ستُقام|ستُجرى|القادمة?|غداً?|بعد\s+غد|الأسبوع\s+القادم|الشهر\s+القادم|موعد|متى\s+ست|برنامج|مقرر|المرتقبة?|(?:الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد)\s+(?:القادم)?)/i
+
+    let temporal = 'UNKNOWN'
+    if (LIVE_KW.test(msg))          temporal = 'LIVE'
+    else if (PAST_KW.test(msg))     temporal = 'PAST'
+    else if (UPCOMING_KW.test(msg)) temporal = 'UPCOMING'
+
+    const searchQuery  = `${team1} ضد ${team2} مباراة نتيجة`
+    const fixtureQuery = `${team1} vs ${team2} match`
+    return { isMatchVs: true, team1, team2, temporal, searchQuery, fixtureQuery }
   }
 
-  // ── النمط ③: "X أمام Y" / "X مقابل Y" / "X في مواجهة Y" / "X لقاء Y" / "X يواجه Y" ─
-  // ⚠️ حارس العملة: "اليورو مقابل الدينار" / "الدولار مقابل الدينار" ليست مباريات
-  const _CURRENCY_GUARD_RE = /(?:دولار|يورو|دينار|جنيه|ريال|درهم|فرنك|ليرة|ين|صرف|تحويل|عملة|USD|EUR|GBP|DZD|SAR|AED|TND|MAD|EGP)/i
-  const faceMatch = msg.match(
-    /([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×x]{1,22})\s+(?:أمام|مقابل|في\s+مواجهة|لقاء|يواجه|تواجه|يلعب\s+(?:ضد|أمام|مع)|contre|face\s+to\s+face)\s+([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×x]{1,22})/iu
-  )
-  if (faceMatch && !_CURRENCY_GUARD_RE.test(faceMatch[1]) && !_CURRENCY_GUARD_RE.test(faceMatch[2])) {
-    return _buildMatchVsResult(faceMatch[1].trim(), faceMatch[2].trim(), temporal)
-  }
-
-  // ── النمط ④: منتخبان معروفان في نفس الجملة + سياق رياضي ────────────────
-  // (يغطي "الجزائر والأرجنتين" / "الجزائر مع الأرجنتين" / أي ذكر للاثنين معاً)
-  const hasMatchCtx = _MATCH_CONTEXT_KW.test(msg)
+  // نمط "منتخب1 منتخب2" (اسمان وطنيان بجوار بعض بدون "ضد")
   for (let i = 0; i < NATIONAL_TEAMS.length; i++) {
-    if (!msg.includes(NATIONAL_TEAMS[i])) continue
     for (let j = 0; j < NATIONAL_TEAMS.length; j++) {
-      if (i === j || !msg.includes(NATIONAL_TEAMS[j])) continue
+      if (i === j) continue
       const t1 = NATIONAL_TEAMS[i], t2 = NATIONAL_TEAMS[j]
-      // متجاوران مباشرةً (بدون/مع "و")
-      const adjacent = new RegExp(`${t1}\\s+(?:و(?:ال)?)?${t2}`, 'i')
-      if (adjacent.test(msg)) return _buildMatchVsResult(t1, t2, temporal)
-      // أو: مجرد ذكر الاثنين مع وجود كلمة رياضية
-      if (hasMatchCtx) return _buildMatchVsResult(t1, t2, temporal)
+      const pairRe = new RegExp(`${t1}\\s+${t2}`, 'i')
+      if (pairRe.test(msg)) {
+        const searchQuery  = `${t1} ضد ${t2} مباراة نتيجة`
+        const fixtureQuery = `${t1} vs ${t2} match`
+        return { isMatchVs: true, team1: t1, team2: t2, temporal: 'UNKNOWN', searchQuery, fixtureQuery }
+      }
     }
   }
 
@@ -10163,7 +8114,7 @@ async function fetchRSSFeed(feed) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 8000)
     const resp = await fetch(feed.url, {
-      headers: { 'User-Agent': 'DZ-GPT-Agent/1.0 (+https://dzagent.app)', 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
+      headers: { 'User-Agent': 'DZ-GPT-Agent/1.0 (+https://dz-gpt.vercel.app)', 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
       signal: controller.signal,
     })
     clearTimeout(timer)
@@ -10243,9 +8194,6 @@ function extractNewsSubject(msg) {
 
   // Strip Arabic preposition patterns (order matters: longest first)
   const arPrefixes = [
-    // ✅ FIX: "ما هي أبرز/أهم/أحدث أخبار X" — فيه كلمة وصفية في الوسط
-    /^(ما هي |ما هو |ما |هل )?(أبرز|أهم|أحدث|آخر|أحدث)\s+(أخبار|خبر)\s+/i,
-    /^(أعطني |اعطني |اريد |أريد )?(أبرز|أهم|أحدث|آخر)\s+(أخبار|خبر)\s+/i,
     /^(ما هي |ما هو |ما |هل )?(آخر الأخبار|أحدث الأخبار|آخر أخبار|أخبار|خبر) (عن|حول|بخصوص|بشأن|ل|الخاصة ب|المتعلقة ب)\s+/i,
     /^(أعطني |اعطني |اريد |أريد |أخبرني عن |قدم لي |قدملي )?(آخر الأخبار|أحدث الأخبار|آخر أخبار|أخبار|خبر) (عن|حول|بخصوص|بشأن|ل)\s+/i,
     /^(ما آخر|ما أخبار|آخر) أخبار\s+/i,
@@ -10272,9 +8220,6 @@ function extractNewsSubject(msg) {
   // If nothing was stripped, the subject is ambiguous — don't return it
   if (s.toLowerCase() === msg.trim().toLowerCase()) return null
 
-  // Strip trailing temporal suffixes: "هذا الأسبوع", "هذا الشهر", "اليوم", "الآن", "الأخيرة"
-  s = s.replace(/\s+(هذا\s+(الأسبوع|الشهر|العام|اليوم)|الأسبوع\s+الماضي|الشهر\s+الماضي|اليوم|الآن|الأخيرة|الأخير|مؤخراً|حديثاً|this\s+week|this\s+month|today|recently|lately)\s*$/i, '').trim()
-
   // Strip trailing punctuation / question marks
   s = s.replace(/[\u061F?!،,\.]+$/, '').trim()
 
@@ -10283,9 +8228,6 @@ function extractNewsSubject(msg) {
   const genericTerms = [
     'الجزائر','algeria','algérie','الاقتصاد','السياسة','الرياضة','اليوم','العالم',
     'economy','politics','sport','world','today','الأخبار','news',
-    // ✅ FIX: مصطلحات التقنية/الذكاء الاصطناعي عامة — تعامَل مع مسار _isTechAIQuery المخصص
-    'ذكاء اصطناعي','الذكاء الاصطناعي','الذكاء','تكنولوجيا','التكنولوجيا',
-    'تقنية','التقنية','ai','tech','technology','artificial intelligence',
   ]
   if (genericTerms.some(g => s.toLowerCase() === g.toLowerCase())) return null
 
@@ -10294,12 +8236,13 @@ function extractNewsSubject(msg) {
 
 
 // ════════════════════════════════════════════════════════════════════════════
-// 🇩🇿 ECONOMY INTELLIGENCE MODULE v2
+// 🇩🇿 ECONOMY INTELLIGENCE MODULE
 // ════════════════════════════════════════════════════════════════════════════
-// ثلاثة أوضاع:
-// - live_news  → "أخبار الاقتصاد الجزائري" → RSS مباشر من الصحف الجزائرية (آني + يومي)
-// - events     → "أحداث اقتصادية"           → ملتقيات، مؤتمرات، معارض، ندوات
-// - wiki_data  → "اقتصاد الجزائر"           → Wikipedia + Wikidata (تعريف + أرقام هيكلية)
+
+// اكتشف نوع الاستعلام الاقتصادي:
+// - live_news  → "آخر الأخبار الاقتصادية" → بحث حي + RSS من الأحدث إلى الأقدم
+// - wiki_data  → "اقتصاد الجزائر"         → Wikipedia + Wikidata بيانات هيكلية
+// - null       → ليس استعلاماً اقتصادياً
 function detectEconomyIntent(msg) {
   if (!msg) return { mode: null, isEconomy: false }
   const lower = msg.toLowerCase()
@@ -10308,89 +8251,58 @@ function detectEconomyIntent(msg) {
     'اقتصاد','اقتصادي','اقتصادية','ميزانية','ناتج محلي','gdp','pib','تضخم','نمو اقتصادي',
     'استثمار','بورصة','عملة','سعر الصرف','احتياطي الصرف','الصادرات','الواردات',
     'البترول','النفط','الغاز','المحروقات','ديون','عجز','فائض','تجارة',
-    'بنك','دينار','دولار','سعر الدولار','مؤشر','اقتصادية الجزائر','أسعار','تجارة خارجية',
-    'ضريبة','جمارك','صادرات','واردات','ميزان تجاري','احتياطي','تنمية','فلاحة','صناعة',
+    'بنك','دينار','دولار اقتصاد','سعر الدولار','مؤشر','اقتصادية الجزائر',
     'economy','economic','finance','investment','budget','inflation','gdp','exports','imports',
     'oil revenue','gas','hydrocarbons','trade balance','fiscal','monetary','growth rate',
-    'économie','croissance','inflation','investissement','budget','réserves','finances',
+    'économie','croissance','inflation','investissement','budget','réserves',
   ]
   if (!economyKw.some(k => lower.includes(k))) return { mode: null, isEconomy: false }
-
-  // أحداث اقتصادية → ملتقيات، مؤتمرات، معارض، ندوات
-  const eventsKw = [
-    'ملتقى','مؤتمر','منتدى','معرض','صالون','ندوة','لقاء','قمة اقتصادية','فعاليات','تظاهرة',
-    'forum','conférence','salon','exposition','sommet','événement','colloque',
-    'forum économique','salon international','meeting','summit',
-  ]
-  const isEvents = eventsKw.some(k => lower.includes(k))
-
-  // بيانات/معلومات هيكلية → تعريف اقتصاد الجزائر من Wikipedia
-  const wikiDataKw = [
-    'معلومات','بيانات','أرقام','إحصائيات','ما هو','ما هي','ما هو اقتصاد','شرح','تعريف',
-    'قطاعات','هيكل الاقتصاد','مساهمة','نسبة','تاريخ الاقتصاد','نبذة','نظرة عامة',
-    'information','data','statistics','what is','overview','structure','sectors','define',
-    'informations','données','statistiques','aperçu','définition','présentation',
-  ]
-  const isWikiData = wikiDataKw.some(k => lower.includes(k))
 
   // أخبار اقتصادية حية → كلمات تدل على الحداثة والأخبار
   const liveNewsKw = [
     'آخر','أحدث','جديد','اليوم','الآن','عاجل','أخبار','هذا الأسبوع','هذا الشهر',
     'مستجدات','تطورات','تحديث','ارتفع','انخفض','أعلن','قرار','إجراء','تقرير','إحصاء',
     'latest','today','breaking','recent','update','news','announced','report','rise','fall',
-    'dernières','aujourd','récent','hausse','baisse','annonce','actualité',
+    'dernières','aujourd','récent','hausse','baisse','annonce',
   ]
   const isLiveNews = liveNewsKw.some(k => lower.includes(k))
 
-  // اقتصاد + الجزائر بدون كلمات أخبار → wiki_data
+  // بيانات/معلومات هيكلية → كلمات تدل على المعلومات والأرقام
+  const wikiDataKw = [
+    'معلومات','بيانات','أرقام','إحصائيات','ما هو','ما هي','ما هو اقتصاد','شرح','تعريف',
+    'قطاعات','هيكل الاقتصاد','مساهمة','نسبة','تاريخ الاقتصاد',
+    'information','data','statistics','what is','overview','structure','sectors',
+    'informations','données','statistiques','aperçu',
+  ]
+  const isWikiData = wikiDataKw.some(k => lower.includes(k))
+
+  // اقتصاد + الجزائر بدون كلمات أخبار → wiki_data (إلا إذا كانت هناك كلمة أخبار)
   const isDZEconomy = /(?:اقتصاد|اقتصادي|اقتصادية).{0,20}(?:الجزائر|جزائر|dz|algeria)/i.test(msg)
     || /(?:الجزائر|algeria).{0,20}(?:اقتصاد|اقتصادي|اقتصادية|economy)/i.test(msg)
 
-  // الأولويات: events < live_news < wiki_data < live_news (default)
-  if (isEvents && !isLiveNews) return { mode: 'events', isEconomy: true }
+  // "أخبار" دائماً تعني live_news — حتى لو كانت مع "اقتصاد الجزائر"
   if (isLiveNews) return { mode: 'live_news', isEconomy: true }
-  if (isWikiData || (isDZEconomy && !isLiveNews && !isEvents)) return { mode: 'wiki_data', isEconomy: true }
-  return { mode: 'live_news', isEconomy: true } // الافتراضي: أخبار حية
+  if (isWikiData || (isDZEconomy && !isLiveNews)) return { mode: 'wiki_data', isEconomy: true }
+  return { mode: 'live_news', isEconomy: true } // الافتراضي: بحث حي
 }
 
-// ── تغذية RSS اقتصادية جزائرية مخصصة ─────────────────────────────────────
-// الأولوية: RSS مباشر من أقسام الاقتصاد في الصحف الجزائرية أولاً
-// ثم Google News site: للمصادر التي تحجب الزواحف
+// تغذية RSS اقتصادية جزائرية مخصصة
 const DZ_ECONOMY_RSS_FEEDS = [
-  // ✅ RSS مباشر من أقسام الاقتصاد (أعلى جودة + أحدث)
-  { name: 'النهار اقتصاد',          url: 'https://www.ennaharonline.com/category/economy/feed/',                                                                                    priority: 1 },
-  { name: 'البلاد اقتصاد',          url: 'https://www.elbilad.net/ar/category/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF/feed/',                                                        priority: 2 },
-  { name: 'الشروق اقتصاد',          url: 'https://www.echoroukonline.com/category/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF/feed',                                                     priority: 3 },
-  { name: 'الخبر اقتصاد',           url: 'https://www.elkhabar.com/ar/category/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF/feed/',                                                      priority: 4 },
-  // 🔄 Google News site: — للمصادر التي لا تدعم RSS مباشر على قسم الاقتصاد
-  { name: 'وكالة APS اقتصاد',       url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar',                      priority: 5 },
-  { name: 'TSA اقتصاد',             url: 'https://news.google.com/rss/search?q=site%3Atsa-algerie.com+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar',            priority: 6 },
-  { name: 'الوطن اقتصاد',           url: 'https://news.google.com/rss/search?q=site%3Aelwatan.com+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar', priority: 7 },
-  { name: 'المساء اقتصاد',          url: 'https://news.google.com/rss/search?q=site%3Aelmassa.com+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar',                priority: 8 },
-  { name: 'الجمهورية اقتصاد',       url: 'https://news.google.com/rss/search?q=site%3Aaldjumhouria.com+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar',            priority: 9 },
-  // 📡 Google News DZ اقتصاد — مواضيع اقتصادية متنوعة
-  { name: 'Google اقتصاد الجزائر',  url: 'https://news.google.com/rss/search?q=%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar', priority: 10 },
-  { name: 'Google استثمار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D8%B3%D8%AA%D8%AB%D9%85%D8%A7%D8%B1+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',  priority: 11 },
-  { name: 'Google محروقات الجزائر', url: 'https://news.google.com/rss/search?q=%D9%85%D8%AD%D8%B1%D9%88%D9%82%D8%A7%D8%AA+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',  priority: 12 },
-  { name: 'Google سعر الصرف الجزائر', url: 'https://news.google.com/rss/search?q=%D8%B3%D8%B9%D8%B1+%D8%A7%D9%84%D8%B5%D8%B1%D9%81+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar', priority: 13 },
-  { name: 'Google ميزانية الجزائر', url: 'https://news.google.com/rss/search?q=%D9%85%D9%8A%D8%B2%D8%A7%D9%86%D9%8A%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',   priority: 14 },
+  { name: 'Google اقتصاد الجزائر',    url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google ميزانية الجزائر',   url: 'https://news.google.com/rss/search?q=%D9%85%D9%8A%D8%B2%D8%A7%D9%86%D9%8A%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google استثمار الجزائر',   url: 'https://news.google.com/rss/search?q=%D8%A7%D8%B3%D8%AA%D8%AB%D9%85%D8%A7%D8%B1+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google تضخم الجزائر',      url: 'https://news.google.com/rss/search?q=%D8%AA%D8%B6%D8%AE%D9%85+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google سعر الصرف الجزائر', url: 'https://news.google.com/rss/search?q=%D8%B3%D8%B9%D8%B1+%D8%A7%D9%84%D8%B5%D8%B1%D9%81+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google محروقات الجزائر',   url: 'https://news.google.com/rss/search?q=%D9%85%D8%AD%D8%B1%D9%88%D9%82%D8%A7%D8%AA+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // المصادر المحلية الجزائرية
+  { name: 'النهار اقتصاد',            url: 'https://news.google.com/rss/search?q=site%3Aennaharonline.com+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'البلاد اقتصاد',            url: 'https://news.google.com/rss/search?q=site%3Aelbilad.net+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 
-// ── تغذية RSS خاصة بالأحداث الاقتصادية (ملتقيات، مؤتمرات، معارض) ───────────
-const DZ_ECONOMY_EVENTS_FEEDS = [
-  { name: 'Google ملتقى اقتصادي',   url: 'https://news.google.com/rss/search?q=%D9%85%D9%84%D8%AA%D9%82%D9%89+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google مؤتمر اقتصادي',   url: 'https://news.google.com/rss/search?q=%D9%85%D8%A4%D8%AA%D9%85%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google صالون الجزائر',   url: 'https://news.google.com/rss/search?q=%D8%B5%D8%A7%D9%84%D9%88%D9%86+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google منتدى الأعمال',   url: 'https://news.google.com/rss/search?q=%D9%85%D9%86%D8%AA%D8%AF%D9%89+%D8%A7%D9%84%D8%A3%D8%B9%D9%85%D8%A7%D9%84+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'APS أحداث اقتصادية',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D9%85%D9%84%D8%AA%D9%82%D9%89+%D9%85%D8%A4%D8%AA%D9%85%D8%B1+%D9%85%D8%B9%D8%B1%D8%B6&hl=ar&gl=DZ&ceid=DZ:ar' },
-]
-
-// كاش الأخبار الاقتصادية (5 دقائق) + الأحداث (15 دقيقة)
+// كاش الأخبار الاقتصادية (4 دقائق)
 const DZ_ECONOMY_NEWS_CACHE = new Map()
-const DZ_ECONOMY_NEWS_TTL   = 5 * 60 * 1000
-const DZ_ECONOMY_EVENTS_TTL = 15 * 60 * 1000
+const DZ_ECONOMY_NEWS_TTL = 4 * 60 * 1000
 
-// ── جلب أخبار الاقتصاد الجزائري الآنية من مصادر متعددة ───────────────────
 async function fetchDZEconomyNews({ force = false } = {}) {
   const KEY = 'dz_economy_news'
   const cached = DZ_ECONOMY_NEWS_CACHE.get(KEY)
@@ -10402,64 +8314,28 @@ async function fetchDZEconomyNews({ force = false } = {}) {
   settled.forEach((r, i) => {
     if (r.status !== 'fulfilled' || !r.value?.items?.length) return
     sources.add(DZ_ECONOMY_RSS_FEEDS[i].name)
-    r.value.items.forEach(item => allItems.push({ ...item, _src: DZ_ECONOMY_RSS_FEEDS[i].name, _priority: DZ_ECONOMY_RSS_FEEDS[i].priority || 99 }))
+    r.value.items.forEach(item => allItems.push({ ...item, _src: DZ_ECONOMY_RSS_FEEDS[i].name }))
   })
 
-  // الأحدث أولاً مع مراعاة الأولوية المصدر
-  allItems.sort((a, b) => {
-    const ta = a.pubDate ? new Date(a.pubDate).getTime() : 0
-    const tb = b.pubDate ? new Date(b.pubDate).getTime() : 0
-    if (Math.abs(tb - ta) > 3600000) return tb - ta // فرق ساعة → الأحدث أولاً
-    return (a._priority || 99) - (b._priority || 99) // في نفس الساعة → الأولوية بالمصدر
-  })
-
-  // إزالة التكرارات (نفس العنوان)
-  const seen = new Set()
-  const unique = allItems.filter(item => {
-    const fp = (item.title || '').slice(0, 60).toLowerCase().replace(/[^\u0600-\u06FFa-z0-9]/g, '')
-    if (seen.has(fp)) return false
-    seen.add(fp)
-    return true
-  })
-
-  const result = { items: unique.slice(0, 80), sources: [...sources], ts: Date.now() }
-  DZ_ECONOMY_NEWS_CACHE.set(KEY, result)
-  console.log(`[DZ-Economy] Cached ${result.items.length} articles from: ${[...sources].join(', ')}`)
-  return result
-}
-
-// ── جلب الأحداث الاقتصادية (ملتقيات، مؤتمرات، معارض، ندوات) ─────────────
-async function fetchDZEconomyEvents({ force = false } = {}) {
-  const KEY = 'dz_economy_events'
-  const cached = DZ_ECONOMY_NEWS_CACHE.get(KEY)
-  if (!force && cached && Date.now() - cached.ts < DZ_ECONOMY_EVENTS_TTL) return cached
-
-  const settled = await Promise.allSettled(DZ_ECONOMY_EVENTS_FEEDS.map(f => fetchRSSFeed(f)))
-  const allItems = []
-  const sources = new Set()
-  settled.forEach((r, i) => {
-    if (r.status !== 'fulfilled' || !r.value?.items?.length) return
-    sources.add(DZ_ECONOMY_EVENTS_FEEDS[i].name)
-    r.value.items.forEach(item => allItems.push({ ...item, _src: DZ_ECONOMY_EVENTS_FEEDS[i].name }))
-  })
-
+  // الأحدث أولاً دائماً
   allItems.sort((a, b) => {
     const ta = a.pubDate ? new Date(a.pubDate).getTime() : 0
     const tb = b.pubDate ? new Date(b.pubDate).getTime() : 0
     return tb - ta
   })
 
+  // إزالة التكرارات (نفس العنوان)
   const seen = new Set()
   const unique = allItems.filter(item => {
-    const fp = (item.title || '').slice(0, 60).toLowerCase().replace(/[^\u0600-\u06FFa-z0-9]/g, '')
+    const fp = (item.title || '').slice(0, 50).toLowerCase().replace(/[^\u0600-\u06FFa-z0-9]/g, '')
     if (seen.has(fp)) return false
     seen.add(fp)
     return true
   })
 
-  const result = { items: unique.slice(0, 30), sources: [...sources], ts: Date.now() }
+  const result = { items: unique.slice(0, 60), sources: [...sources], ts: Date.now() }
   DZ_ECONOMY_NEWS_CACHE.set(KEY, result)
-  console.log(`[DZ-Economy-Events] Cached ${result.items.length} events from: ${[...sources].join(', ')}`)
+  console.log(`[DZ-Economy] Cached ${result.items.length} articles from: ${[...sources].join(', ')}`)
   return result
 }
 
@@ -10510,104 +8386,38 @@ async function fetchAlgeriaEconomyWiki() {
   }
 }
 
-// ── بناء سياق الأخبار الاقتصادية للـ AI ────────────────────────────────────
-// يميّز بين: 🔴 عاجل (< 3س) | 📰 اليوم (< 24س) | 📅 هذا الأسبوع (< 7 أيام)
+// بناء سياق الأخبار الاقتصادية للـ AI — الأحدث أولاً دائماً
 function buildEconomyNewsContext(news) {
   if (!news?.items?.length) return ''
   const now = Date.now()
   const ageMin = Math.floor((now - news.ts) / 60000)
   const dateStr = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
-  // تصنيف الأخبار حسب عمرها
-  const breaking = []  // < 3 ساعات → عاجل
-  const today    = []  // 3س → 24س → اليوم
-  const recent   = []  // 24س → 7 أيام → هذا الأسبوع
-
-  for (const item of news.items.slice(0, 60)) {
-    if (!item.title) continue
-    const pubMs = item.pubDate ? new Date(item.pubDate).getTime() : 0
-    const ageH  = pubMs ? (now - pubMs) / 3600000 : 999
-    if (ageH < 3)        breaking.push({ ...item, _ageH: ageH })
-    else if (ageH < 24)  today.push({ ...item, _ageH: ageH })
-    else if (ageH < 168) recent.push({ ...item, _ageH: ageH })
-  }
-
-  const _fmtAge = (ageH) => {
-    if (ageH < 1)   return '(منذ دقائق)'
-    if (ageH < 24)  return `(منذ ${Math.floor(ageH)}س)`
-    return `(${Math.floor(ageH/24)} يوم)`
-  }
-
-  const _renderItems = (items, max = 10) => {
-    let out = ''
-    let c = 0
-    for (const item of items.slice(0, max)) {
-      out += `**${++c}.** ${item.title} ${_fmtAge(item._ageH)}`
-      if (item._src) out += ` — *${item._src}*`
-      out += `\n`
-    }
-    return out
-  }
-
   let ctx = `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-  ctx += `📈 **أخبار الاقتصاد الجزائري** — ${dateStr}`
+  ctx += `📈 **آخر الأخبار الاقتصادية الجزائرية** — ${dateStr}`
   ctx += ageMin < 1 ? ' *(حديثة للتو)*' : ` *(منذ ${ageMin} دق)*`
-  ctx += `\n**المصادر:** ${news.sources.slice(0,8).join(' · ')}\n`
+  ctx += `\n**المصادر:** ${news.sources.join(' · ')}\n`
   ctx += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-  ctx += `> ⚠️ **قاعدة إلزامية**: استخدم هذه الأخبار فقط — لا تعتمد على بيانات التدريب القديمة.\n`
-  ctx += `> الترتيب: الأحدث أولاً ← رتّب إجابتك كذلك.\n\n`
+  ctx += `> ⚠️ **قاعدة إلزامية**: استخدم هذه الأخبار الحديثة فقط — لا تعتمد على بيانات التدريب القديمة.\n`
+  ctx += `> **الترتيب: الأحدث أولاً**\n\n`
 
-  if (breaking.length > 0) {
-    ctx += `## 🔴 عاجل — أخبار آنية (آخر 3 ساعات)\n`
-    ctx += _renderItems(breaking, 8)
-    ctx += `\n`
-  }
-  if (today.length > 0) {
-    ctx += `## 📰 أخبار اليوم (3 → 24 ساعة)\n`
-    ctx += _renderItems(today, 10)
-    ctx += `\n`
-  }
-  if (recent.length > 0) {
-    ctx += `## 📅 هذا الأسبوع (أقل من 7 أيام)\n`
-    ctx += _renderItems(recent, 8)
-    ctx += `\n`
-  }
-  if (breaking.length === 0 && today.length === 0 && recent.length === 0) {
-    ctx += `> ⚠️ لم تُصنَّف أخبار — عرض آخر ${Math.min(news.items.length, 15)} خبر:\n`
-    ctx += _renderItems(news.items.map(i => ({ ...i, _ageH: 999 })), 15)
-  }
-
-  ctx += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-  ctx += `> 💡 تعليمات للـ AI: ابدأ بالعاجل ثم اليوم ثم الأسبوع. اذكر المصدر والوقت لكل خبر. لا تخترع أرقاماً.\n`
-  return ctx
-}
-
-// ── بناء سياق الأحداث الاقتصادية للـ AI ────────────────────────────────────
-function buildEconomyEventsContext(events) {
-  if (!events?.items?.length) return ''
-  const now = Date.now()
-  const dateStr = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-
-  let ctx = `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-  ctx += `📅 **الأحداث الاقتصادية الجزائرية** (ملتقيات · مؤتمرات · معارض · ندوات)\n`
-  ctx += `${dateStr} | المصادر: ${events.sources.join(' · ')}\n`
-  ctx += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-  ctx += `> استخدم هذه البيانات لعرض الأحداث الاقتصادية. اذكر المصدر والتاريخ لكل حدث.\n\n`
-
-  let c = 0
-  for (const item of events.items.slice(0, 15)) {
-    if (!item.title) continue
+  let count = 0
+  for (const item of news.items.slice(0, 20)) {
+    const title = item.title || ''
+    if (!title) continue
     let dateLabel = ''
     if (item.pubDate) {
       try {
         const ageH = (now - new Date(item.pubDate).getTime()) / 3600000
-        if (ageH < 24)  dateLabel = ` (منذ ${Math.floor(ageH)} ساعة)`
-        else dateLabel = ` (${new Date(item.pubDate).toLocaleDateString('ar-DZ')})`
+        if (ageH < 1) dateLabel = ' *(منذ دقائق)*'
+        else if (ageH < 24) dateLabel = ` *(منذ ${Math.floor(ageH)}س)*`
+        else if (ageH < 72) dateLabel = ` *(${Math.floor(ageH/24)} يوم)*`
+        else dateLabel = ` *(${new Date(item.pubDate).toLocaleDateString('ar-DZ')})*`
       } catch {}
     }
-    ctx += `**${++c}.** ${item.title}${dateLabel}`
-    if (item._src) ctx += ` — *${item._src}*`
-    ctx += `\n`
+    ctx += `**${++count}.** ${title}${dateLabel}`
+    if (item._src) ctx += ` — **${item._src}**`
+    ctx += `\n\n`
   }
   ctx += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
   return ctx
@@ -10646,13 +8456,6 @@ function isNewspaperHeadlineQuery(msg) {
     'جريدة اليوم','جرنان','الجرنان','عناوين اليوم','شنو كتب','شكون قال',
   ]
   return newspaperKw.some(k => lower.includes(k))
-}
-
-// ── International / World News Query Detection ────────────────────────────────
-// يكتشف استعلامات الأخبار الدولية/العالمية التي تحتاج مصادر غير جزائرية
-function isInternationalNewsQuery(msg) {
-  if (!msg) return false
-  return /دولي[ةً]?|عالمي[ةً]?|أبرز الأحداث|أحداث العالم|أحداث\s+دولي|أخبار\s+دولي|أخبار\s+عالمي|الأخبار\s+الدولية|العالمية\s+اليوم|ما\s+يجري\s+في\s+العالم|أخبار\s+العالم|ما\s+(?:أبرز|أهم)\s+الأحداث|أهم\s+الأحداث|أبرز\s+(?:الأحداث|الأخبار)|world\s+news|international\s+news|global\s+news|top\s+news\s+today/i.test(msg)
 }
 
 // ── Web Reader Mode — URL detection & content extraction ─────────────────────
@@ -10805,7 +8608,7 @@ function analyzeQuery(msg) {
   let timeframe = null
   if (/الآن|مباشر|live|en direct|right now|حالياً|هاذ الوقت/i.test(msg)) timeframe = 'live'
   else if (/اليوم|هذا الصباح|الليلة|today|aujourd'hui|ce soir|ليوم|النهار/i.test(msg)) timeframe = 'today'
-  else if (/هذا الأسبوع|آخر|(?<![\u0600-\u06FF])حديث(?![\u0600-\u06FF])|حديثاً|أخير|this week|recent|derniers?|هاذ الجمعة/i.test(msg)) timeframe = 'recent'
+  else if (/هذا الأسبوع|آخر|حديث|أخير|this week|recent|derniers?|هاذ الجمعة/i.test(msg)) timeframe = 'recent'
   else if (/\b(20[0-2][0-9])\b/.test(msg) || /تاريخ|قديم|سابق|منذ|historical|depuis/i.test(msg)) timeframe = 'historical'
 
   // ── 3. Entity Extraction ──────────────────────────────────────────────
@@ -10854,11 +8657,11 @@ function analyzeQuery(msg) {
   // ── 6. Contextual Follow-up Suggestions ──────────────────────────────
   const suggestionsMap = {
     news:        subject
-      ? [`آخر أخبار ${subject} هذا الأسبوع`, `أهم التطورات حول ${subject}`, `مصادر موثوقة عن ${subject}`]
-      : ['💰 أخبار اقتصادية', '🌍 أخبار دولية', '🏛️ أخبار سياسية', '🤖 أخبار التقنية والذكاء الاصطناعي'],
+      ? [`آخر أخبار ${subject} هذا الأسبوع`, `📰 أخبار رياضية`, `💰 أخبار اقتصادية`]
+      : ['📰 أخبار رياضية', '💰 أخبار اقتصادية', '🌍 أخبار دولية', '🏛️ أخبار سياسية'],
     sports:      subject
       ? [`إحصائيات ${subject} هذا الموسم`, `مباريات ${subject} القادمة`, `آخر أخبار ${subject}`]
-      : ['نتائج مباريات اليوم', 'ترتيب الدوري الجزائري', 'آخر أخبار الأندية'],
+      : ['نتائج مباريات اليوم', 'ترتيب الدوري الجزائري', 'نتائج دوري الأبطال'],
     sports_news: subject
       ? [`مسيرة ${subject}`, `إحصائيات ${subject} هذا الموسم`, `أحدث تصريحات ${subject}`]
       : ['أخبار المنتخب الوطني', 'انتقالات الصيف', 'نتائج دوري الأبطال'],
@@ -10874,7 +8677,7 @@ function analyzeQuery(msg) {
     location:    ['أقرب مستشفى', 'مواصلات عامة', 'خريطة الجزائر العاصمة'],
     comparison:  ['مزايا وعيوب كل خيار', 'تجارب المستخدمين', 'الأنسب للسياق الجزائري'],
     admin:       ['الوثائق المطلوبة كاملاً', 'المواعيد والأوقات الرسمية', 'خدمات الكترونية متاحة'],
-    general:     ['💰 أخبار اقتصادية', '🌍 أخبار دولية', '🤖 أخبار الذكاء الاصطناعي', '🇩🇿 معلومات عن الجزائر'],
+    general:     ['📰 أخبار رياضية', '💰 أخبار اقتصادية', '🌍 أخبار دولية'],
   }
   const suggestions = suggestionsMap[questionType] || suggestionsMap.general
 
@@ -10899,13 +8702,6 @@ function buildRSSContext(feedResults, queryType, subject = null, maxAgeDays = 14
   function itemMatchesSubject(item) {
     if (!subjectTokens || subjectTokens.length === 0) return true
     const haystack = ((item.title || '') + ' ' + (item.description || '')).toLowerCase()
-    // ✅ FIX: للموضوعات متعددة الكلمات → ابحث عن العبارة الكاملة أولاً، ثم كل الكلمات (AND)
-    // السابق: some (OR) → يمرّر مقالات تحتوي كلمة واحدة فقط من الموضوع
-    if (subjectTokens.length >= 2) {
-      const fullPhrase = subject ? subject.toLowerCase() : null
-      if (fullPhrase && haystack.includes(fullPhrase)) return true
-      return subjectTokens.every(tok => haystack.includes(tok))
-    }
     return subjectTokens.some(tok => haystack.includes(tok))
   }
 
@@ -10984,9 +8780,9 @@ const DZ_PRIORITY_NEWS_FEEDS = [
   { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed',                                                                                          priority: 3 },
   // 🔄 Google News site: (RSS يعمل عبر Google لأن المصادر المباشرة تحجب البوتات)
   { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar',                                           priority: 4 },
-  { name: 'الجمهورية',     url: 'https://news.google.com/rss/search?q=site%3Aaldjumhouria.com&hl=ar&gl=DZ&ceid=DZ:ar',                                          priority: 5 },
+  { name: 'الوطن',          url: 'https://news.google.com/rss/search?q=site%3Aelwatan.com&hl=ar&gl=DZ&ceid=DZ:ar',                                              priority: 5 },
   { name: 'وكالة APS',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',      priority: 6 },
-  { name: 'الخبر',           url: 'https://www.elkhabar.com/ar/feed/',                                                                                            priority: 7 },
+  { name: 'TSA عربي',       url: 'https://www.tsa-algerie.com/feed/',                                                                                             priority: 7 },
   // 📡 Google News DZ — مكمّل بعد المصادر المحلية
   { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar', priority: 8 },
   { name: 'Google عاجل الجزائر',  url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B9%D8%A7%D8%AC%D9%84&hl=ar&gl=DZ&ceid=DZ:ar',     priority: 9 },
@@ -11039,14 +8835,6 @@ async function fetchDZPriorityNews({ force = false } = {}) {
 }
 
 // بناء سياق الأخبار الجزائرية للـ AI من الكاش
-// يتحقق أن العنوان عربي (يحتوي على أحرف عربية أكثر من اللاتينية)
-function _isArabicTitle(title) {
-  if (!title) return false
-  const arabicChars = (title.match(/[\u0600-\u06FF]/g) || []).length
-  const latinChars  = (title.match(/[a-zA-Z]/g) || []).length
-  return arabicChars >= 3 && arabicChars >= latinChars
-}
-
 function buildDZNewsCachedContext(cachedNews) {
   if (!cachedNews?.items?.length) return ''
   const now = Date.now()
@@ -11082,11 +8870,8 @@ function buildDZNewsCachedContext(cachedNews) {
   for (const src of orderedSources) {
     const items = bySource[src]
     if (!items?.length) continue
-    // فلتر: عناوين عربية فقط — يتجاهل العناوين الفرنسية/اللاتينية
-    const arabicItems = items.filter(item => _isArabicTitle(item.title || item.headline || ''))
-    if (!arabicItems.length) continue
     ctx += `\n**${src}:**\n`
-    for (const item of arabicItems) {
+    for (const item of items) {
       ctx += `• ${item.title || item.headline || '(بدون عنوان)'}`
       if (item.pubDate) {
         try {
@@ -11107,9 +8892,9 @@ const NEWS_FEEDS_DASHBOARD = [
   { name: 'البلاد',         url: 'https://www.elbilad.net/feed' },
   { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
   { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'الجمهورية',     url: 'https://news.google.com/rss/search?q=site%3Aaldjumhouria.com&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
   { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss' },
-  { name: 'الفجر',           url: 'https://www.al-fadjr.com/ar/feed/' },
+  { name: 'TSA عربي',        url: 'https://www.tsa-algerie.com/feed/' },
   { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
   { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
   // ── Google News الجزائر (بعد المصادر المحلية) ──
@@ -11120,7 +8905,7 @@ const NEWS_FEEDS_DASHBOARD = [
   // ── Pan-Arab verified sources ──
   { name: 'الجزيرة', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
   { name: 'BBC عربي', url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
-  { name: 'المساء',   url: 'https://www.elmassa.com/feed/' },
+  { name: 'فرانس 24', url: 'https://www.france24.com/ar/rss' },
   { name: 'سكاي نيوز', url: 'https://www.skynewsarabia.com/rss.xml' },
 ]
 // NOTE: Removed 'سبورت 360' (sport360) feed — was contaminating the Algerian
@@ -11141,12 +8926,11 @@ const TECH_FEEDS_DASHBOARD = [
   // ── مصادر عربية متخصصة في التقنية ──────────────────────────────────────
   { name: 'تك عربي',            url: 'https://techarabi.com/feed/' },
   { name: 'Menabytes تقنية MENA', url: 'https://www.menabytes.com/feed/' },
-  // ── Google News عالمي — ذكاء اصطناعي وتكنولوجيا ─────────────────────────
-  // ✅ FIX: gl=US&ceid=US:ar بدل DZ:ar — أخبار الذكاء الاصطناعي عالمية وليست جزائرية فقط
-  { name: 'Google ذكاء اصطناعي',  url: 'https://news.google.com/rss/search?q=%D8%B0%D9%83%D8%A7%D8%A1+%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A&hl=ar&gl=US&ceid=US:ar' },
-  { name: 'Google تكنولوجيا',     url: 'https://news.google.com/rss/search?q=%D8%AA%D9%83%D9%86%D9%88%D9%84%D9%88%D8%AC%D9%8A%D8%A7+%D8%A7%D9%84%D8%B0%D9%83%D8%A7%D8%A1&hl=ar&gl=US&ceid=US:ar' },
-  { name: 'Google ChatGPT Gemini', url: 'https://news.google.com/rss/search?q=ChatGPT+Gemini+Claude+AI+2026&hl=ar&gl=US&ceid=US:ar' },
-  { name: 'Google AI English',     url: 'https://news.google.com/rss/search?q=artificial+intelligence+AI+models+2026&hl=en&gl=US&ceid=US:en' },
+  // ── Google News عربي — ذكاء اصطناعي وتكنولوجيا ──────────────────────────
+  { name: 'Google ذكاء اصطناعي',  url: 'https://news.google.com/rss/search?q=%D8%B0%D9%83%D8%A7%D8%A1+%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google تكنولوجيا',     url: 'https://news.google.com/rss/search?q=%D8%AA%D9%83%D9%86%D9%88%D9%84%D9%88%D8%AC%D9%8A%D8%A7&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google ChatGPT Gemini', url: 'https://news.google.com/rss/search?q=ChatGPT+Gemini+AI+2025&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google تحول رقمي',     url: 'https://news.google.com/rss/search?q=%D8%AA%D8%AD%D9%88%D9%84+%D8%B1%D9%82%D9%85%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 
 const TECH_CATEGORY_KEYWORDS = {
@@ -11224,14 +9008,14 @@ const GN_RSS_FEEDS = {
     { name: 'Google الشروق الجزائر', url: 'https://news.google.com/rss/search?q=site%3Aechoroukonline.com&hl=ar&gl=DZ&ceid=DZ:ar' },
   ],
   fr: [
-    { name: 'Google أمن الجزائر',    url: 'https://news.google.com/rss/search?q=%D8%A3%D9%85%D9%86+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'Google ثقافة الجزائر',  url: 'https://news.google.com/rss/search?q=%D8%AB%D9%82%D8%A7%D9%81%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google Algérie', url: 'https://news.google.com/rss/search?q=Alg%C3%A9rie&hl=fr&gl=DZ&ceid=DZ:fr' },
+    { name: 'Google Algérie actualités', url: 'https://news.google.com/rss/search?q=Alg%C3%A9rie+actualit%C3%A9s&hl=fr&gl=DZ&ceid=DZ:fr' },
   ],
   en: [
-    { name: 'Google تعليم الجزائر',   url: 'https://news.google.com/rss/search?q=%D8%AA%D8%B9%D9%84%D9%8A%D9%85+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'Google صحة الجزائر',     url: 'https://news.google.com/rss/search?q=%D8%B5%D8%AD%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'Google تكنولوجيا الجزائر', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%83%D9%86%D9%88%D9%84%D9%88%D8%AC%D9%8A%D8%A7+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'Google طاقة الجزائر',    url: 'https://news.google.com/rss/search?q=%D8%B7%D8%A7%D9%82%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google Algeria News', url: 'https://news.google.com/rss/search?q=Algeria&hl=en&gl=DZ&ceid=DZ:en' },
+    { name: 'Google World News', url: 'https://news.google.com/rss/search?q=world+news&hl=en&gl=US&ceid=US:en' },
+    { name: 'Google Economy', url: 'https://news.google.com/rss/search?q=economy&hl=en&gl=US&ceid=US:en' },
+    { name: 'Google Technology AI', url: 'https://news.google.com/rss/search?q=technology+AI&hl=en&gl=US&ceid=US:en' },
   ],
 }
 
@@ -11275,7 +9059,7 @@ async function fetchGNRSSArticles(feeds) {
     feeds.map(async (feed) => {
       try {
         const r = await fetch(feed.url, {
-          headers: { 'User-Agent': 'DZ-GPT-Agent/1.0 (+https://dzagent.app)', 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
+          headers: { 'User-Agent': 'DZ-GPT-Agent/1.0 (+https://dz-gpt.vercel.app)', 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
           signal: AbortSignal.timeout(8000),
         })
         if (!r.ok) return []
@@ -11342,7 +9126,9 @@ function buildGNRSSContext(articles, label = '🌐 Google News RSS') {
     ctx += `\n**${cat}:**\n`
     for (const item of items.slice(0, 4)) {
       ctx += `• ${item.title}`
-      if (item.source) ctx += ` — ${item.source}`
+      if (item.link && item.source) ctx += ` — [${item.source}](${item.link})`
+      else if (item.link) ctx += ` — [المصدر](${item.link})`
+      else if (item.source) ctx += ` — ${item.source}`
       if (item.pubDate) {
         try {
           const ageH = (Date.now() - new Date(item.pubDate).getTime()) / 3600000
@@ -11655,6 +9441,17 @@ function detectCityFromQuery(text) {
   return 'Algiers'
 }
 
+function normalizePrayerTime(value) {
+  if (!value) return '--'
+  const text = String(value).trim()
+  // Aladhan normally returns HH:mm, but some edge/proxy responses return an
+  // ISO timestamp. The dashboard needs the actual clock portion only.
+  const match = text.match(/T(\d{2}:\d{2})/)
+  if (match) return match[1]
+  const clock = text.match(/\b(\d{1,2}:\d{2})\b/)
+  return clock ? clock[1].padStart(5, '0') : text
+}
+
 async function fetchPrayerTimesAladhan(city, country = 'Algeria') {
   const cacheKey = `${city}-${country}`
   const cached = PRAYER_CACHE.get(cacheKey)
@@ -11673,12 +9470,12 @@ async function fetchPrayerTimesAladhan(city, country = 'Algeria') {
       source: 'aladhan.com',
       date: d.data?.date?.readable || new Date().toLocaleDateString('ar-DZ'),
       times: {
-        'الفجر': t?.Fajr || '--',
-        'الشروق': t?.Sunrise || '--',
-        'الظهر': t?.Dhuhr || '--',
-        'العصر': t?.Asr || '--',
-        'المغرب': t?.Maghrib || '--',
-        'العشاء': t?.Isha || '--',
+        'الفجر': normalizePrayerTime(t?.Fajr),
+        'الشروق': normalizePrayerTime(t?.Sunrise),
+        'الظهر': normalizePrayerTime(t?.Dhuhr),
+        'العصر': normalizePrayerTime(t?.Asr),
+        'المغرب': normalizePrayerTime(t?.Maghrib),
+        'العشاء': normalizePrayerTime(t?.Isha),
       },
     }
     PRAYER_CACHE.set(cacheKey, { data: result, ts: Date.now() })
@@ -11709,12 +9506,12 @@ async function fetchPrayerByCoords(lat, lon, cityLabel) {
       source: 'aladhan.com',
       date: d.data?.date?.readable || new Date().toLocaleDateString('ar-DZ'),
       times: {
-        'الفجر': t?.Fajr || '--',
-        'الشروق': t?.Sunrise || '--',
-        'الظهر': t?.Dhuhr || '--',
-        'العصر': t?.Asr || '--',
-        'المغرب': t?.Maghrib || '--',
-        'العشاء': t?.Isha || '--',
+        'الفجر': normalizePrayerTime(t?.Fajr),
+        'الشروق': normalizePrayerTime(t?.Sunrise),
+        'الظهر': normalizePrayerTime(t?.Dhuhr),
+        'العصر': normalizePrayerTime(t?.Asr),
+        'المغرب': normalizePrayerTime(t?.Maghrib),
+        'العشاء': normalizePrayerTime(t?.Isha),
       },
     }
     PRAYER_CACHE.set(cacheKey, { data: result, ts: Date.now() })
@@ -12071,29 +9868,6 @@ function _dedupAlgerianMatches(arr) {
     out.push(m)
   }
   return out
-}
-
-// Global deduplication for match groups — prevents the same match pair
-// from appearing in multiple league groups (e.g. WC group stage showing
-// البرتغال twice when jdwel assigns it to both "كأس العالم" and "المجموعة F").
-function _dedupMatchGroups(groups) {
-  const seen = new Set()
-  const result = []
-  for (const g of groups || []) {
-    const dedupedMatches = []
-    for (const m of g.matches || []) {
-      const h = (m.homeTeam || '').trim().toLowerCase()
-      const a = (m.awayTeam || '').trim().toLowerCase()
-      if (!h && !a) continue
-      const key = `${h}|${a}`
-      const keyRev = `${a}|${h}`
-      if (seen.has(key) || seen.has(keyRev)) continue
-      seen.add(key)
-      dedupedMatches.push(m)
-    }
-    if (dedupedMatches.length > 0) result.push({ ...g, matches: dedupedMatches })
-  }
-  return result
 }
 
 // jdwel.com backup for the Algerian league.
@@ -12617,111 +10391,6 @@ const GLOBAL_LEAGUES_TTL = 5 * 60 * 1000 // 5 min freshness window
 const JDWEL_CACHE = { data: null, ts: 0, date: null }
 const JDWEL_CACHE_TTL = 5 * 60 * 1000
 
-// ── كووورة — مباريات اليوم ────────────────────────────────────────────────────
-const KOOORA_TODAY_CACHE = { data: null, ts: 0, date: null }
-const KOOORA_TODAY_TTL = 5 * 60 * 1000
-const KOOORA_TODAY_URL = 'https://www.kooora.com/%D9%83%D8%B1%D8%A9-%D8%A7%D9%84%D9%82%D8%AF%D9%85/%D9%85%D8%A8%D8%A7%D8%B1%D9%8A%D8%A7%D8%AA-%D8%A7%D9%84%D9%8A%D9%88%D9%85'
-
-function parseKooraMarkdown(text) {
-  if (!text || typeof text !== 'string') return []
-  const groups = []
-  let currentGroup = null
-  for (const line of text.split('\n')) {
-    const t = line.trim()
-    if (!t) continue
-    // Competition header: links to /مسابقة/ URL, contains one flag/badge image
-    if (t.includes('kooora.com') && t.includes('%D9%85%D8%B3%D8%A7%D8%A8%D9%82%D8%A9')) {
-      const cm = t.match(/\[!\[[^\]]*\]\([^)]*\)\s*([^\]]+)\]\(https?:\/\/www\.kooora\.com/)
-      if (cm) {
-        const name = cm[1].trim().replace(/\s+/g, ' ')
-        if (name && name.length > 1 && !name.includes('![')) {
-          currentGroup = { name, matches: [], source: 'kooora.com' }
-          groups.push(currentGroup)
-        }
-      }
-      continue
-    }
-    // Match line: links to /مباراة/ or /-v-/ URL with two badge images inside
-    if (currentGroup && t.includes('kooora.com') &&
-        (t.includes('%D9%85%D8%A8%D8%A7%D8%B1%D8%A7%D8%A9') || t.includes('-v-'))) {
-      const badges = [...t.matchAll(/!\[Image \d+: ([^\]]+?) badge\]\([^)]+\)/g)]
-      if (badges.length < 2) continue
-      const homeTeam = badges[0][1].trim()
-      const awayTeam = badges[1][1].trim()
-      const urlM = t.match(/\]\((https?:\/\/www\.kooora\.com\/[^)]+)\)\s*$/)
-      const matchUrl = urlM ? urlM[1] : 'https://www.kooora.com/'
-      // Strip images from line to get scores/time/status
-      const plain = t
-        .replace(/!\[Image \d+[^\]]*\]\([^)]+\)/g, ' ')
-        .replace(/\[[^\]]*\]\([^)]+\)/g, ' ')
-        .replace(/\[|\]/g, ' ')
-        .trim()
-      const timeM   = plain.match(/\b(\d{1,2}:\d{2})\b/)
-      const statusM = plain.match(/\b(انتهت|استراحة)\b/)
-      const liveM   = plain.match(/\b(\d{1,3})'\b/)
-      let homeScore = null, awayScore = null, startTime = '', statusType = 'scheduled'
-      if (statusM || liveM) {
-        const scores = plain.match(/\b(\d+)\b/g) || []
-        if (scores.length >= 2) {
-          homeScore = parseInt(scores[scores.length - 2])
-          awayScore = parseInt(scores[scores.length - 1])
-        }
-        statusType = statusM ? 'finished' : 'live'
-        if (liveM) startTime = liveM[1] + '\''
-      } else if (timeM) {
-        startTime = timeM[1]
-      }
-      currentGroup.matches.push({
-        homeTeam, awayTeam, homeScore, awayScore,
-        score: (homeScore !== null && awayScore !== null) ? `${homeScore} - ${awayScore}` : null,
-        startTime, statusType,
-        competition: currentGroup.name,
-        link: matchUrl,
-        source: 'kooora.com',
-      })
-    }
-  }
-  const result = groups.filter(g => g.matches.length > 0)
-  return _dedupMatchGroups(result)
-}
-
-async function fetchKooraToday(dateStr = null) {
-  const cacheDate = dateStr || new Date().toISOString().slice(0, 10)
-  if (KOOORA_TODAY_CACHE.data && KOOORA_TODAY_CACHE.date === cacheDate &&
-      Date.now() - KOOORA_TODAY_CACHE.ts < KOOORA_TODAY_TTL) {
-    return KOOORA_TODAY_CACHE.data
-  }
-  try {
-    const jinaUrl = `https://r.jina.ai/${KOOORA_TODAY_URL}`
-    const resp = await fetch(jinaUrl, {
-      headers: { 'User-Agent': 'DZ-Agent/1.0', 'Accept': 'text/plain,text/markdown,*/*' },
-      signal: AbortSignal.timeout(18000),
-    })
-    if (!resp.ok) { diagLog('source_fail', { module: 'kooora.today', status: resp.status }); return null }
-    const md = await resp.text()
-    if (!md || md.length < 300) { diagLog('empty', { module: 'kooora.today' }); return null }
-    const groups = parseKooraMarkdown(md)
-    if (!groups.length) { diagLog('empty', { module: 'kooora.today.parse' }); return null }
-    const totalMatches = groups.reduce((s, g) => s + g.matches.length, 0)
-    const data = {
-      groups,
-      totalMatches,
-      fetchedAt: new Date().toISOString(),
-      source: 'kooora.com',
-      sourceUrl: KOOORA_TODAY_URL,
-      via: 'jina-reader',
-    }
-    KOOORA_TODAY_CACHE.data = data
-    KOOORA_TODAY_CACHE.ts = Date.now()
-    KOOORA_TODAY_CACHE.date = cacheDate
-    console.log(`[kooora] ✓ (jina-reader) Parsed ${totalMatches} matches across ${groups.length} competitions`)
-    return data
-  } catch (err) {
-    diagLog('source_fail', { module: 'kooora.today', error: err.message })
-    return null
-  }
-}
-
 function _decodeJdwelText(s) {
   return (s || '')
     .replace(/&nbsp;/g, ' ')
@@ -12810,7 +10479,7 @@ function parseJdwelHtml(html) {
     if (!groupMap.has(comp.compId)) groupMap.set(comp.compId, { name: comp.name, compId: comp.compId, matches: [] })
     groupMap.get(comp.compId).matches.push(item)
   }
-  return _dedupMatchGroups(Array.from(groupMap.values()))
+  return Array.from(groupMap.values())
 }
 
 // Parse jdwel.com matches from markdown output (extracted via Crawl4AI).
@@ -12871,7 +10540,7 @@ function parseJdwelMarkdown(text) {
       }
     }
   }
-  return _dedupMatchGroups(groups.filter(g => g.matches.length > 0))
+  return groups.filter(g => g.matches.length > 0)
 }
 
 // jdwel.com is fronted by Cloudflare and rejects Node's `fetch` based on its
@@ -13062,19 +10731,6 @@ async function fetchJdwelMatches(dateStr = null) {
       }
     }
     if (!html || groups.length === 0) {
-      // ── Kooora fallback: jdwel totally failed — try kooora.com via Jina ──
-      try {
-        const koooraData = await fetchKooraToday(cacheDate)
-        if (koooraData?.groups?.length) {
-          JDWEL_CACHE.data = koooraData
-          JDWEL_CACHE.ts = Date.now()
-          JDWEL_CACHE.date = cacheDate
-          console.log(`[jdwel] ✓ (kooora fallback) ${koooraData.totalMatches} matches across ${koooraData.groups.length} competitions`)
-          return koooraData
-        }
-      } catch (kErr) {
-        diagLog('source_fail', { module: 'kooora.fallback', error: kErr.message })
-      }
       diagLog('empty', { module: 'jdwel', url, htmlSize: html ? html.length : 0 })
       return null
     }
@@ -13092,14 +10748,6 @@ async function fetchJdwelMatches(dateStr = null) {
     return data
   } catch (err) {
     diagLog('source_fail', { module: 'jdwel', error: err.message })
-    // last-resort: try Kooora before giving up
-    try {
-      const koooraData = await fetchKooraToday()
-      if (koooraData?.groups?.length) {
-        console.log(`[jdwel] ✓ (kooora last-resort) ${koooraData.totalMatches} matches`)
-        return koooraData
-      }
-    } catch (_) {}
     return null
   }
 }
@@ -13892,7 +11540,7 @@ ${fileTreeCtx ? `\nهيكل المشروع الحالي:\n${fileTreeCtx}` : ''}
       failedFiles.length ? `**⚠️ ملفات فشل رفعها:** ${failedFiles.join(', ')}` : '',
       ``,
       `---`,
-      `🤖 Generated by [DZ-GPT](https://dzagent.app)`,
+      `🤖 Generated by [DZ-GPT](https://dz-gpt.vercel.app)`,
     ].filter(l => l !== undefined).join('\n')
 
     const prRes = await fetch(`https://api.github.com/repos/${repo}/pulls`, {
@@ -14079,7 +11727,7 @@ FILE: /path/to/file.css
       headers: ghHeaders,
       body: JSON.stringify({
         title: `🎨 تحسين واجهة UI — أسلوب "${style}" [DZ Agent]`,
-        body: `## 🎨 تحسين التصميم بواسطة DZ Agent\n\n**الأسلوب المطبّق:** ${style}\n\n**الملفات المُحسّنة:**\n${pushedFiles.map(f => `- \`${f}\``).join('\n') || '(لم يتم رصد ملفات بالتنسيق المطلوب — راجع الكود المولَّد)'}\n\n---\n🤖 Generated by [DZ-GPT](https://dzagent.app)`,
+        body: `## 🎨 تحسين التصميم بواسطة DZ Agent\n\n**الأسلوب المطبّق:** ${style}\n\n**الملفات المُحسّنة:**\n${pushedFiles.map(f => `- \`${f}\``).join('\n') || '(لم يتم رصد ملفات بالتنسيق المطلوب — راجع الكود المولَّد)'}\n\n---\n🤖 Generated by [DZ-GPT](https://dz-gpt.vercel.app)`,
         head: newBranch,
         base: 'main',
       }),
@@ -15118,7 +12766,7 @@ app.post('/api/dz-agent/github/init-empty-repo', async (req, res) => {
   const results = { created: [], failed: [] }
 
   // Push README.md
-  const readme = `# ${repoName}\n\n${description || 'مشروع منشأ بواسطة DZ Agent 🇩🇿'}\n\n---\n*Built with [DZ Agent](https://dzagent.app) — Made in Algeria 🇩🇿*\n`
+  const readme = `# ${repoName}\n\n${description || 'مشروع منشأ بواسطة DZ Agent 🇩🇿'}\n\n---\n*Built with [DZ Agent](https://dz-gpt.vercel.app) — Made in Algeria 🇩🇿*\n`
   try {
     const r = await fetch(`https://api.github.com/repos/${repo}/contents/README.md`, {
       method: 'PUT', headers: ghHeaders,
@@ -15131,7 +12779,7 @@ app.post('/api/dz-agent/github/init-empty-repo', async (req, res) => {
 
   // Push index.html if website
   if (isWebsite) {
-    const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${repoName}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem}.card{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:3rem;max-width:640px;width:100%;text-align:center}h1{font-size:2.5rem;font-weight:700;margin-bottom:1rem;background:linear-gradient(135deg,#00d4aa,#00a3e0);-webkit-background-clip:text;-webkit-text-fill-color:transparent}p{color:#8b949e;line-height:1.7;font-size:1.1rem;margin-bottom:1.5rem}.badge{display:inline-flex;align-items:center;gap:.4rem;background:#21262d;border:1px solid #30363d;border-radius:20px;padding:.5rem 1.2rem;font-size:.9rem;color:#58a6ff;text-decoration:none}a.badge:hover{border-color:#58a6ff}</style></head><body><div class="card"><h1>${repoName}</h1><p>${description || 'مشروع رائع منشأ بواسطة DZ Agent 🤖'}</p><a class="badge" href="https://dzagent.app">🇩🇿 Powered by DZ Agent</a></div></body></html>`
+    const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${repoName}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem}.card{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:3rem;max-width:640px;width:100%;text-align:center}h1{font-size:2.5rem;font-weight:700;margin-bottom:1rem;background:linear-gradient(135deg,#00d4aa,#00a3e0);-webkit-background-clip:text;-webkit-text-fill-color:transparent}p{color:#8b949e;line-height:1.7;font-size:1.1rem;margin-bottom:1.5rem}.badge{display:inline-flex;align-items:center;gap:.4rem;background:#21262d;border:1px solid #30363d;border-radius:20px;padding:.5rem 1.2rem;font-size:.9rem;color:#58a6ff;text-decoration:none}a.badge:hover{border-color:#58a6ff}</style></head><body><div class="card"><h1>${repoName}</h1><p>${description || 'مشروع رائع منشأ بواسطة DZ Agent 🤖'}</p><a class="badge" href="https://dz-gpt.vercel.app">🇩🇿 Powered by DZ Agent</a></div></body></html>`
     try {
       const r = await fetch(`https://api.github.com/repos/${repo}/contents/index.html`, {
         method: 'PUT', headers: ghHeaders,
@@ -15645,139 +13293,6 @@ app.get('/api/sports/verify', async (req, res) => {
   })
 })
 
-// ══════════════════════════════════════════════════════════════════════════════
-// § WC2026 SCOREBOARD — بطاقة كأس العالم 2026 اليومية (تُحذف تلقائياً بعد 19 يوليو 2026)
-// GET /api/wc2026/today?date=YYYY-MM-DD
-// ══════════════════════════════════════════════════════════════════════════════
-const WC2026_END_DATE = new Date('2026-07-20T00:00:00Z')
-
-app.get('/api/wc2026/today', async (req, res) => {
-  // إذا انتهت البطولة لا نُرجع بيانات
-  if (new Date() >= WC2026_END_DATE) {
-    return res.json({ active: false, matches: [], message: 'انتهت بطولة كأس العالم 2026' })
-  }
-  const _dzNow = new Date(Date.now() + 3600000) // UTC+1 للجزائر
-  const dateStr = req.query.date || _dzNow.toISOString().split('T')[0]
-  try {
-    // 1) محاولة جلب بيانات حية من sports-agent
-    let liveMatches = []
-    try {
-      const liveRes = await runWC2026TodayAgent(dateStr)
-      if (liveRes && Array.isArray(liveRes.matches) && liveRes.matches.length > 0) {
-        liveMatches = liveRes.matches
-      }
-    } catch (_e) { /* نكمل بالبيانات المحلية */ }
-
-    // 2) احتياطياً: البيانات المحلية الكاملة (تصحيح: static import بدل dynamic)
-    if (liveMatches.length === 0) {
-      liveMatches = WC2026_FULL_FIXTURES.filter(m => m.date === dateStr)
-    }
-
-    // 3) إذا لا توجد مباريات اليوم → اجلب مباريات الغد ثم بعد غد (أقرب يوم)
-    let nextDate = null
-    if (liveMatches.length === 0) {
-      const today = new Date(dateStr + 'T00:00:00Z')
-      const futureDates = [...new Set(
-        WC2026_FULL_FIXTURES
-          .filter(f => new Date(f.date + 'T00:00:00Z') > today)
-          .map(f => f.date)
-      )].sort()
-      if (futureDates.length > 0) {
-        nextDate = futureDates[0]
-        liveMatches = WC2026_FULL_FIXTURES.filter(m => m.date === nextDate)
-      }
-    }
-
-    // ── تصحيح حالات المباريات بناءً على الوقت الحالي ──────────────────────────
-    // startTime في البيانات = UTC (WC2026MatchCard تُضيف ساعة لتوقيت الجزائر)
-    // ⛔ لا نُحوّل إلى 'finished' إذا لم تكن هناك نتيجة — نستخدم 'result-pending'
-    const _nowUTC = Date.now()
-    liveMatches = liveMatches.map(m => {
-      if (!m.startTime || !m.date) return m
-      try {
-        const [_h, _min] = m.startTime.split(':').map(Number)
-        const _matchUTC  = new Date(`${m.date}T${String(_h).padStart(2,'0')}:${String(_min).padStart(2,'0')}:00Z`).getTime()
-        const _matchEnd  = _matchUTC + 7200000   // +2 ساعة نهاية المباراة
-        const _liveEnd   = _matchUTC + 7800000   // +2:10 لإطالة (وقت إضافي)
-        if (_nowUTC > _liveEnd) {
-          // إذا كانت النتيجة موثوقة (من مصدر حي) → finished
-          // إذا لم تكن هناك نتيجة (من بيانات محلية) → result-pending لمنع الهلوسة
-          const hasVerifiedScore = m.homeScore !== null && m.homeScore !== undefined
-            && m.awayScore !== null && m.awayScore !== undefined
-          return { ...m, statusType: hasVerifiedScore ? 'finished' : 'result-pending' }
-        }
-        if (_nowUTC > _matchUTC) return { ...m, statusType: 'live' }
-        return m
-      } catch(_) { return m }
-    })
-
-    return res.json({
-      active: true,
-      date: nextDate || dateStr,
-      isNextDay: !!nextDate,
-      matches: liveMatches,
-      fetchedAt: new Date().toISOString(),
-    })
-  } catch (err) {
-    console.error('[/api/wc2026/today] error:', err.message)
-    return res.status(500).json({ active: true, matches: [], error: err.message })
-  }
-})
-
-// GET /api/wc2026/yesterday — نتائج مباريات البارحة
-// ══════════════════════════════════════════════════════════════════════════════
-app.get('/api/wc2026/yesterday', async (req, res) => {
-  if (new Date() >= WC2026_END_DATE) {
-    return res.json({ active: false, matches: [], message: 'انتهت بطولة كأس العالم 2026' })
-  }
-  // البارحة = اليوم - 24 ساعة (توقيت الجزائر UTC+1)
-  const _yesterday = new Date(Date.now() + 3600000 - 86400000).toISOString().split('T')[0]
-  try {
-    let yesterdayMatches = []
-
-    // 1) محاولة جلب بيانات حية (قد تحتوي نتائج)
-    try {
-      const liveRes = await runWC2026TodayAgent(_yesterday)
-      if (liveRes && Array.isArray(liveRes.matches) && liveRes.matches.length > 0) {
-        yesterdayMatches = liveRes.matches
-      }
-    } catch (_e) { /* نكمل بالبيانات المحلية */ }
-
-    // 2) احتياطياً: بيانات محلية
-    if (yesterdayMatches.length === 0) {
-      yesterdayMatches = WC2026_FULL_FIXTURES.filter(m => m.date === _yesterday)
-    }
-
-    // 3) المباريات انتهت جميعها — نُصحّح الحالات
-    const _nowUTC = Date.now()
-    yesterdayMatches = yesterdayMatches.map(m => {
-      if (!m.startTime || !m.date) return m
-      try {
-        const [_h, _min] = m.startTime.split(':').map(Number)
-        const _matchEnd = new Date(`${m.date}T${String(_h).padStart(2,'0')}:${String(_min).padStart(2,'0')}:00Z`).getTime() + 7800000
-        if (_nowUTC > _matchEnd) {
-          const hasVerifiedScore = m.homeScore !== null && m.homeScore !== undefined
-            && m.awayScore !== null && m.awayScore !== undefined
-          return { ...m, statusType: hasVerifiedScore ? 'finished' : 'result-pending' }
-        }
-        return m
-      } catch (_) { return m }
-    })
-
-    console.log(`[/api/wc2026/yesterday] ${yesterdayMatches.length} matches on ${_yesterday}`)
-    return res.json({
-      active: true,
-      date: _yesterday,
-      isYesterday: true,
-      matches: yesterdayMatches,
-      fetchedAt: new Date().toISOString(),
-    })
-  } catch (err) {
-    console.error('[/api/wc2026/yesterday] error:', err.message)
-    return res.status(500).json({ active: true, matches: [], error: err.message })
-  }
-})
-
 // ===== CURRENCY EXCHANGE MODULE (DZD Base) =====
 const CURRENCY_CACHE = { data: null, ts: 0, status: 'empty' }
 const CURRENCY_TTL = 20 * 60 * 1000 // 20 minutes
@@ -15858,13 +13373,6 @@ function detectCurrencyQuery(msg) {
     'usd to dzd', 'eur to dzd', 'convert currency', 'currency convert',
     'taux de change', 'euro en dinar', 'dollar en dinar', 'convertir devise',
     'euro dinar', 'dollar dinar', 'gbp dinar', 'cours du dinar',
-    // ✅ FIX: صيغ مركّبة تحتوي على "الدولار" أو "اليورو" مع "الدينار" أو "اليوم" بدون "سعر"
-    'الدولار واليورو', 'اليورو والدولار', 'الدولار مقابل', 'اليورو مقابل',
-    'العملات اليوم', 'العملة اليوم', 'أسعار العملة', 'أسعار الصرف',
-    'الدولار والدينار', 'اليورو والدينار', 'صرف الدولار', 'صرف اليورو',
-    'سعر الصرف اليوم', 'تسعيرة اليوم', 'قداش يساوي', 'كمية الدولار',
-    'صراف اليوم', 'بلاك ماركت', 'black market dz', 'square port',
-    'واش سعر الدولار', 'واش سعر اليورو', 'شحال الدولار', 'شحال اليورو',
   ]
   return kw.some(k => lower.includes(k))
 }
@@ -15983,7 +13491,7 @@ app.get('/rss/currency/dzd', async (_req, res) => {
     '  <channel>',
     '    <title>DZD Currency Rates — Algerian Dinar Exchange Rates</title>',
     '    <description>Live exchange rates against the Algerian Dinar (DZD). Source: ' + escapeXml(data?.provider || 'N/A') + '. Status: ' + escapeXml(data?.status || 'unavailable') + '.</description>',
-    '    <link>https://dzagent.app</link>',
+    '    <link>https://dz-gpt.vercel.app</link>',
     '    <language>ar</language>',
     '    <lastBuildDate>' + escapeXml(updated) + '</lastBuildDate>',
     items.join('\n'),
@@ -16321,7 +13829,7 @@ app.get('/api/dz-dollar', async (_req, res) => {
 })
 
 // ─── Telegram Bot Webhook ────────────────────────────────────────────────────
-// Set your bot webhook: https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://dzagent.app/api/telegram/webhook
+// Set your bot webhook: https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://dz-gpt.vercel.app/api/telegram/webhook
 app.post('/api/telegram/webhook', async (req, res) => {
   const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
   if (!BOT_TOKEN) return res.json({ ok: false, error: 'TELEGRAM_BOT_TOKEN not set' })
@@ -16347,7 +13855,7 @@ app.post('/api/telegram/webhook', async (req, res) => {
 • الوظائف والصحة 💼🏥
 • وأكثر بكثير!
 
-اكتب سؤالك مباشرة أو زر موقعنا: https://dzagent.app`
+اكتب سؤالك مباشرة أو زر موقعنا: https://dz-gpt.vercel.app`
       await sendTelegramMessage(BOT_TOKEN, chatId, welcome)
       return res.json({ ok: true })
     }
@@ -16393,7 +13901,7 @@ async function sendTelegramMessage(token, chatId, text) {
 app.post('/api/telegram/setup', async (req, res) => {
   const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
   if (!BOT_TOKEN) return res.status(400).json({ error: 'TELEGRAM_BOT_TOKEN not set in environment secrets.' })
-  const webhookUrl = req.body?.webhookUrl || `https://dzagent.app/api/telegram/webhook`
+  const webhookUrl = req.body?.webhookUrl || `https://dz-gpt.vercel.app/api/telegram/webhook`
   try {
     const ctrl = new AbortController()
     setTimeout(() => ctrl.abort(), 10000)
@@ -16458,7 +13966,7 @@ app.get('/api/dz-agent/sync/status', async (_req, res) => {
       pendingTotal: changedFiles + unpushedCommits,
       localSha,
       remoteSha,
-      runtime: process.env.CF_PAGES ? 'cloudflare' : process.env.VERCEL ? 'vercel' : 'replit',
+      runtime: process.env.VERCEL ? 'vercel' : 'replit',
     })
   } catch {
     return res.json({
@@ -16467,7 +13975,7 @@ app.get('/api/dz-agent/sync/status', async (_req, res) => {
       hasVercelToken: !!process.env.VERCEL_TOKEN,
       hasDeployAdminToken: !!process.env.DEPLOY_ADMIN_TOKEN,
       deployReady: !!(process.env.GITHUB_TOKEN && process.env.VERCEL_TOKEN && process.env.DEPLOY_ADMIN_TOKEN),
-      runtime: process.env.CF_PAGES ? 'cloudflare' : process.env.VERCEL ? 'vercel' : 'unknown',
+      runtime: process.env.VERCEL ? 'vercel' : 'unknown',
     })
   }
 })
@@ -16642,8 +14150,8 @@ app.post('/api/dz-agent/deploy', async (req, res) => {
     return res.json({
       success: true,
       message: 'Vercel deploy triggered successfully.',
-      url: `https://${d.url || 'dzagent.app'}`,
-      production: 'https://dzagent.app',
+      url: `https://${d.url || 'dz-gpt.vercel.app'}`,
+      production: 'https://dz-gpt.vercel.app',
       deploymentId: d.id,
       sha,
       shortSha: sha.slice(0, 8),
@@ -16935,874 +14443,14 @@ function pruneDiskSessions() {
 }
 setInterval(pruneDiskSessions, 6 * 60 * 60 * 1000) // every 6h
 
-// ===== VISITOR ANALYTICS INTENT DETECTION =====
-function detectVisitorAnalyticsIntent(text) {
-  const t = text.toLowerCase().trim()
-  // Arabic, Darija, French patterns for visitor/analytics questions
-  const patterns = [
-    /كم.*زائر|عدد.*زائر|زوار|زيارات|زار.*اليوم|زار.*الأسبوع|زار.*الشهر/,
-    /كم.*دخل.*موقع|كم.*شخص.*دخل|من.*دخل|كم.*واحد.*دخل/,
-    /إحصائيات.*زوار|إحصاء.*زوار|إحصائيات.*الموقع/,
-    /من.*ولايات|أي.*ولايات|الولايات.*زيار|ولاية.*زيار/,
-    /زوار.*ولايات|ولايات.*جزائر.*زوار/,
-    /زوار.*دول|دول.*زوار|زوار.*خارج|هل.*زوار.*دول/,
-    /أكثر.*ولاية|ولاية.*أكثر|أكثر.*دولة|دولة.*أكثر/,
-    /قارن.*أسبوع|هذا الأسبوع.*الأسبوع الماضي|مقارنة.*زوار/,
-    /visitors|analytics.*dz|dz.*analytics/,
-    /آخر.*[0-9]+.*يوم.*زائر|زائر.*آخر.*[0-9]+.*يوم/,
-    /كم.*زار.*dz|كم.*دخل.*dz.?agent/i,
-    /عدد الزيارات|الزيارات اليوم|الزيارات هذا/,
-    /traffic.*dz|dz.*traffic/i,
-    /visiteurs|combien.*visiteurs/i,
-  ]
-  return patterns.some(p => p.test(t))
-}
-
-// Extract analytics period from message
-function _vaExtractPeriod(text) {
-  const t = text.toLowerCase()
-  if (/أمس|yesterday|hier/.test(t)) return 'yesterday'
-  if (/آخر\s*7|7\s*أيام|أسبوع.*أخير|last.?7/.test(t)) return 'last7days'
-  if (/آخر\s*30|30\s*يوم|last.?30/.test(t)) return 'last30days'
-  if (/آخر\s*90|90\s*يوم|ثلاثة أشهر|last.?90/.test(t)) return 'last90days'
-  if (/هذا الأسبوع|الأسبوع الحالي|this week/.test(t)) return 'week'
-  if (/هذا الشهر|الشهر الحالي|this month/.test(t)) return 'month'
-  if (/اليوم|aujourd|today/.test(t)) return 'today'
-  return 'today'
-}
-
 // ===== DZ AGENT API ROUTE =====
 app.post('/api/dz-agent-chat', async (req, res) => {
-  const _isRetry   = req.body.isRetry === true
-  const _retrySeed = _isRetry ? (req.body.retrySeed || Math.floor(Math.random() * 999999)) : null
   const _agentSessionId = sanitizeString(req.body.sessionId || '', 64) || null
   let messages = normalizeChatMessages(req.body.messages)
 
   if (!messages?.length) {
     return res.status(400).json({ error: 'Invalid request: messages array required.' })
   }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // 🔒 DEVELOPER / OWNER IDENTITY — أول فحص مطلق — يعيد DEVELOPER_RESPONSE فوراً
-  // يجب أن يكون قبل كل شيء: sports guardian، health، clarification، إلخ
-  // ══════════════════════════════════════════════════════════════════════
-  {
-    const _devRaw = [...messages].reverse().find(m => m?.role === 'user')?.content || ''
-    if (isSelfUpdateQuestion(_devRaw)) {
-      console.log(`[DZAgentChat] 🔄 Self-update question detected — returning build-info response`)
-      return res.status(200).json(buildSelfUpdateResponse())
-    }
-    if (isDeveloperOrOwnerQuestion(_devRaw)) {
-      console.log(`[DZAgentChat] 👨‍💻 Developer question detected — returning DEVELOPER_RESPONSE`)
-      return res.status(200).json(DEVELOPER_RESPONSE)
-    }
-    if (isHealthCapabilityQuestion(_devRaw)) {
-      console.log(`[DZAgentChat] 🏥 Health capability question — returning HEALTH_CAPABILITY_RESPONSE`)
-      return res.status(200).json(HEALTH_CAPABILITY_RESPONSE)
-    }
-    if (isCapabilitiesQuestion(_devRaw)) {
-      console.log(`[DZAgentChat] 🎯 Capabilities question detected — returning CAPABILITIES_RESPONSE`)
-      return res.status(200).json(CAPABILITIES_RESPONSE)
-    }
-    // 🛡️ Static guards — تتخطى LLM بالكامل على كل النقاط
-    const _staticGuard = applyStaticGuards(_devRaw)
-    if (_staticGuard) {
-      console.log(`[DZAgentChat] 🛡️ static guard matched — bypassing LLM`)
-      return res.status(200).json(_staticGuard)
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // 📥 DOWNLOAD MEDIA GUARDIAN — كاشف نوايا تحميل الوسائط الاجتماعية
-  // يعمل مباشرة بعد حراس الهوية، قبل Sports Guardian
-  // يدعم: YouTube, Facebook, TikTok, Instagram, Pinterest, X/Twitter, Vimeo, Dailymotion
-  //
-  // ⚡ يُرجع status:'extracting' فوراً — المتصفح يستخرج التفاصيل بـ IP سكني
-  //    (IP الخادم محجوب من منصات التواصل الاجتماعي)
-  // ══════════════════════════════════════════════════════════════════════
-  {
-    const _dlRaw = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
-    const _dlIntent = detectDownloadIntent(_dlRaw)
-    if (_dlIntent.intent === 'DOWNLOAD_MEDIA') {
-      const _dlUrls = extractDownloadUrls(_dlRaw)
-      const _validDlJobs = _dlUrls.map(url => ({ url, platform: mediaPlatformForUrl(url) }))
-        .filter(job => job.platform && isValidMediaPlatformUrl(job.url))
-      if (_validDlJobs.length > 0) {
-        console.log(`[DownloadGuardian] 📥 jobs=${_validDlJobs.length} platforms=${_validDlJobs.map(j => j.platform).join(',')}`)
-        // Return immediately — browser-side extractor handles the heavy lifting
-        const _jobs = _validDlJobs.map(job => ({
-          status: 'extracting',
-          url: job.url,
-          platform: job.platform,
-          format: _dlIntent.requestedFormat,
-        }))
-        if (_jobs.length > 1) {
-          return res.status(200).json({
-            richType: 'media-download-batch',
-            content: `⬇️ جارٍ استخراج ${_jobs.length} روابط بشكل مستقل...`,
-            mediaDownloads: _jobs,
-            model: 'download-guardian',
-          })
-        }
-        return res.status(200).json({
-          richType: 'media-download',
-          content: `⬇️ جارٍ استخراج معلومات الوسائط...`,
-          mediaDownload: {
-            status: 'extracting',
-            url: _jobs[0].url,
-            platform: _jobs[0].platform,
-            format: _jobs[0].format,
-          },
-          model: 'download-guardian',
-        })
-      } else if (_dlUrls.length === 0 && _dlIntent.confidence >= 0.75) {
-        // Has download keywords but no recognized URL — ask for the link
-        return res.status(200).json({
-          content: `📥 **تحميل الوسائط** — أرسل لي الرابط الذي تريد تحميله:\n\n| المنصة | مثال |\n|--------|------|\n| 📺 YouTube | \`https://youtube.com/watch?v=...\` |\n| 📘 Facebook | \`https://facebook.com/...\` |\n| 🎵 TikTok | \`https://tiktok.com/...\` |\n| 📸 Instagram | \`https://instagram.com/...\` |\n| 🐦 Twitter/X | \`https://x.com/...\` |\n| 🎬 Vimeo | \`https://vimeo.com/...\` |\n| 🎥 Dailymotion | \`https://dailymotion.com/...\` |`,
-          model: 'download-guardian',
-        })
-      }
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // 📊 VISITOR ANALYTICS GUARDIAN — يعترض أسئلة الزوار قبل الـ LLM
-  // ══════════════════════════════════════════════════════════════════════
-  {
-    const _vaRaw = [...messages].reverse().find(m => m?.role === 'user')?.content?.trim() || ''
-    if (detectVisitorAnalyticsIntent(_vaRaw)) {
-      const _vaPeriod = _vaExtractPeriod(_vaRaw)
-      const _vaStats  = _vaComputeStats(_vaPeriod)
-      console.log(`[VisitorAnalytics] 📊 period=${_vaPeriod} visits=${_vaStats.totalVisits}`)
-      return res.status(200).json({
-        richType: 'visitor-analytics',
-        content: '',
-        analyticsData: _vaStats,
-        model: 'visitor-analytics',
-      })
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // 🏥 DZTOOLS EARLY BYPASS — قبل كل شيء بما فيه Sports Guardians
-  // طلبات tool='health' يجب أن تصل مباشرةً لوكيل الصحة دون المرور
-  // بأي guard رياضي قد يُخطئ في تفسير النص الطبي (مصادر→مصر / المريض→المغرب)
-  // ══════════════════════════════════════════════════════════════════════
-  const _earlyToolReq = typeof req.body.tool === 'string' ? req.body.tool.toLowerCase() : ''
-  const _isEarlyDZTool = ['jobs', 'health', 'cv', 'legal', 'chart', 'ocr', 'doctor'].includes(_earlyToolReq)
-  if (_isEarlyDZTool && _earlyToolReq === 'health') {
-    // ── معالجة فورية لوكيل الصحة (DZTools) ──────────────────────────────────
-    // DZTools يُرسل قالب [TOOL:SYMPTOM_ANALYZER] ويتوقع ردًّا markdown مُهيكلاً
-    // نستخدم system prompt بسيط يتوافق مع القالب (لا JSON لأن الـ frontend يعرض markdown)
-    const _earlyLastMsg = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
-    const _earlySymLine = _earlyLastMsg.match(/\*\*الأعراض المُدخلة:\*\*\s*(.+)/u)
-    const _earlyRawSym  = _earlySymLine?.[1]?.trim() || _earlyLastMsg
-    const _earlyKb      = getRelatedDZKnowledge(detectHealthIntent(_earlyRawSym).symptoms.length ? detectHealthIntent(_earlyRawSym).symptoms : ['ألم'])
-    const _earlyKbNote  = _earlyKb ? `\n\n[معلومة طبية جزائرية: "${_earlyKb.name}" — ${_earlyKb.prevalence}. أدوية: ${_earlyKb.drugs.join(', ')}]` : ''
-    // System prompt بسيط يشجع LLM على ملء الأقسام الـ markdown (لا JSON)
-    const _earlyMedSys = `أنت طبيب مساعد ذكي مدرَّب على مصادر طبية معتمدة. أجب دائماً بالعربية الفصحى الواضحة.
-قاعدة أساسية: ردّك يجب أن يملأ الأقسام المطلوبة في رسالة المستخدم بشكل مفصّل ومفيد.
-لا تقدم تشخيصاً نهائياً — هذا تقييم استرشادي فقط. أضف تحذير "يرجى استشارة طبيب" في النهاية.${_earlyKbNote}`
-    const _earlyMsgs = [
-      { role: 'system', content: _earlyMedSys },
-      { role: 'user',   content: _earlyLastMsg },
-    ]
-    console.log(`[DZTools:Health:Early] 🩺 symptoms="${_earlyRawSym.slice(0,60)}" | kb=${_earlyKb?.name||'—'}`)
-    try {
-      // محاولة Groq 70b أولاً
-      const _earlyGroq = await callGroqWithFallback({
-        model: 'llama-3.3-70b-versatile',
-        messages: _earlyMsgs,
-        max_tokens: 2000,
-        temperature: 0.4,
-      })
-      if (_earlyGroq?.content && _earlyGroq.content.trim().length > 30) {
-        console.log(`[DZTools:Health:Early] ✅ Groq70b — ${_earlyGroq.content.length} chars`)
-        return res.status(200).json({ content: _earlyGroq.content, model: _earlyGroq.model })
-      }
-      // Groq fallback: 8b-instant
-      const _earlyGroq2 = await callGroqWithFallback({
-        model: 'llama-3.1-8b-instant',
-        messages: _earlyMsgs,
-        max_tokens: 1500,
-        temperature: 0.4,
-      })
-      if (_earlyGroq2?.content && _earlyGroq2.content.trim().length > 30) {
-        console.log(`[DZTools:Health:Early] ✅ Groq8b — ${_earlyGroq2.content.length} chars`)
-        return res.status(200).json({ content: _earlyGroq2.content, model: _earlyGroq2.model })
-      }
-      // Fallback 1: callAIRouter مباشرةً (يتجاوز aiSemaphore/aiDeduplicator)
-      try {
-        const _earlyRouter = await callAIRouter(_earlyMsgs, { max_tokens: 2000, taskHint: 'general' })
-        if (_earlyRouter?.content && _earlyRouter.content.trim().length > 30) {
-          console.log(`[DZTools:Health:Early] ✅ AIRouter — ${_earlyRouter.content.length} chars model=${_earlyRouter.model}`)
-          return res.status(200).json({ content: _earlyRouter.content, model: _earlyRouter.model })
-        }
-      } catch (_rErr) { console.warn('[DZTools:Health:Early] Router failed:', _rErr.message) }
-      // Fallback 2: Pollinations.ai (لا API key — دائماً متاح) — new plain-text API
-      try {
-        const _polRes = await fetch('https://text.pollinations.ai/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'openai', messages: _earlyMsgs, seed: Math.floor(Math.random() * 999999), private: true }),
-          signal: AbortSignal.timeout(25000),
-        })
-        if (_polRes.ok) {
-          const _polContent = await _polRes.text()
-          if (_polContent && _polContent.trim().length > 30 && !_polContent.includes('"error"')) {
-            console.log(`[DZTools:Health:Early] ✅ Pollinations — ${_polContent.length} chars`)
-            return res.status(200).json({ content: _polContent.trim(), model: 'pollinations/openai' })
-          }
-        }
-      } catch (_polErr) { console.warn('[DZTools:Health:Early] Pollinations failed:', _polErr.message) }
-      return res.status(200).json({ content: '⚠️ تعذّر توليد تحليل الأعراض. يرجى المحاولة مرة أخرى.', model: null })
-    } catch (_earlyErr) {
-      console.error('[DZTools:Health:Early] ❌', _earlyErr.message)
-      return res.status(200).json({ content: '⚠️ خطأ مؤقت في وكيل الصحة. يرجى المحاولة مرة أخرى.', model: null })
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // 🛡️ ULTRA-EARLY SPORTS GUARDIAN — أول خط دفاع — قبل correctQuery وقبل أي شيء
-  // يضمن أن لا LLM يجيب على أسئلة "فريق ضد فريق" أبداً
-  // ══════════════════════════════════════════════════════════════════════
-  {
-    const _ultraRaw = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
-    const _ultraMatchVs = detectMatchVsQuery(_ultraRaw)
-    if (_ultraMatchVs?.isMatchVs) {
-      console.log(`[MatchVs:UltraEarly] 🛡️ "${_ultraMatchVs.team1} ضد ${_ultraMatchVs.team2}" — حارس رياضي أولي تفعّل`)
-      try {
-        const _sRes = await runSportsAgent(_ultraRaw, messages)
-        const _sCont = _sRes.userResponse || _sRes.context || _sRes.content || ''
-        return res.status(200).json({
-          content: _sCont,
-          model: 'sports-agent',
-          found: _sRes.found,
-          type: _sRes.type,
-          matches: _sRes.matches,
-          sources: _sRes.sources,
-          wc2026: _sRes.wc2026,
-          matchVsData: (() => {
-            const _m = _sRes.matches?.[0] || _sRes.wcFixtures?.[0] || null
-            return { team1: _ultraMatchVs.team1, team2: _ultraMatchVs.team2, temporal: _ultraMatchVs.temporal, date: _m?.date||null, time: _m?.startTime||null, competition: _m?.competition||null, venue: _m?.venue||null, city: _m?.city||null, round: _m?.round||null, kooraLink: _m?.kooraLink||null, homeScore: _m?.homeScore??null, awayScore: _m?.awayScore??null }
-          })(),
-          _sportsAgent: true,
-        })
-      } catch (_e) {
-        console.error('[MatchVs:UltraEarly] خطأ في الوكيل الرياضي:', _e.message?.slice(0, 100))
-        return res.status(200).json({
-          content: [
-            `## ⚽ ${_ultraMatchVs.team1} ضد ${_ultraMatchVs.team2}`,
-            ``,
-            `> ⚠️ **تعذّر الاتصال بالوكيل الرياضي مؤقتاً** — تحقق من المصادر الرسمية مباشرةً:`,
-            ``,
-            `| المصدر | الرابط |`,
-            `|--------|--------|`,
-            `| 📡 **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
-            `| ⚽ **FotMob** | [مباريات كأس العالم](https://www.fotmob.com/leagues/77/matches/world-cup) |`,
-            `| 🏆 **FIFA.com** | [الموقع الرسمي](https://www.fifa.com/worldcup) |`,
-            `| 🇩🇿 **Kooora** | [مباريات الجزائر](https://www.kooora.com/) |`,
-          ].join('\n'),
-          model: 'sports-agent-guardian',
-          _sportsAgent: true,
-          _guardianBlocked: true,
-        })
-      }
-    }
-  }
-  // ══════════════════════════════════════════════════════════════════════
-  // ══════════════════════════════════════════════════════════════════════
-
-  // ══════════════════════════════════════════════════════════════════════
-  // 🩺 ULTRA-EARLY HEALTH GUARDIAN — خط الدفاع الأول للصحة
-  // يعمل قبل كل شيء: قبل Tool Redirect, قبل Capability KB, قبل WC2026
-  // يضمن أن الوكيل الطبي يُجيب دائماً قبل LLM على أسئلة الأعراض
-  // ══════════════════════════════════════════════════════════════════════
-  {
-    const _uhRaw = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
-    // Guard: لا نعترض طلبات الأدوات المتخصصة
-    // 'health' مستثنى هنا لأن DZTools تتوقع ردًّا نصيًّا بسيطاً لا بطاقة health-analysis غنية
-    // معالجة DZTools health تتم في isDZToolRequest fast-path بعد ذلك
-    const _uhToolReq = typeof req.body.tool === 'string' ? req.body.tool.toLowerCase() : ''
-    const _uhIsTool = ['jobs', 'cv', 'legal', 'chart', 'ocr', 'health'].includes(_uhToolReq)
-    if (!_uhIsTool && _uhRaw.length >= 4) {
-      try {
-        const _uhIntent = detectHealthIntent(_uhRaw)
-        if (_uhIntent.isHealthQuery && !_uhIntent.isDoctorSearch) {
-          console.log(`[DZHealth:UltraEarly] 🩺 ${_uhIntent.isEmergency ? '🚨 EMERGENCY' : 'HEALTH'} | symptoms=${_uhIntent.symptoms.join(',')} | query="${_uhRaw.slice(0,70)}"`)
-
-          // طوارئ → رد فوري
-          if (_uhIntent.isEmergency) {
-            return res.status(200).json({
-              content: '',
-              richType: 'health-analysis',
-              healthData: {
-                interpretation: 'تم الكشف عن أعراض طارئة — يرجى الاتصال فوراً بالإسعاف',
-                possible_causes: ['حالة طارئة تستدعي تدخلاً فورياً'],
-                triage_level: 'HIGH',
-                triage_reason: 'أعراض خطيرة تستوجب رعاية طبية فورية',
-                advice: ['📞 اتصل بالإسعاف: 14 (الجزائر) أو 115 (SAMU)', 'لا تبقَ وحدك — اطلب المساعدة فوراً'],
-                medications_info: null,
-                suggest_doctor: true,
-                emergency_note: '🚨 هذه حالة طوارئ — اتصل بـ 14 أو 115 فوراً',
-                disclaimer: 'هذا ليس تشخيصاً طبياً — اتصل بالإسعاف الآن',
-                symptoms_found: _uhIntent.symptoms,
-                original_query: _uhRaw.slice(0, 120),
-              },
-              model: 'health-guardian-emergency',
-            })
-          }
-
-          // تحليل طبي — Groq أولاً ثم KB fallback
-          const _uhSysPrompt = buildHealthSystemPrompt(_uhIntent.symptoms, _uhIntent.hasDrugQuestion, false)
-          const _uhDzKb = getRelatedDZKnowledge(_uhIntent.symptoms)
-          const _uhKbNote = _uhDzKb
-            ? `\n\n[معلومة طبية جزائرية: "${_uhDzKb.name}" — ${_uhDzKb.prevalence}. أدوية متاحة: ${_uhDzKb.drugs.join(', ')}]`
-            : ''
-          const _uhMsgs = [
-            { role: 'system', content: _uhSysPrompt + _uhKbNote },
-            { role: 'user',   content: _uhRaw },
-          ]
-
-          let _uhContent = null
-          let _uhModel   = null
-
-          // محاولة Groq llama-3.3-70b
-          try {
-            const _uhGroq = await callGroqWithFallback({
-              model: 'llama-3.3-70b-versatile',
-              messages: _uhMsgs,
-              max_tokens: 1000,
-              temperature: 0.3,
-            })
-            if (_uhGroq.content && _uhGroq.content.trim().length > 20) {
-              _uhContent = _uhGroq.content
-              _uhModel   = 'groq:llama-3.3-70b-versatile'
-            }
-          } catch (_uhG1) { console.warn('[DZHealth:UltraEarly] Groq1:', _uhG1.message?.slice(0,60)) }
-
-          // محاولة Groq llama-3.1-8b إذا فشل الأول
-          if (!_uhContent) {
-            try {
-              const _uhGroq2 = await callGroqWithFallback({
-                model: 'llama-3.1-8b-instant',
-                messages: _uhMsgs,
-                max_tokens: 800,
-                temperature: 0.3,
-              })
-              if (_uhGroq2.content && _uhGroq2.content.trim().length > 20) {
-                _uhContent = _uhGroq2.content
-                _uhModel   = 'groq:llama-3.1-8b-instant'
-              }
-            } catch (_uhG2) { console.warn('[DZHealth:UltraEarly] Groq2:', _uhG2.message?.slice(0,60)) }
-          }
-
-          const _uhParsed = _uhContent
-            ? parseHealthResponse(_uhContent, _uhRaw, _uhIntent.symptoms)
-            : buildKBFallbackResponse(_uhIntent.symptoms, _uhIntent.hasDrugQuestion, _uhRaw)
-
-          _uhParsed.model_used = _uhModel || 'kb_local'
-          console.log(`[DZHealth:UltraEarly] ✅ triage=${_uhParsed.triage_level} | causes=${_uhParsed.possible_causes?.length} | src=${_uhParsed.model_used}`)
-
-          return res.status(200).json({
-            content: '',
-            richType: 'health-analysis',
-            healthData: _uhParsed,
-            model: _uhModel || 'kb_local',
-          })
-        }
-      } catch (_uhErr) {
-        console.error('[DZHealth:UltraEarly] ❌ error (non-fatal, continuing):', _uhErr.message?.slice(0,100))
-        // لا نُعيد خطأً — نتابع المسار العادي
-      }
-    }
-  }
-  // ══════════════════════════════════════════════════════════════════════
-
-  // ══ PLAYER CURRENT CLUB INTERCEPTOR — قبل WC2026 squad ══════════════════
-  // يعترض أسئلة "مع من يلعب X" / "أين يلعب X" / "ما نادي X" ويُجيب بنادي اللاعب الحالي
-  {
-    const _pccRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
-                     .find(m => m?.role === 'user')?.content?.trim() || ''
-    const _pccClubQ = /(?:مع\s+من\s+يلعب|أين\s+يلعب|في\s+أي\s+نادي|ما\s+نادي|نادي\s+(?:من|هو|ه)|يلعب\s+(?:مع|في|حالياً|الآن|عند)|(?:club|team|plays?\s+for))/i.test(_pccRaw)
-    if (_pccClubQ) {
-      const _PLAYER_CLUBS = {
-        'ميسي':        { name:'ليونيل ميسي',       club:'إنتر ميامي 🇺🇸',      flag:'🇦🇷', emoji:'⭐' },
-        'messi':       { name:'ليونيل ميسي',       club:'إنتر ميامي 🇺🇸',      flag:'🇦🇷', emoji:'⭐' },
-        'رونالدو':     { name:'كريستيانو رونالدو', club:'النصر 🇸🇦',            flag:'🇵🇹', emoji:'🌟' },
-        'ronaldo':     { name:'كريستيانو رونالدو', club:'النصر 🇸🇦',            flag:'🇵🇹', emoji:'🌟' },
-        'مبابي':       { name:'كيليان مبابي',      club:'ريال مدريد 🇪🇸',       flag:'🇫🇷', emoji:'⚡' },
-        'mbappe':      { name:'كيليان مبابي',      club:'ريال مدريد 🇪🇸',       flag:'🇫🇷', emoji:'⚡' },
-        'هالاند':      { name:'إيرلينغ هالاند',   club:'مانشستر سيتي 🏴󠁧󠁢󠁥󠁮󠁧󠁿', flag:'🇳🇴', emoji:'💥' },
-        'haaland':     { name:'إيرلينغ هالاند',   club:'مانشستر سيتي 🏴󠁧󠁢󠁥󠁮󠁧󠁿', flag:'🇳🇴', emoji:'💥' },
-        'صلاح':        { name:'محمد صلاح',         club:'ليفربول 🏴󠁧󠁢󠁥󠁮󠁧󠁿',        flag:'🇪🇬', emoji:'🔴' },
-        'salah':       { name:'محمد صلاح',         club:'ليفربول 🏴󠁧󠁢󠁥󠁮󠁧󠁿',        flag:'🇪🇬', emoji:'🔴' },
-        'محرز':        { name:'رياض محرز',         club:'الأهلي 🇸🇦',           flag:'🇩🇿', emoji:'🟢' },
-        'mahrez':      { name:'رياض محرز',         club:'الأهلي 🇸🇦',           flag:'🇩🇿', emoji:'🟢' },
-        'بنزيمة':      { name:'كريم بنزيمة',       club:'الاتحاد 🇸🇦',          flag:'🇫🇷', emoji:'🏆' },
-        'benzema':     { name:'كريم بنزيمة',       club:'الاتحاد 🇸🇦',          flag:'🇫🇷', emoji:'🏆' },
-        'نيمار':       { name:'نيمار جونيور',      club:'سانتوس 🇧🇷',           flag:'🇧🇷', emoji:'🎭' },
-        'neymar':      { name:'نيمار جونيور',      club:'سانتوس 🇧🇷',           flag:'🇧🇷', emoji:'🎭' },
-        'فينيسيوس':    { name:'فينيسيوس جونيور',  club:'ريال مدريد 🇪🇸',       flag:'🇧🇷', emoji:'🔥' },
-        'vinicius':    { name:'فينيسيوس جونيور',  club:'ريال مدريد 🇪🇸',       flag:'🇧🇷', emoji:'🔥' },
-        'بيللينغهام':  { name:'جود بيلينغهام',    club:'ريال مدريد 🇪🇸',       flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', emoji:'💫' },
-        'bellingham':  { name:'جود بيلينغهام',    club:'ريال مدريد 🇪🇸',       flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', emoji:'💫' },
-        'بن جديد':     { name:'أمين بن جديد',     club:'الاتحاد 🇸🇦',          flag:'🇩🇿', emoji:'🟢' },
-        'بن ناصر':     { name:'عدنان بن ناصر',    club:'باشاك شهير 🇹🇷',       flag:'🇩🇿', emoji:'🟢' },
-        'سليماني':     { name:'إسلام سليماني',    club:'بيراميدز 🇪🇬',         flag:'🇩🇿', emoji:'🟢' },
-        'بوفال':       { name:'سفيان بوفال',      club:'مارسيليا 🇫🇷',         flag:'🇲🇦', emoji:'🔴' },
-        'لامين يمال':  { name:'لامين يمال',        club:'برشلونة 🇪🇸',          flag:'🇪🇸', emoji:'⚡' },
-        'yamal':       { name:'لامين يمال',        club:'برشلونة 🇪🇸',          flag:'🇪🇸', emoji:'⚡' },
-      }
-      const _pccKey = Object.keys(_PLAYER_CLUBS).find(k => _pccRaw.toLowerCase().includes(k.toLowerCase()))
-      if (_pccKey) {
-        const _pccInfo = _PLAYER_CLUBS[_pccKey]
-        console.log(`[PlayerClub] ⚽ Intercepted club query for "${_pccInfo.name}" → ${_pccInfo.club}`)
-        return res.status(200).json({
-          content: [
-            `## ${_pccInfo.emoji} ${_pccInfo.name} ${_pccInfo.flag}`,
-            ``,
-            `> **يلعب حالياً مع:** **${_pccInfo.club}**`,
-            ``,
-            `| التفصيل | القيمة |`,
-            `|---------|--------|`,
-            `| 🏟️ **النادي الحالي** | ${_pccInfo.club} |`,
-            `| 🌍 **الجنسية** | ${_pccInfo.flag} |`,
-            ``,
-            `> 📅 *المعلومات محدّثة — يونيو 2026*`,
-          ].join('\n'),
-          model: 'player-club-kb',
-          found: true,
-          _bypassLLM: true,
-        })
-      }
-    }
-  }
-  // ══════════════════════════════════════════════════════════════════════════
-
-  // ══ TEMPORAL QUERY INTERCEPTOR — متى استشهد / وُلد / حدثت / تأسست ════════
-  // يعترض أسئلة "متى" ويُبرز التاريخ كإجابة رئيسية
-  // طبقة 1: KB جزائري + KB شخصيات → طبقة 2: Wikidata P569/P570/P585 → طبقة 3: Wikipedia
-  {
-    // ── KB الأحداث التاريخية الجزائرية الكبرى ─────────────────────────────
-    const _DZ_EVENTS_KB = {
-      // ── ثورة التحرير ──
-      'ثورة نوفمبر':              { date: '1 نوفمبر 1954', event: 'اندلاع الثورة الجزائرية', detail: 'انطلقت ثورة أول نوفمبر 1954 بـ70 عملية متزامنة في أنحاء الجزائر، بقيادة "المجموعة الثورية للوحدة والعمل" التي ستُصبح جبهة التحرير الوطني (FLN).' },
-      'اندلاع الثورة':            { date: '1 نوفمبر 1954', event: 'اندلاع الثورة الجزائرية' },
-      'أول نوفمبر':               { date: '1 نوفمبر 1954', event: 'اندلاع ثورة التحرير الجزائرية' },
-      'استقلال الجزائر':          { date: '5 يوليو 1962', event: 'استقلال الجزائر', detail: 'أُعلن استقلال الجزائر رسمياً في 5 يوليو 1962، بعد 132 سنة من الاستعمار الفرنسي (1830-1962)، وإثر 7 سنوات ونصف من الثورة التحريرية.' },
-      'استقلال':                  { date: '5 يوليو 1962', event: 'استقلال الجزائر عن فرنسا' },
-      'مفاوضات إيفيان':           { date: '18 مارس 1962', event: 'اتفاقيات إيفيان', detail: 'وُقِّعت اتفاقيات إيفيان في 18 مارس 1962 بين الحكومة الفرنسية وجبهة التحرير الوطني، وأنهت رسمياً الحرب الجزائرية.' },
-      'اتفاقيات إيفيان':          { date: '18 مارس 1962', event: 'توقيع اتفاقيات إيفيان' },
-      'مؤتمر الصومام':            { date: '20 أغسطس 1956', event: 'مؤتمر الصومام' },
-      'مجازر 8 مايو':             { date: '8 مايو 1945', event: 'مجازر 8 مايو 1945 في سطيف وقالمة وخراطة', detail: 'قمع فرنسا للمظاهرات السلمية في 8 مايو 1945، ذهب ضحيتها آلاف الجزائريين.' },
-      'مجازر سطيف':               { date: '8 مايو 1945', event: 'مجازر سطيف وقالمة وخراطة 1945' },
-
-      // ── شهداء ثورة ──
-      'استشهاد بن مهيدي':         { date: '3 مارس 1957', event: 'استشهاد العربي بن مهيدي', detail: 'نُفِّذ حكم الإعدام بحق القائد الثوري محمد العربي بن مهيدي في 3 مارس 1957 على يد الاستعمار الفرنسي، بعد اعتقاله في مدينة الجزائر.' },
-      'استشهاد زيغود يوسف':       { date: '25 سبتمبر 1956', event: 'استشهاد زيغود يوسف' },
-      'استشهاد ديدوش مراد':       { date: '18 يناير 1955', event: 'استشهاد ديدوش مراد' },
-      'استشهاد مصطفى بن بولعيد': { date: '22 مارس 1956', event: 'استشهاد مصطفى بن بولعيد' },
-      'استشهاد عبان رمضان':       { date: '27 ديسمبر 1957', event: 'استشهاد عبان رمضان' },
-      'اغتيال بوضياف':            { date: '29 يونيو 1992', event: 'اغتيال محمد بوضياف', detail: 'اغتيل الرئيس محمد بوضياف في 29 يونيو 1992 في عنابة خلال خطاب رسمي.' },
-
-      // ── أحداث سياسية جزائرية ──
-      'انقلاب بومدين':            { date: '19 يونيو 1965', event: 'انقلاب هواري بومدين على أحمد بن بلة' },
-      'انتفاضة أكتوبر':           { date: '5 أكتوبر 1988', event: 'أحداث أكتوبر 1988', detail: 'انتفاضة شعبية جزائرية اندلعت في 5 أكتوبر 1988 ضد الحزب الواحد والأزمة الاقتصادية، قمعتها السلطة بعنف وخلّفت مئات القتلى.' },
-      'أحداث أكتوبر':             { date: '5 أكتوبر 1988', event: 'أحداث أكتوبر 1988 الجزائر' },
-      'الحراك':                    { date: '22 فبراير 2019', event: 'انطلاق حراك 22 فبراير', detail: 'انطلق الحراك الشعبي الجزائري في 22 فبراير 2019 رفضاً للعهدة الخامسة لبوتفليقة، وأدى إلى استقالته في 2 أبريل 2019.' },
-      'استقالة بوتفليقة':         { date: '2 أبريل 2019', event: 'استقالة الرئيس بوتفليقة' },
-      'تأسيس FLN':                { date: '10 أكتوبر 1954', event: 'تأسيس جبهة التحرير الوطني (FLN)' },
-      'تأسيس جبهة التحرير':       { date: '10 أكتوبر 1954', event: 'تأسيس FLN' },
-
-      // ── أحداث عالمية مرتبطة ──
-      'معركة الجزائر':            { date: 'يناير–أكتوبر 1957', event: 'معركة الجزائر 1957', detail: 'معركة عسكرية حضرية بين الجيش الفرنسي وجبهة التحرير الوطني في مدينة الجزائر عام 1957.' },
-    }
-
-    // ── KB تواريخ الشهداء والسياسيين (سريع — بدون fetch) ─────────────────
-    const _PERSONS_DATE_KB = {
-      'بن مهيدي': { birth: '1923', death: '3 مارس 1957', note: 'أُعدم على يد الاستعمار الفرنسي' },
-      'العربي بن مهيدي': { birth: '1923', death: '3 مارس 1957', note: 'أُعدم على يد الاستعمار الفرنسي' },
-      'محمد العربي بن مهيدي': { birth: '1923', death: '3 مارس 1957', note: 'أُعدم على يد الاستعمار الفرنسي' },
-      'زيغود يوسف': { birth: '1921', death: '25 سبتمبر 1956', note: 'استشهد في معركة' },
-      'ديدوش مراد': { birth: '1927', death: '18 يناير 1955', note: 'أول شهيد ضابط في الثورة' },
-      'مصطفى بن بولعيد': { birth: '1917', death: '22 مارس 1956', note: 'أحد ستة الآباء المؤسسين' },
-      'عبان رمضان': { birth: '1920', death: '27 ديسمبر 1957', note: 'مهندس مؤتمر الصومام' },
-      'أحمد زبانة': { birth: '1926', death: '19 يونيو 1956', note: 'أول من نُفِّذ فيه حكم الإعدام في الثورة' },
-      'لرباع': { birth: '1929', death: '19 يونيو 1956', note: 'أُعدم مع أحمد زبانة' },
-      'محمد بوضياف': { birth: '23 يونيو 1919', death: '29 يونيو 1992', note: 'اغتيل في عنابة' },
-      'هواري بومدين': { birth: '23 أغسطس 1932', death: '27 ديسمبر 1978', note: 'رئيس الجزائر 1965-1978' },
-      'أحمد بن بلة': { birth: '25 ديسمبر 1916', death: '11 أبريل 2012', note: 'أول رئيس للجزائر' },
-      'الشاذلي بن جديد': { birth: '14 أبريل 1929', death: '6 أكتوبر 2012', note: 'رئيس الجزائر 1979-1992' },
-      'عبد العزيز بوتفليقة': { birth: '2 مارس 1937', death: '17 سبتمبر 2021', note: 'رئيس الجزائر 1999-2019' },
-      'جمال عبد الناصر': { birth: '15 يناير 1918', death: '28 سبتمبر 1970', note: 'رئيس مصر 1956-1970' },
-      'ياسر عرفات': { birth: '24 أغسطس 1929', death: '11 نوفمبر 2004', note: 'رئيس السلطة الفلسطينية' },
-      'الملك فيصل': { birth: '14 أبريل 1906', death: '25 مارس 1975', note: 'اغتيل' },
-      'عمر المختار': { birth: '1858', death: '16 سبتمبر 1931', note: 'أُعدم شنقاً من قِبل إيطاليا' },
-      'الأمير عبد القادر': { birth: '6 سبتمبر 1808', death: '26 مايو 1883', note: 'مقاوم جزائري ضد الاستعمار الفرنسي' },
-      'نيلسون مانديلا': { birth: '18 يوليو 1918', death: '5 ديسمبر 2013', note: 'أول رئيس أسود لجنوب أفريقيا' },
-      'مارتن لوثر كينغ': { birth: '15 يناير 1929', death: '4 أبريل 1968', note: 'اغتيل' },
-    }
-
-    const _tqRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
-                    .find(m => m?.role === 'user')?.content?.trim() || ''
-
-    // ══════════════════════════════════════════════════════════════════════
-    // 🏢 DZ COMPANIES EARLY BYPASS — شركات جزائرية
-    // يكشف استعلامات الشركات الجزائرية ويعيد ردًّا فورياً من KB + Wikipedia
-    // ══════════════════════════════════════════════════════════════════════
-    if (_tqRaw.length >= 3) {
-      const _dzCoDetected = _detectDZCompany(_tqRaw)
-      if (_dzCoDetected) {
-        console.log(`[DZCompanies] 🏢 Company query detected — resolving...`)
-        try {
-          const _dzCoRes = await _resolveDZCompany(_tqRaw)
-          if (_dzCoRes?.content) {
-            console.log(`[DZCompanies] ✅ model="${_dzCoRes.model}"`)
-            return res.status(200).json({ ..._dzCoRes, _bypassLLM: true })
-          }
-        } catch (_dzCoErr) {
-          console.warn('[DZCompanies] ⚠️ KB resolve failed:', _dzCoErr.message?.slice(0, 60))
-        }
-        // Fallback: Wikipedia live search إذا فشل KB
-        if (!_dzCoDetected.generalQuery) {
-          const _coName = _tqRaw.replace(/(?:شركة|مجمع|مؤسسة|entreprise|groupe|société|company|group|about)\s*/gi, '').trim()
-          try {
-            const _dzCoWiki = await _lookupUnknownDZCompany(_coName)
-            if (_dzCoWiki?.content) {
-              return res.status(200).json({ ..._dzCoWiki, _bypassLLM: true })
-            }
-          } catch {}
-        }
-      }
-    }
-
-    if (_tqRaw.length >= 5 && _detectTemporalQ(_tqRaw)) {
-      const _tqDet = _detectTemporalQ(_tqRaw)
-      const _tqEntity = (_tqDet?.entity || '').trim()
-      const _tqType   = _tqDet?.dateType || 'point'
-      const _tqTypeAr = _tqDet?.dateTypeAr || 'تاريخ الحدث'
-
-      // تطبيع الاستعلام — توحيد صيغ الأفعال
-      const _tqNorm = _tqRaw
-        .replace(/استقلت|يستقل|مستقلة/g, 'استقلال')
-        .replace(/اندلعت|اندلع|انطلقت|انطلق/g, 'ثورة نوفمبر')
-        .replace(/استشهد\s+بن\s+مهيدي/g, 'استشهاد بن مهيدي')
-        .replace(/اغتيل\s+بوضياف/g, 'اغتيال بوضياف')
-        .replace(/وقّع|وقعت|أُبرمت/g, 'مفاوضات')
-
-      // ① فحص KB الأحداث التاريخية
-      const _evtKey = Object.keys(_DZ_EVENTS_KB).find(k =>
-        _tqNorm.includes(k) || _tqRaw.includes(k) || _tqEntity.includes(k) || k.includes(_tqEntity)
-      )
-      if (_evtKey) {
-        const _evt = _DZ_EVENTS_KB[_evtKey]
-        console.log(`[TemporalKB] ✅ Event KB: "${_evtKey}" → ${_evt.date}`)
-        const _lines = [
-          `## 📅 ${_evt.event}`,
-          ``,
-          `> 🗓️ **التاريخ: ${_evt.date}**`,
-          ``,
-        ]
-        if (_evt.detail) { _lines.push(`### 📖 التفاصيل`); _lines.push(_evt.detail); _lines.push(``) }
-        _lines.push(`---`)
-        _lines.push(`> 📚 *معلومات من قاعدة المعرفة الجزائرية | DZ AGENT*`)
-        return res.json({ content: _lines.join('\n'), model: 'temporal-kb-event' })
-      }
-
-      // ② فحص KB الشهداء والشخصيات
-      const _pKey = Object.keys(_PERSONS_DATE_KB).find(k =>
-        _tqRaw.includes(k) || _tqEntity.includes(k) || k.includes(_tqEntity)
-      )
-      if (_pKey) {
-        const _pd = _PERSONS_DATE_KB[_pKey]
-        const _dateVal = _tqType === 'birth' ? _pd.birth : (_pd.death || _pd.birth)
-        const _dateLabel = _tqType === 'birth' ? 'تاريخ الميلاد' : (_pd.death ? 'تاريخ الوفاة / الاستشهاد' : 'تاريخ الميلاد')
-        console.log(`[TemporalKB] ✅ Person KB: "${_pKey}" ${_dateLabel} → ${_dateVal}`)
-        const _lines = [
-          `## 📅 ${_pKey}`,
-          ``,
-          `> **${_dateLabel}:** 🗓️ **${_dateVal}**`,
-        ]
-        if (_pd.note) _lines.push(`> *${_pd.note}*`)
-        _lines.push(``)
-        _lines.push(`---`)
-        _lines.push(`> 📚 *معلومات من قاعدة المعرفة | DZ-GPT — جارٍ التحقق من Wikidata...*`)
-        // إرسال KB فوراً ثم fetch Wikidata في الخلفية غير محظور
-        return res.json({ content: _lines.join('\n'), model: 'temporal-kb-person' })
-      }
-
-      // ③ Wikidata + Wikipedia حياً (للكيانات غير الموجودة في KB)
-      console.log(`[TemporalLookup] 🌐 Live Wikidata+Wikipedia for "${_tqEntity}"`)
-      try {
-        const _liveResult = await _resolveTemporalQ(_tqRaw)
-        if (_liveResult?.found) {
-          return res.json({ content: _liveResult.content, model: _liveResult.model })
-        }
-      } catch (_tqErr) {
-        console.error('[TemporalLookup] error:', _tqErr.message)
-      }
-      // لا fallback — نترك باقي الـ handlers يتولى الأمر
-    }
-  }
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  // ══ DZ KNOWLEDGE ENTITY AGENT — نظام التعرف على الكيانات (محسّن) ════════
-  // WHO / WHAT → Wikidata → Wikipedia → DBpedia (مع فصل صارم عن Search/Maps/Service)
-  // يمنع هلوسة LLM ويضمن المصادر الموثوقة — عتبة الثقة 85%
-  {
-    const _keaRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
-                      .find(m => m?.role === 'user')?.content?.trim() || ''
-    if (_keaRaw.length >= 3) {
-      const _keaClass = classifyEntityIntent(_keaRaw)
-      if (_keaClass.shouldHandle) {
-        console.log(`[KnowledgeEntityAgent] 🎯 Handling: "${_keaRaw.slice(0,60)}"`)
-        try {
-          const _keaResult = await resolveKnowledgeEntity(_keaRaw)
-          if (_keaResult?.found && _keaResult.content) {
-            console.log(`[KnowledgeEntityAgent] ✅ model="${_keaResult.model}" conf=${(_keaResult.confidence*100).toFixed(0)}%`)
-            return res.status(200).json({
-              content: _keaResult.content,
-              model: _keaResult.model,
-              found: true,
-              confidence: _keaResult.confidence,
-              sources: _keaResult.sources,
-              entityType: _keaResult.entityType,
-              _bypassLLM: true,
-              _fromCache: _keaResult._fromCache || false,
-            })
-          }
-          // درجة ثقة منخفضة — نرسل رابط مصادر
-          if (_keaResult && !_keaResult.found && _keaResult.content) {
-            return res.status(200).json({
-              content: _keaResult.content,
-              model: _keaResult.model,
-              found: false,
-              _bypassLLM: true,
-            })
-          }
-        } catch (_keaErr) {
-          console.error('[KnowledgeEntityAgent] ❌', _keaErr.message?.slice(0, 100))
-        }
-        // fallback — نتابع pipeline العادي إذا فشل الوكيل
-      } else if (_keaClass.redirectTo && _keaClass.intent !== ENTITY_INTENT.UNRELATED) {
-        console.log(`[KnowledgeEntityAgent] 🔀 Redirect: "${_keaClass.intent}" → ${_keaClass.redirectTo}`)
-        // لا نوقف هنا — نسمح للوكلاء الأخرى بالمعالجة
-      }
-    }
-  }
-  // ══════════════════════════════════════════════════════════════════════════
-
-  // ══ WIKI ENTITY LOOKUP — مؤلف كتاب / مخرج فيلم / ملحن أغنية ═══════════
-  // يعترض أسئلة "من هو مؤلف كتاب X" قبل أن تذهب للبحث الحي غير الملائم
-  // المصادر: KB أولاً → Wikipedia AR → Wikidata (بالتوازي)
-  {
-    const _welRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
-                     .find(m => m?.role === 'user')?.content?.trim() || ''
-    // كشف مبكر: هل هذا سؤال كيان (مؤلف/مخرج/ملحن)؟
-    if (_welRaw.length >= 5 && _detectEntityAttrQ(_welRaw)) {
-      // 1. فحص KB أولاً (فوري)
-      const _welKBName = resolveRoleToPersonName(_welRaw)
-      if (_welKBName) {
-        console.log(`[WikiEntity:KB] ✅ "${_welRaw.slice(0,50)}" → "${_welKBName}"`)
-        // استرجاع بطاقة الشخص من Wikipedia بشكل حي
-        try {
-          const _welWikiRes = await _resolveEntityQuery(_welRaw)
-          if (_welWikiRes?.content) {
-            return res.status(200).json({ ..._welWikiRes, _bypassLLM: true })
-          }
-        } catch {}
-        // fallback: رد KB بسيط
-        return res.status(200).json({
-          content: [
-            `## 📖 ${_welRaw.replace(/^من\s+(?:هو|هي)?\s*/i,'').trim()}`,
-            ``,
-            `> **المؤلف / الكاتب:** **${_welKBName}**`,
-            ``,
-            `> 📅 *معلومات من قاعدة بيانات DZ-GPT — يونيو 2026*`,
-          ].join('\n'),
-          model: 'wiki-entity-kb',
-          found: true,
-          _bypassLLM: true,
-        })
-      }
-      // 2. البحث الحي من Wikipedia + Wikidata (إذا لم يكن في KB)
-      console.log(`[WikiEntity:Live] 🔍 "${_welRaw.slice(0,60)}" — querying Wikipedia + Wikidata...`)
-      try {
-        const _welLiveRes = await _resolveEntityQuery(_welRaw)
-        if (_welLiveRes?.content) {
-          console.log(`[WikiEntity:Live] ✅ model="${_welLiveRes.model}"`)
-          return res.status(200).json({ ..._welLiveRes, _bypassLLM: true })
-        }
-      } catch (_welErr) {
-        console.error('[WikiEntity:Live] ❌', _welErr.message?.slice(0,80))
-      }
-      // 3. إذا فشل كل شيء — رسالة بمصادر مباشرة
-      const _welEntityDet = _detectEntityAttrQ(_welRaw)
-      if (_welEntityDet) {
-        const _welEntity = encodeURIComponent(_welEntityDet.entity)
-        return res.status(200).json({
-          content: [
-            `## 🔍 لم أعثر على معلومات كافية عن "${_welEntityDet.entity}"`,
-            ``,
-            `يمكنك البحث مباشرةً في:`,
-            `| المصدر | الرابط |`,
-            `|--------|--------|`,
-            `| 📚 **ويكيبيديا العربية** | [بحث](https://ar.wikipedia.org/w/index.php?search=${_welEntity}) |`,
-            `| 🌐 **Wikidata** | [بحث](https://www.wikidata.org/w/index.php?search=${_welEntity}) |`,
-            `| 🔍 **Google** | [بحث](https://www.google.com/search?q=${_welEntity}+مؤلف+كاتب) |`,
-          ].join('\n'),
-          model: 'wiki-entity-not-found',
-          found: false,
-          _bypassLLM: true,
-        })
-      }
-    }
-  }
-  // ══════════════════════════════════════════════════════════════════════════
-
-  // ══ WC2026 SQUAD ULTRA-EARLY INTERCEPTOR — أولوية قصوى ══════════════════
-  // يُطلَق قبل كل handler آخر — يمنع أي LLM من تجاوز قاعدة بيانات التشكيلات
-  // الترتيب: ultra-early guardian → هذا الـ block → كل شيء آخر
-  {
-    const _ueRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
-                    .find(m => m?.role === 'user')?.content?.trim() || ''
-    // كشف نية تشكيلة كأس العالم 2026 — فصحى + دارجة جزائرية
-    const _dz_squad_re = /(?:تشكيل(?:ة|ات)?|شكيل(?:ة|ات)?|قائمة\s*(?:اللاعبين|الرسمية|بيتكو|المدرب)?|لاعب(?:ون|ين|و|ي)?\s*(?:المنتخب|الفريق|الخضر|الجزائر)?|استدعاء|المستدعون|26\s*لاعب|الـ\s*26|منو\s*(?:يلعب|فيهم|في\s*القائمة|دعا|جاب)|واش\s*(?:راهم|يلعبو|عندنا|جابو)|كروسة|الكرو|كرو\s*الجزائر|لاعبي\s*(?:الخضر|الجزائر|المنتخب)|دعاهم\s*(?:بيتكو|المدرب)|كاش\s*(?:تشكيل|قائمة)|من\s+(?:في|هم)\s*القائمة|من\s+يلعب|من\s+سيلعب|\bsquad\b|\broster\b|\bline.?up\b|\bformation\b|\bplayers?\s+list\b|\bstarting\s+(?:eleven|xi|lineup)\b|\bnational\s+team\s+squad\b|\bworld\s*cup\s+squad\b|\bwho\s+(?:is\s+)?in\s+(?:the\s+)?(?:squad|team)\b)/i
-    const _dz_ctx_re   = /(?:كأس\s*العالم|مونديال|المونديال|FIFA|WC\s*2026|2026|الخضر|الجزائر|الجزائري|المنتخب\s*الجزائري|الخضرة|بيتكوفيتش|بيتكو|\bworld\s*cup\b|\bwc\s*2026\b|\balgeria\b|\balgerian\b|\bargentina\b|\bfrance\b|\bmorocco\b|\btunisia\b)/i
-    const _ueIsSquad = _dz_squad_re.test(_ueRaw) && _dz_ctx_re.test(_ueRaw)
-    if (_ueIsSquad) {
-      // تحديد الفريق من الاستفسار
-      const _ueTeam = detectWC2026SquadTeam(_ueRaw)
-      console.log(`[WC2026:UltraEarlySquad] ⛔ LLM BLOCKED | Detected: "${_ueTeam || 'غير محدد'}" | Query: "${_ueRaw.slice(0,70)}"`)
-
-      // الجزائر: فصحى + دارجة
-      const _ueIsAlgeria = !_ueTeam && (
-        /(?:الجزائر|الجزائري|الخضر|الخضرة|الخضار|الفنيق\s*الجزائري|المنتخب\s*الجزائري|منتخب\s*(?:الجزائر|الجزائري|الوطني)|كرو\s*الجزائر|كروسة|الكرو|بيتكوفيتش|بيتكو|خضرنا|منتخبنا|\balgeria\b|\balgerian\b|\bdes fennecs\b|\bfennecs\b)/i.test(_ueRaw)
-      )
-      if (_ueIsAlgeria || _ueTeam === 'الجزائر') {
-        const _ueAlgResp = buildAlgeriaWC2026SquadResponse('full')
-        return res.status(200).json({
-          content: _ueAlgResp,
-          model: 'wc2026-squad-ultra-early-kb',
-          _sportsAgent: true, _bypassLLM: true, wc2026: true, found: true, type: 'algeria-squad',
-        })
-      }
-
-      // فريق آخر موجود في WC2026_ALL_SQUADS
-      if (_ueTeam && WC2026_ALL_SQUADS[_ueTeam]) {
-        const _ueResp = buildWC2026SquadResponse(_ueTeam)
-        return res.status(200).json({
-          content: _ueResp,
-          model: 'wc2026-squad-ultra-early-kb',
-          _sportsAgent: true, _bypassLLM: true, wc2026: true, found: true, type: 'team-squad', team: _ueTeam,
-        })
-      }
-
-      // فريق غير موجود في قاعدة البيانات — مصادر FIFA مباشرة
-      const _ueSources = _ueTeam
-        ? `## 🔍 تشكيلة ${_ueTeam} — كأس العالم FIFA 2026
-
-> ⚠️ لا تتوفر بيانات محلية لهذا الفريق.
-
-🔗 **المصادر الرسمية:**
-| المصدر | الرابط |
-|--------|--------|
-| 🏆 **FIFA الرسمي** | [قوائم كأس العالم 2026](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026/teams) |
-| ⚽ **كووورة** | [تشكيلات كأس العالم](https://www.kooora.com) |
-| 📊 **SofaScore** | [صفحة الفريق](https://www.sofascore.com) |`
-        : `## ⚽ تشكيلات كأس العالم FIFA 2026
-
-🔗 **المصادر الرسمية:**
-| المصدر | الرابط |
-|--------|--------|
-| 🏆 **FIFA الرسمي** | [قوائم كأس العالم 2026](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026/teams) |
-| ⚽ **كووورة** | [تشكيلات كأس العالم](https://www.kooora.com) |
-| 📊 **SofaScore** | [صفحة الفريق](https://www.sofascore.com) |
-
-> الفرق المتاحة: ${Object.keys(WC2026_ALL_SQUADS).join(' · ')}`
-      return res.status(200).json({
-        content: _ueSources,
-        model: 'wc2026-squad-sources-only',
-        _sportsAgent: true, _bypassLLM: true, wc2026: true, found: false, type: 'squad-sources',
-      })
-    }
-  }
-  // ══════════════════════════════════════════════════════════════════════
-
-  // ══════════════════════════════════════════════════════════════════════
-  // 🔒 RETRIEVAL-FIRST GUARD — Dynamic Sports Queries (English + Arabic)
-  // يضمن توجيه كل الاستعلامات الرياضية الديناميكية للوكيل أولاً (حتى عند retry)
-  // يُطلَق بعد squad interceptor — يمسك: squad/roster/lineup/injuries/
-  //   results/fixtures/transfers/coach-decisions باللغتين
-  // ══════════════════════════════════════════════════════════════════════
-  {
-    const _rfRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
-                    .find(m => m?.role === 'user')?.content?.trim() || ''
-
-    // كاشف إنجليزي — استعلامات رياضية ديناميكية مع سياق بطولة/منتخب
-    const _RF_DYN_EN  = /\b(?:squad|roster|line.?up|formation|starting\s+(?:eleven|xi|lineup)|player[s']?\s+list|national\s+team\s+(?:squad|players?)|who\s+(?:plays?|played|scored|is\s+playing)|injur(?:ies|ed\s+players?)|transfer(?:s|\s+news)?|fixture[s]?|schedule[s]?|match\s+result[s]?|today[''']?s?\s+(?:match(?:es)?|game[s]?)|latest\s+(?:squad|result[s]?|score[s]?|lineup)|coach\s+(?:decision[s]?|pick[s]?)|top\s+scorer[s]?|goal\s+scorer[s]?)\b/i
-    const _RF_CTX_EN  = /\b(?:world\s*cup|wc\s*2026|wc2026|fifa|algeria|algerian|morocco|france|argentina|brazil|spain|national\s+team|cup\s+2026)\b/i
-
-    // كاشف عربي — حالات لم تُكتشف في interceptors أعلاه
-    const _RF_DYN_AR  = /(?:إصاب(?:ة|ات)\s*(?:اللاعبين|الفريق|المنتخب)|انتقال(?:ات)?\s*(?:اللاعبين|الصيف|الشتاء)|قرار(?:ات)?\s*المدرب|مستدع(?:ون|ين)\s+(?:جدد)?|من\s+(?:سجل|أحرز)\s+(?:هدف|الأهداف)|أفضل\s+لاعب\s+(?:اليوم|الجولة|المباراة))/i
-
-    const _rfIsEn = _RF_DYN_EN.test(_rfRaw) && _RF_CTX_EN.test(_rfRaw)
-    const _rfIsAr = _RF_DYN_AR.test(_rfRaw)
-
-    if (_rfIsEn || _rfIsAr) {
-      const _rfLang = _rfIsEn ? 'EN' : 'AR'
-      console.log(`[RetrievalFirst:Guard] 🛡️ DYNAMIC_SPORTS[${_rfLang}] → runSportsAgent | retry=${_isRetry} | q="${_rfRaw.slice(0,70)}"`)
-      console.log(`[RetrievalFirst:Log] query="${_rfRaw.slice(0,80)}" intent=SPORTS_DYNAMIC agent=sports-agent retrievalExecuted=true retry=${_isRetry}`)
-      try {
-        const _rfRes = await Promise.race([
-          runSportsAgent(_rfRaw, messages),
-          new Promise(r => setTimeout(() => r(null), 15000)),
-        ])
-        if (_rfRes?.userResponse || _rfRes?.context) {
-          const _rfContent = _rfRes.userResponse || _rfRes.context
-          console.log(`[RetrievalFirst:Guard] ✅ found=${_rfRes.found} type=${_rfRes.type} sources=${_rfRes.sources?.length ?? 0} len=${_rfContent.length}`)
-          return res.status(200).json({
-            content: _rfContent,
-            model: 'sports-agent-retrieval-first',
-            _sportsAgent: true, _bypassLLM: true, _retrievalFirst: true,
-            found: _rfRes.found, type: _rfRes.type, sources: _rfRes.sources, wc2026: _rfRes.wc2026,
-            _log: { query: _rfRaw.slice(0,80), intent: 'SPORTS_DYNAMIC', agent: 'sports-agent', retrievalExecuted: true, sourcesReturned: _rfRes.sources?.length ?? 0, contextLen: _rfContent.length },
-          })
-        }
-        // الوكيل لم يجد بيانات — رد نظيف بدون LLM
-        console.log(`[RetrievalFirst:Guard] ℹ️ no live data → clean no-data (LLM blocked)`)
-        return res.status(200).json({
-          content: [
-            `## ⚽ بيانات رياضية مطلوبة`,
-            ``,
-            `> ⚠️ **لم أتمكن من التحقق من أحدث المعلومات من المصادر.**`,
-            `> 🛡️ DZ Agent لا يُجيب من ذاكرة النموذج القديمة على الأسئلة الرياضية الديناميكية.`,
-            ``,
-            `**تابع مباشرةً من المصادر الرسمية الحية:**`,
-            ``,
-            `| المصدر | الرابط |`,
-            `|--------|--------|`,
-            `| 🏆 **FIFA الرسمي** | [fifa.com/worldcup](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026) |`,
-            `| 📡 **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
-            `| ⚽ **FotMob** | [WC2026](https://www.fotmob.com/leagues/77/matches/world-cup) |`,
-            `| 🇩🇿 **Kooora** | [الجزائر](https://www.kooora.com/) |`,
-          ].join('\n'),
-          model: 'sports-no-data-retrieval-first',
-          _sportsAgent: true, _bypassLLM: true, _retrievalFirst: true, found: false,
-          _log: { query: _rfRaw.slice(0,80), intent: 'SPORTS_DYNAMIC', agent: 'sports-agent', retrievalExecuted: true, sourcesReturned: 0, contextLen: 0 },
-        })
-      } catch (_rfErr) {
-        console.error('[RetrievalFirst:Guard] agent error (LLM still blocked):', _rfErr.message?.slice(0,100))
-        return res.status(200).json({
-          content: `## ⚽ خطأ مؤقت في الوكيل الرياضي\n\n> ⚠️ لا أستطيع الإجابة من ذاكرة النموذج القديمة.\n\n🔄 **أعد المحاولة** أو تابع: [FIFA](https://www.fifa.com/worldcup) | [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026)`,
-          model: 'sports-agent-error-retrieval-first',
-          _sportsAgent: true, _bypassLLM: true, _retrievalFirst: true, found: false,
-        })
-      }
-    }
-  }
-  // ══════════════════════════════════════════════════════════════════════
 
   // ── Disk session restore — استعادة المحادثة من disk إن لم يُرسل السياق ──
   if (_agentSessionId && messages.length <= 1) {
@@ -17844,16 +14492,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // ── Tool Redirect — كشف الطلبات التي لها أدوات متخصصة ─────────────────
   // Skip redirect when request comes from a specialized tool (e.g. web-builder calling itself)
-  const _rawLastMsgOrig = [...messages].reverse().find(m => m.role === 'user')?.content || ''
-
-  // ── تصحيح النية والإملاء — Query Intent Corrector ──────────────────────
-  const _qCorrection   = correctQuery(_rawLastMsgOrig)
-  const _rawLastMsg    = _qCorrection.wasChanged ? _qCorrection.corrected : _rawLastMsgOrig
-  const _correctionNote = buildCorrectionNote(_qCorrection)
-  if (_qCorrection.wasChanged) {
-    console.log(`[QueryCorrector] ✏️  "${_rawLastMsgOrig}" → "${_rawLastMsg}"`)
-  }
-
+  const _rawLastMsg = [...messages].reverse().find(m => m.role === 'user')?.content || ''
   // Website builder queries: skip redirect — generate inline HTML with preview + download
   const _isWebsiteRequest = detectWebsiteBuilderQuery(_rawLastMsg) || detectMapWebsiteQuery(_rawLastMsg)
   const _skipToolRedirect = req.body.source === 'web-builder' || req.body.skipToolRedirect === true || _isWebsiteRequest
@@ -17863,1412 +14502,53 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ _toolRedirect })
   }
 
-  // ══════════════════════════════════════════════════════════════════════
-  // 🔍⚡ RESEARCH vs EXECUTION MODE — Intent Gate
-  // يحدد هل الطلب معلوماتي (Research) أم تنفيذي (Execution)
-  // ويطبق Confirmation Gate قبل أي عملية حساسة
-  // ══════════════════════════════════════════════════════════════════════
-  {
-    const _clientMode  = String(req.body.agentQueryMode || 'auto')
-    const _confirmed   = req.body.confirmed === true
-    const _modeResult  = detectAgentMode(_rawLastMsg, messages, _clientMode, _confirmed)
-
-    // ── تحديث الوضع في الـ response headers للـ client ──────────────────────
-    res.setHeader('X-DZ-Agent-Mode',   _modeResult.mode)
-    res.setHeader('X-DZ-Intent-Type',  _modeResult.intentType)
-
-    // ── حالة 1: وضع البحث + طلب تنفيذي → حجب التنفيذ + رد بحثي ────────────
-    if (_modeResult.shouldBlockExecution) {
-      const _blockedResp = buildResearchBlockedResponse(_rawLastMsg, _modeResult.actionSummary)
-      console.log(`[AgentMode] 🔍 RESEARCH_BLOCKED | intent=${_modeResult.intentType} | query="${_rawLastMsg.slice(0,60)}"`)
-      return res.status(200).json({
-        content: _blockedResp,
-        model: 'research-mode-guard',
-        _researchModeBlocked: true,
-        intentType: _modeResult.intentType,
-      })
-    }
-
-    // ── حالة 2: طلب تنفيذي غير مؤكد → إرسال Confirmation Gate للواجهة ──────
-    if (_modeResult.needsConfirmation) {
-      console.log(`[AgentMode] ⚡ CONFIRM_GATE | intent=${_modeResult.intentType} | query="${_rawLastMsg.slice(0,60)}"`)
-      return res.status(200).json({
-        content: '',
-        _needsConfirmation: true,
-        confirmationData: _modeResult.actionSummary,
-        intentType: _modeResult.intentType,
-        originalQuery: _rawLastMsg.slice(0, 200),
-      })
-    }
-
-    // ── حالة 3: وضع البحث + سؤال بحثي → حقن تعليمات البحث في الـ context ──
-    if (_clientMode === 'research' && _modeResult.isResearchQuery && _modeResult.researchModeInstruction) {
-      if (messages.length > 0) {
-        const _sysMsg = { role: 'system', content: _modeResult.researchModeInstruction }
-        if (messages[0]?.role === 'system') {
-          messages[0] = { ...messages[0], content: messages[0].content + '\n\n' + _modeResult.researchModeInstruction }
-        } else {
-          messages.unshift(_sysMsg)
-        }
-      }
-    }
-
-    // ── حالة 4: طلب تنفيذي مؤكد أو وضع التنفيذ صريح → متابعة طبيعية ────────
-    if (_confirmed || _clientMode === 'execution') {
-      console.log(`[AgentMode] ✅ EXECUTION_CONFIRMED | intent=${_modeResult.intentType} | query="${_rawLastMsg.slice(0,60)}"`)
-    }
-  }
-  // ══════════════════════════════════════════════════════════════════════
-
-  // ── All Tools Grid — عرض قائمة كل الأدوات مع أزرار التنقل ─────────────────
-  if (detectAllToolsQuery(_rawLastMsg)) {
-    console.log(`[AllToolsGrid] ✅ "${_rawLastMsg.slice(0,60)}" → قائمة الأدوات`)
-    return res.status(200).json({
-      content: `🛠️ **أدوات DZ Agent المتاحة** — اختر الأداة المناسبة:`,
-      model: 'tools-kb',
-      status: 'tools_grid',
-      _toolsList: ALL_TOOLS_LIST,
-    })
-  }
-
-  // ── Capability KB — هل يسأل عن خدمة بعينها؟ (توليد صور، GitHub، CV...) ──
-  // BYPASS: طلبات حقيقية تذهب للمعالجات المتخصصة ولا تُعترض بـ capability guide
-  {
-    // طقس حقيقي: يحتوي مدينة أو مرجع زمني → لا guide
-    const _capBypassWeather = /(?:طقس|جو\s+|weather[\s_]|météo[\s_])/i.test(_rawLastMsg) &&
-      /(?:وهران|الجزائر|قسنطينة|عنابة|سطيف|بجاية|تلمسان|باتنة|جيجل|بشار|أدرار|مستغانم|تيزي|بليدة|تبسة|عين|oran|alger|constantine|annaba|setif|bejaia|tlemcen|batna|اليوم|الآن|غداً|غدا|الأسبوع|now|today|tomorrow|forecast)/i.test(_rawLastMsg)
-    // عملة حقيقية: detectCurrencyQuery تميّز الطلب الحقيقي عن السؤال عن الخدمة
-    const _capBypassCurrency = detectCurrencyQuery(_rawLastMsg)
-    // فيديو/يوتيوب حقيقي: مطابقة نفس نمط _ytKwRe_pre المبكر
-    const _capBypassYouTube = /(?:فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|ابحث.*(?:فيديو|يوتيوب)|شرح.*بالفيديو|درس.*بالفيديو|فيديو.*يشرح|أفضل.*فيديو|best.*video|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب)/i.test(_rawLastMsg)
-    // وظائف/مسابقات حقيقية: يذهب لمحرك البحث الحي (11 مصدر جزائري) لا لـ capability guide
-    const _capBypassJobs = isJobsQuery(_rawLastMsg)
-    if (!_capBypassWeather && !_capBypassCurrency && !_capBypassYouTube && !_capBypassJobs) {
-      const _capResp = getCapabilityResponse(_rawLastMsg)
-      if (_capResp) {
-        console.log(`[CapabilityKB] ✅ "${_rawLastMsg.slice(0,50)}" → خدمة مكتشفة`)
-        const _capJson = { content: _capResp.content, model: 'capability-kb', status: 'capability_guide' }
-        if (_capResp.toolRedirect) _capJson._toolRedirect = _capResp.toolRedirect
-        return res.status(200).json(_capJson)
-      }
-    }
-  }
-
-  // ── WC2026 Smart Routing Guard — الحارس الذكي (قبل كل شيء) ──────────────
-  // يعالج: الجزائر لم تلعب بعد | ميسي مع الجزائر | هل فازت | نتائج متعددة الأيام
-  {
-    const _wcSRNow = Date.now()
-    const _isWCSR  = _wcSRNow >= 1781136000000 && _wcSRNow <= 1784591999000
-    if (_isWCSR) {
-      const _qSR = _rawLastMsg
-
-      // ── 1. الجزائر لم تلعب بعد (قبل 2026-06-17 02:00 توقيت الجزائر) ──────
-      const _algFirstMatchMs = new Date('2026-06-17T01:00:00Z').getTime()
-      const _algHasNotPlayed = _wcSRNow < _algFirstMatchMs
-      const _isAlgQuery  = /(?:الجزائر|الخضر|منتخب\s*(?:الجزائري|وطني))/i.test(_qSR)
-      const _isResultReq = /(?:نتيجة|نتائج|سجل|هدف|أهداف|انتهت|انتهى|فاز|فازت|ربح|ربحت|خسر|خسرت|ملخص|من\s+لعب|من\s+سجل|بطاقة|إحصائي|ترتيب|نقاط|آخر\s+مباراة|أخيرة?\s+مباراة)/i.test(_qSR)
-      // NOTE: "حارس" intentionally REMOVED from _isResultReq — it belongs to squad queries
-      // ("حارس المرمى" = GK position, not a match result keyword)
-      const _isWC26Ctx   = /(?:كأس\s*العالم|مونديال|FIFA|WC\s*2026|2026)/i.test(_qSR)
-      // خلال موسم WC2026: أي سؤال نتيجة يخص الجزائر = WC2026 (لا منافسة أخرى كبرى)
-      if (_algHasNotPlayed && _isAlgQuery && _isResultReq && !isWC2026SquadQuery(_qSR)) {
-        console.log(`[WC2026:AlgNotPlayed] 🇩🇿 Algeria hasn't played yet — intercepting: "${_qSR.slice(0,60)}"`)
-        return res.status(200).json({
-          content: [
-            `## 🇩🇿 الجزائر في كأس العالم FIFA 2026`,
-            ``,
-            `> ℹ️ **الجزائر لم تلعب بعد** في كأس العالم 2026.`,
-            `> البطولة انطلقت يوم **11 يونيو**، لكن الجزائر تبدأ مشوارها في **الجولة الأولى يوم 17 يونيو**.`,
-            ``,
-            `### ⏳ أول مباراة للجزائر`,
-            `| 📅 التاريخ | ⏰ التوقيت | 🏟️ الملعب | 📍 المدينة |`,
-            `|-----------|----------|----------|----------|`,
-            `| **الأربعاء، 17 يونيو 2026** | **02:00 (بتوقيت الجزائر)** | MetLife Stadium | East Rutherford، نيوجيرسي |`,
-            ``,
-            `### 🏆 برنامج مباريات الجزائر — المجموعة J`,
-            `| الجولة | التاريخ | المنافس | الملعب |`,
-            `|-------|---------|--------|--------|`,
-            `| الجولة 1 | 17 يونيو — 02:00 | 🇦🇷 **الأرجنتين** | MetLife Stadium |`,
-            `| الجولة 2 | 21 يونيو — 03:00 | 🇦🇹 **النمسا** | Arrowhead Stadium |`,
-            `| الجولة 3 | 25 يونيو — 04:00 | 🇯🇴 **الأردن** | AT&T Stadium |`,
-            ``,
-            `> 🛡️ لا نتائج ولا إحصائيات للجزائر حتى الآن — ستُحدَّث تلقائياً بعد مباراة 17 يونيو.`,
-            ``,
-            `🔗 [متابعة مباشرة على FotMob](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup)`,
-          ].join('\n'),
-          model: 'wc2026-algeria-not-played-yet',
-          _sportsAgent: true, wc2026: true, found: true,
-        })
-      }
-
-      // ── 2. ميسي مع الجزائر — استحالة منطقية ───────────────────────────────
-      if (/(?:ميسي|messi|lionel\s+messi)/i.test(_qSR) && _isAlgQuery &&
-          /(?:لعب|يلعب|شارك|يشارك|لبس|يلبس|مع|في\s+صفوف|ينتمي|من\s+منتخب|يمثل)/i.test(_qSR)) {
-        console.log(`[WC2026:LogicCheck] ⚽ Messi+Algeria logic impossibility intercepted`)
-        return res.status(200).json({
-          content: [
-            `## 🛡️ تحقق منطقي — ليونيل ميسي والجزائر`,
-            ``,
-            `> ❌ **هذا السؤال يفترض معلومة خاطئة.**`,
-            ``,
-            `**ليونيل ميسي** 🇦🇷 يمثل **الأرجنتين** وليس الجزائر:`,
-            `- **جنسيته:** أرجنتيني، مواليد روساريو (الأرجنتين)`,
-            `- **منتخبه:** 🇦🇷 الأرجنتين — بطل العالم 2022 معها`,
-            `- **في WC2026:** مع الأرجنتين في **المجموعة J** — **يواجه الجزائر يوم 17 يونيو**`,
-            ``,
-            `> 🇩🇿 **الجزائر والأرجنتين** في نفس المجموعة J — يتواجهان في الجولة الأولى **17/6/2026، 02:00 (توقيت الجزائر)**.`,
-          ].join('\n'),
-          model: 'wc2026-logic-check', _sportsAgent: true, wc2026: true, found: true,
-        })
-      }
-
-      // ── 3. هل فازت X بكأس العالم 2026 — حالة البطولة ───────────────────────
-      if (/(?:هل\s+فاز|هل\s+فازت|هل\s+ربح|هل\s+ربحت|هل\s+(?:أحرز|نال|حقق)\s+(?:لقب|الكأس|البطولة)|من\s+بطل\s+(?:كأس\s+العالم|المونديال)|من\s+(?:فاز|ربح|أحرز)\s+(?:بكأس|بالكأس|البطولة|اللقب)|هل\s+انتهت?\s+(?:البطولة|كأس\s+العالم))/i.test(_qSR) &&
-          /(?:كأس\s*العالم|مونديال|FIFA|WC\s*2026|2026)/i.test(_qSR)) {
-        console.log(`[WC2026:TournamentStatus] 🏆 Tournament winner/status query intercepted: "${_qSR.slice(0,60)}"`)
-        const _wcFinalMs  = new Date('2026-07-19T23:00:00Z').getTime()
-        const _isOngoing  = _wcSRNow <= _wcFinalMs
-        const _teamName   = (/الجزائر|الخضر/.test(_qSR) ? '🇩🇿 الجزائر' :
-                             /الأرجنتين|ارجنتين/.test(_qSR) ? '🇦🇷 الأرجنتين' :
-                             /البرازيل/.test(_qSR) ? '🇧🇷 البرازيل' :
-                             /فرنسا/.test(_qSR) ? '🇫🇷 فرنسا' :
-                             /المغرب/.test(_qSR) ? '🇲🇦 المغرب' : null)
-        const _dzNowLabel = new Date(_wcSRNow + 3600000).toLocaleDateString('ar-DZ', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'Africa/Algiers' })
-        const _lines = [
-          `## 🏆 حالة بطولة كأس العالم FIFA 2026`,
-          ``,
-          _isOngoing
-            ? `> ⏳ **البطولة لا تزال جارية** — اليوم ${_dzNowLabel}`
-            : `> ✅ **البطولة انتهت** — تحقق من المصادر الرسمية للنتيجة النهائية.`,
-          ``,
-          `| | التفصيل |`,
-          `|---|---------|`,
-          `| 📅 بدأت | 11 يونيو 2026 |`,
-          `| 🏁 النهائي | 19 يوليو 2026 — SoFi Stadium, Los Angeles |`,
-          `| 📊 المرحلة الحالية | دور المجموعات (الجولة 1) |`,
-          ``,
-        ]
-        if (_teamName) {
-          if (_teamName.includes('الجزائر') && _algHasNotPlayed) {
-            _lines.push(`> 🇩🇿 **الجزائر لم تلعب بعد** — أول مبارياتها **17 يونيو 2026 ضد الأرجنتين**.`)
-          } else {
-            _lines.push(`> **${_teamName}** — البطولة لا تزال جارية، لا يوجد بطل حتى الآن.`)
-          }
-          _lines.push(``)
-        }
-        _lines.push(`> 🛡️ **لا يمكن الإجابة عمن فاز بالكأس — البطولة لم تنته بعد.**`)
-        _lines.push(``)
-        _lines.push(`🔗 [FIFA الرسمي](https://www.fifa.com/worldcup) | [FotMob](https://www.fotmob.com/ar/leagues/77/matches/world-cup)`)
-        return res.status(200).json({
-          content: _lines.join('\n'),
-          model: 'wc2026-tournament-status', _sportsAgent: true, wc2026: true, found: true,
-        })
-      }
-
-      // ── 4. نتائج / آخر نتائج — متعدد الأيام ───────────────────────────────
-      // يُطابق: "نتائج مباريات كأس العالم" / "نتائج كأس العالم" / "آخر نتائج" إلخ
-      if (/^(?:نتيجة|نتائج)\s+(?:مباريات?\s+)?(?:كأس\s*العالم|مونديال|FIFA|WC\s*2026)/i.test(_qSR) ||
-          /(?:نتيجة|نتائج)\s+(?:مباريات?|ماتشات?)\s+(?:كأس\s*العالم|مونديال|FIFA|فيفا)/i.test(_qSR) ||
-          /(?:آخر|أحدث)\s+(?:نتائج|نتيجة)\s+(?:كأس\s*العالم|مونديال|FIFA|WC\s*2026)/i.test(_qSR) ||
-          /(?:جميع|كل)?\s*(?:نتائج|مباريات?)\s+(?:الجولة\s+(?:الأولى|1|الأول)|المرحلة\s+الأولى|الراوند\s+الأول)/i.test(_qSR) ||
-          /(?:نتائج|مباريات?)\s+(?:كأس\s*العالم|مونديال)\s+(?:حتى\s+الآن|إلى\s+الآن|حتى\s+اليوم|منذ\s+البداية)/i.test(_qSR) ||
-          /(?:كل|جميع)\s+(?:نتائج|مباريات?)\s+(?:كأس\s*العالم|مونديال|FIFA|WC\s*2026)/i.test(_qSR)) {
-        console.log(`[WC2026:MultiDayResults] 📊 Multi-day results query: "${_qSR.slice(0,60)}"`)
-        try {
-          const _dzOff2 = 3600000
-          const _md_today   = new Date(Date.now() + _dzOff2).toISOString().split('T')[0]
-          const _md_yest    = new Date(Date.now() + _dzOff2 - 86400000).toISOString().split('T')[0]
-          const _md_d2ago   = new Date(Date.now() + _dzOff2 - 172800000).toISOString().split('T')[0]
-          const [_md0, _md1, _md2] = await Promise.all([
-            Promise.race([runWC2026TodayAgent(_md_today),  new Promise(r => setTimeout(() => r(null), 12000))]),
-            Promise.race([runWC2026TodayAgent(_md_yest),   new Promise(r => setTimeout(() => r(null), 12000))]),
-            Promise.race([runWC2026TodayAgent(_md_d2ago),  new Promise(r => setTimeout(() => r(null), 12000))]),
-          ])
-          const _mdSections = [_md0, _md1, _md2].filter(d => d?.userResponse).map(d => d.userResponse)
-          if (_mdSections.length > 0) {
-            const _mdAllMatches = [
-              ...(_md0?.matches || []), ...(_md1?.matches || []), ...(_md2?.matches || [])
-            ].filter(m => m.statusType === 'finished')
-            const _mdHeader = [
-              `## 🏆 آخر نتائج كأس العالم FIFA 2026`,
-              ``,
-              `> 📊 **النتائج المجمّعة (${_md_d2ago} → ${_md_today})** — بيانات مباشرة من FotMob`,
-              ``,
-            ].join('\n')
-            return res.status(200).json({
-              content: _mdHeader + _mdSections.join('\n\n---\n\n'),
-              model: 'wc2026-multi-day-results', _sportsAgent: true, wc2026: true,
-              found: true, matches: _mdAllMatches,
-            })
-          }
-        } catch (_mdErr) { console.error('[WC2026:MultiDayResults] error:', _mdErr.message) }
-      }
-    }
-  }
-
-  // ── WC2026 Specific Match Lookup — يبحث عن مباراة بعينها في الجدول ──────
-  // يُعطي الأولوية للمباريات المحددة (فريقان) على الاستعلامات العامة (اليوم/الأمس)
-  {
-    const _smNow  = Date.now()
-    const _smSeas = _smNow >= 1781136000000 && _smNow <= 1784591999000
-    if (_smSeas) {
-      // خريطة الأسماء البديلة للفرق (دارجة + إملاء + إنجليزي)
-      const _SM_ALIASES = {
-        'امريكا':'الولايات المتحدة','اميركا':'الولايات المتحدة','أمريكا':'الولايات المتحدة',
-        'امريكة':'الولايات المتحدة','usa':'الولايات المتحدة','united states':'الولايات المتحدة',
-        'كورة الجنوبية':'كوريا الجنوبية','كوريا':'كوريا الجنوبية','korea':'كوريا الجنوبية',
-        'south korea':'كوريا الجنوبية','كورة':'كوريا الجنوبية',
-        'تشيك':'جمهورية التشيك','تشيكيا':'جمهورية التشيك','czechia':'جمهورية التشيك',
-        'czech republic':'جمهورية التشيك','التشيك':'جمهورية التشيك',
-        'البوسنة':'البوسنة والهرسك','بوسنة':'البوسنة والهرسك','هرسك':'البوسنة والهرسك',
-        'بوسنه':'البوسنة والهرسك','bosnia':'البوسنة والهرسك',
-        'جنوب افريقيا':'جنوب أفريقيا','افريقيا الجنوبية':'جنوب أفريقيا',
-        'south africa':'جنوب أفريقيا','جنوب أفريقية':'جنوب أفريقيا',
-        'باراقواي':'باراغواي','باراجواي':'باراغواي','paraguay':'باراغواي',
-        'اسكتلنده':'اسكتلندا','scotland':'اسكتلندا',
-        'هايتى':'هايتي','haiti':'هايتي',
-        'سويسرة':'سويسرا','switzerland':'سويسرا',
-        'المكسيك':'المكسيك','مكسيك':'المكسيك','mexico':'المكسيك',
-        'البرازيل':'البرازيل','brasil':'البرازيل','brazil':'البرازيل',
-        'المغرب':'المغرب','morocco':'المغرب',
-        'قطر':'قطر','qatar':'قطر',
-        'كندا':'كندا','canada':'كندا',
-        'الولايات المتحدة':'الولايات المتحدة',
-        'الأرجنتين':'الأرجنتين','ارجنتين':'الأرجنتين','argentina':'الأرجنتين',
-        'النمسا':'النمسا','austria':'النمسا',
-        'الأردن':'الأردن','jordan':'الأردن',
-      }
-      // دالة: هل يذكر الاستعلام هذا الفريق؟
-      function _smMatch(q, teamName) {
-        const ql = q.toLowerCase()
-        if (q.includes(teamName)) return true
-        const noAl = teamName.replace(/^ال/, '')
-        if (noAl !== teamName && q.includes(noAl)) return true
-        for (const [alias, canonical] of Object.entries(_SM_ALIASES)) {
-          if (canonical === teamName && (q.includes(alias) || ql.includes(alias.toLowerCase()))) return true
-        }
-        return false
-      }
-      // استعلام عن فريقين محددين + نتيجة/مباراة
-      const _smIsResult = /(?:نتيجة|نتائج|انتهت?|انتهى|ربح|فاز|خسر|تعادل|ملخص|كيف\s+انتهت?|من\s+ربح|من\s+فاز|مباراة|لقاء|ماتش)/i.test(_rawLastMsg)
-      const _smNotGeneral = !/(?:اليوم|الليلة|النهار|الغد|غداً)\s+(?:في\s+)?(?:كأس\s*العالم|مونديال|FIFA)/i.test(_rawLastMsg)
-      if (_smIsResult && _smNotGeneral) {
-        const _smFix = WC2026_FULL_FIXTURES.find(m =>
-          _smMatch(_rawLastMsg, m.homeTeam) && _smMatch(_rawLastMsg, m.awayTeam)
-        )
-        if (_smFix) {
-          const _smFin = _smFix.statusType === 'finished'
-          const _smScore = _smFin
-            ? `${_smFix.homeScore} – ${_smFix.awayScore}`
-            : `📅 ${_smFix.startTime ? String(parseInt(_smFix.startTime.split(':')[0])+1).padStart(2,'0')+':'+_smFix.startTime.split(':')[1] : '—'} (توقيت الجزائر)`
-          const _smWinner = _smFix.winner ? `🏆 الفائز: **${_smFix.winner}**` : _smFin ? '🤝 **تعادل**' : ''
-
-          // ── جلب تفاصيل ESPN (أهداف + بطاقات + إحصائيات) ──────────────────────
-          let _smEnriched = { ..._smFix }
-          if (_smFin && _smFix.espnEventId) {
-            try {
-              const _espnDet = await fetchESPNMatchDetails(_smFix.espnEventId)
-              if (_espnDet) {
-                _smEnriched.goals       = _espnDet.goals       || []
-                _smEnriched.yellowCards = _espnDet.yellowCards || []
-                _smEnriched.redCards    = _espnDet.redCards    || []
-                _smEnriched.stats       = _espnDet.stats       || null
-                console.log(`[WC2026:SpecificLookup] ESPN details: goals=${_espnDet.goals.length} yellows=${_espnDet.yellowCards.length} reds=${_espnDet.redCards.length}`)
-              }
-            } catch (_espnErr) {
-              console.warn('[WC2026:SpecificLookup] ESPN details fetch failed:', _espnErr.message)
-            }
-          }
-
-          const _smGoalText = (_smEnriched.goals || []).length
-            ? '\n⚽ **الأهداف:** ' + (_smEnriched.goals || []).map(g => `${g.player} ${g.minute || ''}`).join(' | ')
-            : ''
-          const _smContent = [
-            `## ${_smFin ? '✅' : '📅'} ${_smFix.homeTeam} ضد ${_smFix.awayTeam}`,
-            `**النتيجة:** ${_smScore}`,
-            _smWinner,
-            _smGoalText,
-            `**المجموعة ${_smFix.group || '—'}** | ${_smFix.round || ''} | ${_smFix.date}`,
-            `🏟️ ${_smFix.venue}, ${_smFix.city}`,
-          ].filter(Boolean).join('\n')
-          console.log(`[WC2026:SpecificLookup] 🎯 ${_smFix.homeTeam} vs ${_smFix.awayTeam} | ${_smFix.statusType} | ${_smFix.homeScore}-${_smFix.awayScore}`)
-          return res.status(200).json({
-            content: _smContent,
-            model: 'wc2026-specific-match',
-            _sportsAgent: true,
-            wc2026: true,
-            found: true,
-            matches: [_smEnriched],
-            sources: [_smFix.source || 'WC2026_FULL_FIXTURES'],
-          })
-        }
-      }
-    }
-  }
-
-  // ── WC2026 Anti-Hallucination Guard (EARLY) — قبل MatchVs ───────────────
-  // يمنع LLM من اختراع نتائج WC 2026 حتى عند استعلامات "نتيجة المكسيك" بدون خصم
-  {
-    const _wcAHNow  = Date.now()
-    const _isWCAH   = _wcAHNow >= 1781136000000 && _wcAHNow <= 1784591999000
-    const _isWCRQ   = _isWCAH && (
-      /(?:نتيجة|نتائج|انتهت|انتهى|ملخص|كيف\s+انتهت?|من\s+ربح|من\s+فاز|فاز\s+من|ربح\s+من|هل\s+فاز|هل\s+فازت|هل\s+ربح|هل\s+ربحت|هل\s+انتهت?|هل\s+تأهل)\s+(?:مباراة|لقاء|مباريات?)?.{0,35}/i.test(_rawLastMsg) &&
-      /(?:المكسيك|مكسيك|جنوب\s*أفريقيا|الأرجنتين|ارجنتين|البرازيل|براسيل|فرنسا|ألمانيا|إسبانيا|اسبانيا|البرتغال|برتغال|إنجلترا|انجلترا|الجزائر|المغرب|مصر|تونس|السعودية|قطر|الولايات المتحدة|أمريكا|كندا|اليابان|كوريا|كأس العالم|مونديال|WC\s*2026)/i.test(_rawLastMsg) &&
-      !/آخر\s+(?:نتيجة|نتائج|مباراة)/i.test(_rawLastMsg)
-    )
-    if (_isWCRQ && !req.body._wcResultHandled) {
-      console.log(`[WC2026:AntiHallu:Early] 🛡️ WC result query → live agent: "${_rawLastMsg.slice(0, 60)}"`)
-      try {
-        const _isYestQ2 = /البارحة|بالأمس|(?:نتائج|مباريات?)\s+(?:الأمس|امس\b)/i.test(_rawLastMsg)
-        const _ahDate2 = _isYestQ2
-          ? new Date(Date.now() + 3600000 - 86400000).toISOString().split('T')[0]
-          : new Date(Date.now() + 3600000).toISOString().split('T')[0]
-        const _ahRes2  = await Promise.race([
-          runWC2026TodayAgent(_ahDate2),
-          new Promise(r => setTimeout(() => r(null), 12000)),
-        ])
-        if (_ahRes2?.userResponse) {
-          return res.status(200).json({
-            content: _ahRes2.userResponse,
-            model: 'wc2026-anti-hallucination-early',
-            _sportsAgent: true,
-            wc2026: true,
-            found: _ahRes2.found,
-            sources: _ahRes2.sources,
-            matches: _ahRes2.matches || [],
-          })
-        }
-      } catch (_ahErr2) {
-        console.error('[WC2026:AntiHallu:Early] error:', _ahErr2.message)
-      }
-      return res.status(200).json({
-        content: [
-          `## 🛡️ نتائج كأس العالم 2026`,
-          ``,
-          `> ⚠️ **لم نتمكن من الاتصال بمصادر النتائج الحية حالياً.**`,
-          `> **لا نعرض أي نتيجة دون مصدر موثوق** — أي نتيجة من الذكاء الاصطناعي دون استعلام API هي تخمين وليست حقيقة.`,
-          ``,
-          `**تحقق مباشرة من:**`,
-          `| المصدر | الرابط |`,
-          `|--------|--------|`,
-          `| 📡 **FotMob** | [نتائج WC 2026](https://www.fotmob.com/ar/leagues/77/matches/world-cup) |`,
-          `| 🏆 **FIFA** | [fifa.com/worldcup](https://www.fifa.com/worldcup/matches) |`,
-          `| ⚽ **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
-        ].join('\n'),
-        model: 'wc2026-no-hallucination-early',
-        _sportsAgent: true,
-        wc2026: true,
-        found: false,
-      })
-    }
-  }
-
   // ── Match-Vs Early Handler ────────────────────────────────────────────────
-  // يُعالَج هنا قبل أي fast-path آخر — دائماً يُوجَّه للوكيل الرياضي مباشرةً
-  // عند إعادة المحاولة (_isRetry) نتجاوز هذا البايباس لإعطاء إجابة مختلفة عبر LLM
+  // يُعالَج هنا قبل أي fast-path آخر (أخبار/ويكيبيديا/...)
+  // استراتيجية: sports ctx موجود → وكيل رياضي فوراً | لا ctx → طلب توضيح
   {
     const _earlyMatchVs = detectMatchVsQuery(_rawLastMsg)
-    // MatchVs: يعمل دائماً حتى عند retry — البيانات الرياضية لا تتغير
     if (_earlyMatchVs?.isMatchVs) {
-      console.log(`[MatchVs:EarlyRoute] ⚽ "${_earlyMatchVs.team1} vs ${_earlyMatchVs.team2}" → runSportsAgent (direct, no clarification)`)
-      try {
-        const _sportRes = await runSportsAgent(_rawLastMsg, messages)
-        const _sportContent = _sportRes.userResponse || _sportRes.context || _sportRes.content || ''
-        return res.status(200).json({
-          content: _correctionNote + _sportContent,
-          model: 'sports-agent',
-          found: _sportRes.found,
-          type: _sportRes.type,
-          matches: _sportRes.matches,
-          sources: _sportRes.sources,
-          wc2026: _sportRes.wc2026,
-          matchVsData: (() => {
-            const _fm = _sportRes.matches?.[0] || _sportRes.wcFixtures?.[0] || null
-            return { team1: _earlyMatchVs.team1, team2: _earlyMatchVs.team2, temporal: _earlyMatchVs.temporal, date: _fm?.date||null, time: _fm?.startTime||null, competition: _fm?.competition||null, venue: _fm?.venue||null, city: _fm?.city||null, round: _fm?.round||null, kooraLink: _fm?.kooraLink||null, homeScore: _fm?.homeScore??null, awayScore: _fm?.awayScore??null }
-          })(),
-          wcGroupData: (() => {
-          if (_sportRes.type === 'WORLD_CUP_2026') {
-            const _grpLetterEarly = _findWC2026TeamGroup(_earlyMatchVs.team1) || _findWC2026TeamGroup(_earlyMatchVs.team2) || 'J'
-            return buildWC2026GroupTableData(_grpLetterEarly)
-          }
-          return undefined
-        })(),
-          _sportsAgent: true,
-          _queryCorrected: _qCorrection.wasChanged,
-        })
-      } catch (_sae) {
-        console.error('[MatchVs:EarlyRoute] sports agent error:', _sae.message, _sae.stack?.slice(0, 200))
-        // ⛔ لا نُسقط للـ LLM — نُرجع رداً واضحاً من الوكيل الرياضي مع روابط
-        const _f1e = _earlyMatchVs?.team1 || ''
-        const _f2e = _earlyMatchVs?.team2 || ''
-        return res.status(200).json({
-          content: [
-            `## ⚽ ${_f1e} ضد ${_f2e}`,
-            ``,
-            `> ⚠️ تعذّر الاتصال بالوكيل الرياضي مؤقتاً. تحقق من المصادر التالية مباشرةً:`,
-            ``,
-            `| المصدر | الرابط |`,
-            `|--------|--------|`,
-            `| 📡 **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
-            `| ⚽ **FotMob** | [مباريات كأس العالم](https://www.fotmob.com/leagues/77/matches/world-cup) |`,
-            `| 🏆 **FIFA.com** | [الموقع الرسمي](https://www.fifa.com/worldcup) |`,
-            `| 🇩🇿 **Kooora** | [مباريات الجزائر](https://www.kooora.com/) |`,
-          ].join('\n'),
-          model: 'sports-agent-error',
-          _sportsAgent: true,
-          _error: 'sports_agent_timeout',
-        })
-      }
-    }
-  }
-
-  // ── WC2026 Anti-Hallucination Guard — نتائج مباريات سابقة ────────────────
-  // يُشغَّل بعد MatchVs Early Handler — يمنع LLM من اختراع نتائج WC 2026
-  // بعد الاستيثاق: إذا الاستعلام عن نتيجة مباراة WC ولم يُعالَج بعد → وكيل اليوم
-  {
-    const _wcAntiHalluNow  = Date.now()
-    const _isWCSeasonAH    = _wcAntiHalluNow >= 1781136000000 && _wcAntiHalluNow <= 1784591999000
-    const _isWCResultQuery = _isWCSeasonAH && (
-      /(?:نتيجة|نتائج|انتهت|انتهى|ملخص|كيف انتهت?|من\s+ربح|من\s+فاز|فاز\s+من|ربح\s+من|هل\s+فاز|هل\s+فازت|هل\s+ربح|هل\s+ربحت|هل\s+انتهت?|هل\s+تأهل)\s+(?:مباراة|لقاء|مباريات?)?.{0,35}/i.test(_rawLastMsg) &&
-      /(?:المكسيك|مكسيك|جنوب\s*أفريقيا|الأرجنتين|ارجنتين|البرازيل|براسيل|فرنسا|ألمانيا|إسبانيا|اسبانيا|البرتغال|برتغال|إنجلترا|انجلترا|الجزائر|المغرب|مصر|تونس|السعودية|قطر|الولايات المتحدة|أمريكا|كندا|اليابان|كوريا|كأس العالم|مونديال|WC\s*2026)/i.test(_rawLastMsg) &&
-      !/آخر\s+(?:نتيجة|نتائج|مباراة)/i.test(_rawLastMsg)
-    )
-    if (_isWCResultQuery && !req.body._wcResultHandled) {
-      console.log(`[WC2026:AntiHallu] 🛡️ WC result query intercepted — routing to live agent: "${_rawLastMsg.slice(0, 60)}"`)
-      try {
-        const _isYestQ = /البارحة|بالأمس|(?:نتائج|مباريات?)\s+(?:الأمس|امس\b)/i.test(_rawLastMsg)
-        const _ahDate = _isYestQ
-          ? new Date(Date.now() + 3600000 - 86400000).toISOString().split('T')[0]
-          : new Date(Date.now() + 3600000).toISOString().split('T')[0]
-        const _ahRes  = await Promise.race([
-          runWC2026TodayAgent(_ahDate),
-          new Promise(r => setTimeout(() => r(null), 12000)),
-        ])
-        if (_ahRes?.userResponse) {
-          return res.status(200).json({
-            content: _ahRes.userResponse,
-            model: 'wc2026-anti-hallucination',
-            _sportsAgent: true,
-            wc2026: true,
-            found: _ahRes.found,
-            sources: _ahRes.sources,
-            matches: _ahRes.matches || [],
-          })
-        }
-      } catch (_ahErr) {
-        console.error('[WC2026:AntiHallu] error:', _ahErr.message)
-      }
-      // إذا فشل الوكيل → نُعيد رداً صريحاً بعدم توفر النتيجة (لا LLM)
-      return res.status(200).json({
-        content: [
-          `## 🛡️ نتائج كأس العالم 2026`,
-          ``,
-          `> ⚠️ **لم نتمكن من الاتصال بمصادر النتائج الحية حالياً.**`,
-          `> **لا نعرض أي نتيجة دون مصدر موثوق** — أي نتيجة تصدر من الذكاء الاصطناعي دون استعلام API هي تخمين وليست حقيقة.`,
-          ``,
-          `**تحقق مباشرة من:**`,
-          `| المصدر | الرابط |`,
-          `|--------|--------|`,
-          `| 📡 **FotMob** | [نتائج WC 2026](https://www.fotmob.com/ar/leagues/77/matches/world-cup) |`,
-          `| 🏆 **FIFA الرسمي** | [fifa.com/worldcup](https://www.fifa.com/worldcup/matches) |`,
-          `| ⚽ **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
-          `| 📺 **Kooora** | [kooora.com](https://www.kooora.com/) |`,
-        ].join('\n'),
-        model: 'wc2026-no-hallucination',
-        _sportsAgent: true,
-        wc2026: true,
-        found: false,
-      })
-    }
-  }
-
-  // ── WC2026 Today Matches Early Handler ─────────────────────────────────────
-  // يُعالَج مباشرةً: "مباريات كأس العالم اليوم" / "من يلعب اليوم في المونديال"
-  // يُجيب من FotMob (حي) ← قاعدة البيانات المحلية — بدون LLM
-  {
-    // WC today handler: يعمل حتى عند _isRetry (البيانات الرياضية لا تتغير)
-    // ── كشف موسم كأس العالم 2026 (11 يونيو – 19 يوليو 2026) ──────────────────────
-    const _wcSeasonNow = Date.now()
-    // ✅ FIX: WC2026 انتهى في 19 يوليو — الـ timestamp المُصحَّح 1784534399000 = 2026-07-19T23:59:59Z
-    const _isWCSeason  = _wcSeasonNow >= 1781136000000 && _wcSeasonNow <= 1784534399000
-    // لا نُطلق handler المباريات إذا كان السؤال عن تشكيلة فريق
-    const _isSquadQueryGuard = isWC2026SquadQuery(_rawLastMsg)
-    const _isWCTodayEarly = !_isSquadQueryGuard && (
-      detectWC2026TodayQuery(_rawLastMsg) ||
-      /(?:مباريات?|مباراة|ماتشات|نتائج|برنامج|رزنامة)\s+(?:كأس\s*العالم|المونديال|مونديال|FIFA|فيفا)\s+(?:اليوم|الليلة)/i.test(_rawLastMsg) ||
-      /(?:كأس\s*العالم|المونديال|مونديال)\s+(?:مباريات?\s+)?(?:اليوم|الليلة)/i.test(_rawLastMsg) ||
-      /(?:اليوم|الليلة)\s+(?:في|من)\s+(?:كأس\s*العالم|المونديال|مونديال)/i.test(_rawLastMsg) ||
-      /من\s+(?:يلعب|سيلعب|ستلعب)\s+(?:اليوم|الليلة)\s+(?:في\s+)?(?:كأس\s*العالم|المونديال)/i.test(_rawLastMsg) ||
-      /(?:ماتشات|مباريات?|مباراة|نتائج)\s+(?:اليوم|الليلة).*(?:كأس|مونديال|FIFA)/i.test(_rawLastMsg) ||
-      // مباراة اليوم (مفرد) + كأس العالم — النمط الرئيسي المُصلَح
-      /مباراة\s+(?:اليوم|الليلة|الآن).*(?:كأس\s*العالم|مونديال|FIFA)/i.test(_rawLastMsg) ||
-      /(?:كأس\s*العالم|مونديال|FIFA\s*2026).*مباراة\s+(?:اليوم|الليلة|الآن)/i.test(_rawLastMsg) ||
-      // أنماط إضافية — أسئلة عامة عن مباريات اليوم في كأس العالم
-      /(?:ما\s+هي|ايش|وش|شو)\s+(?:مباريات?|مباراة|ماتشات).*(?:كأس\s*العالم|مونديال)/i.test(_rawLastMsg) ||
-      /(?:كأس\s*العالم|مونديال|FIFA\s*2026).*(?:النهار|هاذ|اليوم)/i.test(_rawLastMsg) ||
-      /(?:هاذ\s+النهار|هذا\s+اليوم)\s+.*(?:كأس|مونديال|FIFA)/i.test(_rawLastMsg) ||
-      /(?:واش|كاين|فيه)\s+.*(?:ماتش|مقابلة|مباراة).*(?:مونديال|كأس\s*العالم)/i.test(_rawLastMsg) ||
-      /(?:شكون|مين)\s+(?:يلعب|يواجه|لعب).*(?:مونديال|كأس\s*العالم)/i.test(_rawLastMsg) ||
-      /(?:أخبار|نتائج|ملخص)\s+(?:كأس\s*العالم|مونديال).*(?:اليوم|الليلة|الآن)/i.test(_rawLastMsg) ||
-      // نمط شامل: أي ذكر لـ (مباراة|ماتش) + (اليوم|الليلة) + (كأس|مونديال)
-      (/(?:مباراة|مباريات|ماتش)\s+.{0,30}(?:كأس\s*العالم|مونديال|FIFA\s*2026)/i.test(_rawLastMsg) && /(?:اليوم|الليلة|الآن|النهار)/i.test(_rawLastMsg)) ||
-      // ── موسم كأس العالم: "مباراة اليوم" أو "ماتش اليوم" = WC تلقائياً ──────
-      (_isWCSeason && /(?:مباراة|مباريات|ماتش|مقابلة)\s+(?:اليوم|الليلة|النهار)/i.test(_rawLastMsg)) ||
-      (_isWCSeason && /(?:اليوم|الليلة|النهار)\s+(?:فيه|كاين|واش|في)?\s*(?:مباراة|ماتش|كورة)/i.test(_rawLastMsg)) ||
-      (_isWCSeason && /(?:من\s+يلعب|شكون\s+يلعب|من\s+ضد\s+من)\s+(?:اليوم|الليلة|النهار)/i.test(_rawLastMsg)) ||
-      // ── نتائج اليوم / الأمس / البارحة (مباريات انتهت) ───────────────────────
-      (_isWCSeason && /(?:نتيجة|نتائج)\s+(?:مباريات?|لقاء|ماتشات?)?\s*(?:اليوم|الليلة|النهار|الأمس|امس|البارحة)/i.test(_rawLastMsg)) ||
-      (_isWCSeason && /(?:نتائج|ملخص|ماذا\s+(?:انتهت|كانت))\s+(?:اليوم|الليلة)/i.test(_rawLastMsg)) ||
-      (_isWCSeason && /(?:كيف\s+انتهت|كيف\s+كانت|ايش\s+صار|وش\s+صار)\s+مباريات?\s+(?:اليوم|الليلة|البارحة|الأمس)/i.test(_rawLastMsg)) ||
-      // ── "البارحة" وحدها (دارجة جزائرية ليوم الأمس) ───────────────────────
-      (_isWCSeason && /(?:مباريات?|ماتشات?|نتائج|نتيجة|ملخص|لقاءات?)\s+(?:البارحة|بالأمس)/i.test(_rawLastMsg)) ||
-      (_isWCSeason && /(?:البارحة|بالأمس)\s+(?:في\s+)?(?:كأس\s*العالم|مونديال|FIFA)/i.test(_rawLastMsg)) ||
-      (_isWCSeason && /(?:البارحة|بالأمس)\s+(?:كاينة?|فيه?|كانت?)\s+(?:مباراة|ماتش)/i.test(_rawLastMsg))
-    )
-    if (_isWCTodayEarly) {
-      // ── كشف: هل السؤال عن الأمس أم اليوم؟ ──────────────────────────────
-      const _isYesterdayQ = /البارحة|بالأمس|(?:نتائج|نتيجة|مباريات?|ماتشات?)\s+(?:الأمس|امس\b)/i.test(_rawLastMsg)
-      const _dzOffset = 3600000 // UTC+1 الجزائر
-      const _queryDate = _isYesterdayQ
-        ? new Date(Date.now() + _dzOffset - 86400000).toISOString().split('T')[0] // أمس
-        : new Date(Date.now() + _dzOffset).toISOString().split('T')[0]            // اليوم
-      console.log(`[WC2026:TodayEarly] 🌐 WC ${_isYesterdayQ ? '📅 YESTERDAY' : '📅 TODAY'} query: "${_rawLastMsg.slice(0, 60)}" → date: ${_queryDate}`)
-      try {
-        const _wcTodayRes = await Promise.race([
-          runWC2026TodayAgent(_queryDate),
-          new Promise(r => setTimeout(() => r(null), 15000)),
-        ])
-        if (_wcTodayRes?.userResponse) {
-          return res.status(200).json({
-            content: _wcTodayRes.userResponse,
-            model: 'sports-agent-wc2026-today',
-            _sportsAgent: true,
-            wc2026: true,
-            found: _wcTodayRes.found,
-            sources: _wcTodayRes.sources,
-            matchCount: _wcTodayRes.matchCount,
-            matches: _wcTodayRes.matches || [],
-          })
-        }
-        // ── Fallback: بيانات محلية عندما تفشل APIs الخارجية ──────────────────
-        // يمنع السقوط إلى LLM وما ينتج عنه من ردود "لم أفهم" أو اختراع بيانات
-        // تصحيح: استخدام WC2026_FULL_FIXTURES المستوردة statically (تعمل في Vercel bundle)
-        console.log('[WC2026:TodayEarly] APIs empty → using local WC2026_FULL_FIXTURES fallback')
-        const _nowUTC2 = Date.now()
-        const _fixStatus = (m) => {
-          if (!m.startTime || !m.date) return m
-          try {
-            const [_h,_min] = m.startTime.split(':').map(Number)
-            const _ms = new Date(`${m.date}T${String(_h).padStart(2,'0')}:${String(_min).padStart(2,'0')}:00Z`).getTime()
-            if (_nowUTC2 > _ms + 7800000) return {...m, statusType:'finished'}
-            if (_nowUTC2 > _ms) return {...m, statusType:'live'}
-            return m
-          } catch(_) { return m }
-        }
-        const _localMatches = WC2026_FULL_FIXTURES.filter(m => m.date === _todayDate).map(_fixStatus)
-        if (_localMatches?.length) {
-          const _lm_lines = [
-            `## ⚽ مباريات كأس العالم 2026 — ${new Date(_todayDate + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })}`,
-            ``,
-            `> [![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`,
-            ``,
-          ]
-          for (const _m of _localMatches) {
-            const _mf1 = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','المغرب':'🇲🇦','تونس':'🇹🇳','مصر':'🇪🇬','السعودية':'🇸🇦','قطر':'🇶🇦','هولندا':'🇳🇱','اليابان':'🇯🇵','كوريا الجنوبية':'🇰🇷' }[_m.homeTeam] || '🏴'
-            const _mf2 = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','المغرب':'🇲🇦','تونس':'🇹🇳','مصر':'🇪🇬','السعودية':'🇸🇦','قطر':'🇶🇦','هولندا':'🇳🇱','اليابان':'🇯🇵','كوريا الجنوبية':'🇰🇷' }[_m.awayTeam] || '🏴'
-            const [_mh, _mm] = _m.startTime?.split(':') || ['??','??']
-            const _mdzH = String((parseInt(_mh, 10) + 1) % 24).padStart(2, '0')
-            _lm_lines.push(`### ${_mf1} **${_m.homeTeam}** 🆚 **${_m.awayTeam}** ${_mf2}`)
-            _lm_lines.push(`🕒 **${_mdzH}:${_mm}** (توقيت الجزائر) | 🏟️ ${_m.venue}, ${_m.city} | المجموعة **${_m.group}** | ${_m.round}`)
-            _lm_lines.push(``)
-          }
-          _lm_lines.push(`[![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![Kooora](https://www.google.com/s2/favicons?sz=32&domain=kooora.com)](https://www.kooora.com/%D9%83%D8%B1%D8%A9-%D8%A7%D9%84%D9%82%D8%AF%D9%85/%D9%85%D8%B3%D8%A7%D8%A8%D9%82%D8%A9/%D9%83%D8%A7%D9%94%D8%B3-%D8%A7%D9%84%D8%B9%D8%A7%D9%84%D9%85/%D9%85%D8%A8%D8%A7%D8%B1%D9%8A%D8%A7%D8%AA/70excpe1synn9kadnbppahdn7) [![beIN Sports](https://www.google.com/s2/favicons?sz=32&domain=beinsports.com)](https://www.beinsports.com/ar-mena/%D9%86%D8%AA%D8%A7%D8%A6%D8%AC-%D9%85%D8%A8%D8%A7%D8%B4%D8%B1%D8%A9-page_scores) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`)
-          return res.status(200).json({
-            content: _lm_lines.join('\n'),
-            model: 'wc2026-today-local',
-            _sportsAgent: true,
-            wc2026: true,
-            found: true,
-            sources: ['WC2026_FULL_FIXTURES'],
-            matchCount: _localMatches.length,
-            matches: _localMatches,
-          })
-        }
-        // لا مباريات هذا اليوم محلياً
-        return res.status(200).json({
-          content: [
-            `## ⚽ كأس العالم 2026 — لا مباريات اليوم`,
-            ``,
-            `📅 لا توجد مباريات مجدولة في **${_todayDate}** وفق الجدول الرسمي لـ FIFA 2026.`,
-            ``,
-            `🗓️ [الجدول الكامل للمباريات](https://www.fifa.com/worldcup/matches)`,
-          ].join('\n'),
-          model: 'wc2026-no-matches',
-          _sportsAgent: true,
-          wc2026: true,
-          found: false,
-        })
-      } catch (_wcTodayErr) {
-        console.error('[WC2026:TodayEarly] error:', _wcTodayErr.message)
-        // ❌ إصلاح حرج: catch يجب أن يُعيد رداً آمناً — لا يسمح بالسقوط إلى LLM
-        // قبل الإصلاح: كان يسقط إلى General Interceptor الذي يخلط مباريات WC بغيرها
-        try {
-          const _safeMatches = WC2026_FULL_FIXTURES.filter(m => m.date === new Date(Date.now() + 3600000).toISOString().split('T')[0])
-          if (_safeMatches.length) {
-            const _sf_date = new Date(Date.now() + 3600000).toISOString().split('T')[0]
-            const _sf_lines = [
-              `## ⚽ مباريات كأس العالم 2026 — ${new Date(_sf_date + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })}`,
-              ``,
-              `> [![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`,
-              ``,
-            ]
-            const _WC_FL = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','المغرب':'🇲🇦','تونس':'🇹🇳','مصر':'🇪🇬','السعودية':'🇸🇦','قطر':'🇶🇦','هولندا':'🇳🇱','اليابان':'🇯🇵','كوريا الجنوبية':'🇰🇷' }
-            for (const _sm of _safeMatches) {
-              const _f1 = _WC_FL[_sm.homeTeam] || '🏴', _f2 = _WC_FL[_sm.awayTeam] || '🏴'
-              const [_sh, _smm] = _sm.startTime?.split(':') || ['??','??']
-              const _sdh = String((parseInt(_sh, 10) + 1) % 24).padStart(2, '0')
-              _sf_lines.push(`### ${_f1} **${_sm.homeTeam}** 🆚 **${_sm.awayTeam}** ${_f2}`)
-              _sf_lines.push(`🕒 **${_sdh}:${_smm}** (توقيت الجزائر) | 🏟️ ${_sm.venue}, ${_sm.city} | المجموعة **${_sm.group}**`)
-              _sf_lines.push(``)
-            }
-            _sf_lines.push(`[![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![Kooora](https://www.google.com/s2/favicons?sz=32&domain=kooora.com)](https://www.kooora.com/%D9%83%D8%B1%D8%A9-%D8%A7%D9%84%D9%82%D8%AF%D9%85/%D9%85%D8%B3%D8%A7%D8%A8%D9%82%D8%A9/%D9%83%D8%A7%D9%94%D8%B3-%D8%A7%D9%84%D8%B9%D8%A7%D9%84%D9%85/%D9%85%D8%A8%D8%A7%D8%B1%D9%8A%D8%A7%D8%AA/70excpe1synn9kadnbppahdn7) [![beIN Sports](https://www.google.com/s2/favicons?sz=32&domain=beinsports.com)](https://www.beinsports.com/ar-mena/%D9%86%D8%AA%D8%A7%D8%A6%D8%AC-%D9%85%D8%A8%D8%A7%D8%B4%D8%B1%D8%A9-page_scores) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`)
-            return res.status(200).json({ content: _sf_lines.join('\n'), model: 'wc2026-today-safe-fallback', _sportsAgent: true, wc2026: true, found: true, matches: _safeMatches })
-          }
-        } catch (_) {}
-        return res.status(200).json({
-          content: [
-            `## ⚽ كأس العالم 2026 — خطأ مؤقت`,
-            ``,
-            `> ⚠️ تعذّر الاتصال بوكيل المباريات مؤقتاً. تابع مباشرةً:`,
-            ``,
-            `| المصدر | الرابط |`,
-            `|--------|--------|`,
-            `| 🏆 **FIFA الرسمي** | [fifa.com/worldcup](https://www.fifa.com/worldcup) |`,
-            `| 📡 **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
-            `| ⚽ **FotMob** | [مباريات WC2026](https://www.fotmob.com/leagues/77/matches/world-cup) |`,
-          ].join('\n'),
-          model: 'wc2026-today-error-safe',
-          _sportsAgent: true,
-          wc2026: true,
-          found: false,
-        })
-      }
-    }
-  }
-
-  // ── WC2026 Tomorrow Matches Handler 📅 ─────────────────────────────────────
-  // يُعالَج: "مباريات الغد كأس العالم" / "مباراة الغد" / "غدا مونديال" / "مباريات بكرة الفيفا"
-  {
-    const _isWCTomorrowEarly = (
-      /(?:مباريات?|مباراة|ماتشات|برنامج|جدول|رزنامة)\s+(?:الغد|غدا?|بكر[اة])\s*(?:كأس\s*العالم|المونديال|مونديال|FIFA|فيفا|العالمي)?/i.test(_rawLastMsg) ||
-      /(?:الغد|غدا?|بكر[اة])\s+(?:مباريات?|مباراة|ماتشات|برنامج)?\s*(?:كأس\s*العالم|المونديال|مونديال|FIFA|فيفا)/i.test(_rawLastMsg) ||
-      /(?:كأس\s*العالم|المونديال|مونديال|FIFA\s*2026|الفيفا)\s+(?:الغد|غدا?|بكر[اة])/i.test(_rawLastMsg) ||
-      (/(?:مباريات?|مباراة|ماتشات)\s+(?:الغد|غدا?|بكر[اة])/i.test(_rawLastMsg) && /(?:كأس|مونديال|FIFA|عالم|فيفا)/i.test(_rawLastMsg)) ||
-      (/(?:الغد|غدا?|بكر[اة])/i.test(_rawLastMsg) && /(?:كأس\s*العالم|المونديال|مونديال)/i.test(_rawLastMsg) && /(?:مباراة|مبارا|ماتش|يلعب|يلعبون|من\s+يلعب)/i.test(_rawLastMsg))
-    )
-    if (_isWCTomorrowEarly) {
-      console.log(`[WC2026:TomorrowEarly] 📅 WC tomorrow query: "${_rawLastMsg.slice(0, 60)}"`)
-      try {
-        const _tomorrowDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-        const _tomorrowLabel = new Date(_tomorrowDate + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })
-        const _wcTomRes = await Promise.race([
-          runWC2026TodayAgent(_tomorrowDate),
-          new Promise(r => setTimeout(() => r(null), 15000)),
-        ])
-        if (_wcTomRes?.userResponse) {
-          const _patched = _wcTomRes.userResponse.replace(/اليوم/g, `الغد (${_tomorrowLabel})`)
-          return res.status(200).json({
-            content: _patched,
-            model: 'sports-agent-wc2026-tomorrow',
-            _sportsAgent: true,
-            wc2026: true,
-            found: _wcTomRes.found,
-            sources: _wcTomRes.sources,
-            matchCount: _wcTomRes.matchCount,
-            matches: _wcTomRes.matches || [],
-          })
-        }
-        // ── Fallback: بيانات محلية ──────────────────────────────────────────
-        // تصحيح: WC2026_FULL_FIXTURES المستوردة statically بدل dynamic import
-        const _tomMatches = WC2026_FULL_FIXTURES.filter(m => m.date === _tomorrowDate)
-        const _WC_FLAGS_TOM = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','المغرب':'🇲🇦','تونس':'🇹🇳','مصر':'🇪🇬','السعودية':'🇸🇦','قطر':'🇶🇦','هولندا':'🇳🇱','اليابان':'🇯🇵','كوريا الجنوبية':'🇰🇷','إيطاليا':'🇮🇹','بلجيكا':'🇧🇪','كرواتيا':'🇭🇷','أوروغواي':'🇺🇾','الدنمارك':'🇩🇰','السويد':'🇸🇪','أستراليا':'🇦🇺','تركيا':'🇹🇷','نيجيريا':'🇳🇬','السنغال':'🇸🇳','كولومبيا':'🇨🇴','الإكوادور':'🇪🇨','بولندا':'🇵🇱','سويسرا':'🇨🇭','اسكتلندا':'🏴󠁧󠁢󠁳󠁣󠁴󠁿' }
-        if (_tomMatches?.length) {
-          const _tl = [
-            `## ⚽ مباريات كأس العالم 2026 — ${_tomorrowLabel}`,
-            ``,
-            `> [![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`,
-            ``,
-          ]
-          for (const _m of _tomMatches) {
-            const _f1 = _WC_FLAGS_TOM[_m.homeTeam] || '🏴'
-            const _f2 = _WC_FLAGS_TOM[_m.awayTeam] || '🏴'
-            const [_mh, _mm] = _m.startTime?.split(':') || ['??','??']
-            const _dztH = String((parseInt(_mh, 10) + 1) % 24).padStart(2, '0')
-            _tl.push(`### ${_f1} **${_m.homeTeam}** 🆚 **${_m.awayTeam}** ${_f2}`)
-            _tl.push(`🕒 **${_dztH}:${_mm}** (توقيت الجزائر) | 🏟️ ${_m.venue}, ${_m.city} | المجموعة **${_m.group}** | ${_m.round}`)
-            _tl.push(``)
-          }
-          _tl.push(`🔴 **المتابعة الحية:** [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026)`)
-          return res.status(200).json({
-            content: _tl.join('\n'),
-            model: 'wc2026-tomorrow-local',
-            _sportsAgent: true,
-            wc2026: true,
-            found: true,
-            sources: ['WC2026_FULL_FIXTURES'],
-            matchCount: _tomMatches.length,
-            matches: _tomMatches,
-          })
-        }
-        return res.status(200).json({
-          content: [
-            `## ⚽ كأس العالم 2026 — لا مباريات غداً`,
-            ``,
-            `📅 لا توجد مباريات مجدولة في **${_tomorrowLabel}** وفق الجدول الرسمي لـ FIFA 2026.`,
-            ``,
-            `🗓️ [الجدول الكامل للمباريات](https://www.fifa.com/worldcup/matches)`,
-          ].join('\n'),
-          model: 'wc2026-tomorrow-no-matches',
-          _sportsAgent: true,
-          wc2026: true,
-          found: false,
-        })
-      } catch (_wcTomErr) {
-        console.error('[WC2026:TomorrowEarly] error:', _wcTomErr.message)
-        // إصلاح: catch يُعيد رداً آمناً — لا يسقط إلى LLM
-        try {
-          const _safeTomDate = new Date(Date.now() + 24*60*60*1000).toISOString().split('T')[0]
-          const _safeTomMatches = WC2026_FULL_FIXTURES.filter(m => m.date === _safeTomDate)
-          if (_safeTomMatches.length) {
-            const _WCF2 = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','المغرب':'🇲🇦','تونس':'🇹🇳','قطر':'🇶🇦' }
-            const _tl2 = [`## ⚽ مباريات كأس العالم 2026 — الغد`, ``, `> [![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`, ``]
-            for (const _m of _safeTomMatches) {
-              const [_h,_mn] = _m.startTime?.split(':') || ['??','??']
-              _tl2.push(`### ${_WCF2[_m.homeTeam]||'🏴'} **${_m.homeTeam}** 🆚 **${_m.awayTeam}** ${_WCF2[_m.awayTeam]||'🏴'}`)
-              _tl2.push(`🕒 **${String((parseInt(_h,10)+1)%24).padStart(2,'0')}:${_mn}** (توقيت الجزائر) | 🏟️ ${_m.venue}, ${_m.city}`)
-              _tl2.push(``)
-            }
-            return res.status(200).json({ content: _tl2.join('\n'), model: 'wc2026-tomorrow-safe-fallback', _sportsAgent: true, wc2026: true, found: true, matches: _safeTomMatches })
-          }
-        } catch (_) {}
-        return res.status(200).json({
-          content: [`## ⚽ كأس العالم 2026 — خطأ مؤقت`, ``, `> تعذّر الاتصال. تابع: [FIFA](https://www.fifa.com/worldcup) | [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup)`].join('\n'),
-          model: 'wc2026-tomorrow-error-safe', _sportsAgent: true, wc2026: true, found: false,
-        })
-      }
-    }
-  }
-
-  // ── WC2026 Standings Early Handler 🏆📊 ────────────────────────────────────
-  // يُعالَج مباشرةً: "ترتيب المجموعة J" / "كم نقطة الجزائر" / "مجموعة الجزائر"
-  // يجلب بيانات حية من SofaScore ← FotMob ← قاعدة البيانات المحلية
-  {
-    const _isWCStandingsEarly = !_isRetry && (
-      detectWC2026StandingsQuery(_rawLastMsg) ||
-      isWC2026AllGroupsQuery(_rawLastMsg) ||
-      /(?:ترتيب|جدول|صدارة)\s+(?:المجموعة|مجموعة)\s+[A-La-l]/i.test(_rawLastMsg) ||
-      /(?:كم\s+نقطة|نقاط\s+الجزائر|نقط\s+الجزائر)/i.test(_rawLastMsg) ||
-      /مجموعة\s+(?:الجزائر|الخضر)/i.test(_rawLastMsg) ||
-      /ترتيب\s+(?:الفرق|المنتخبات).*(?:كأس|مونديال|2026)/i.test(_rawLastMsg) ||
-      /(?:كأس|مونديال|2026).*ترتيب\s+(?:الفرق|المنتخبات)/i.test(_rawLastMsg)
-    )
-    if (_isWCStandingsEarly) {
-      console.log(`[WC2026:Standings] 📊 Standings query: "${_rawLastMsg.slice(0, 60)}"`)
-      try {
-        const _standingsRes = await Promise.race([
-          runWC2026StandingsAgent(_rawLastMsg),
-          new Promise(r => setTimeout(() => r(null), 18000)),
-        ])
-        if (_standingsRes?.userResponse) {
-          return res.status(200).json({
-            content: _standingsRes.userResponse,
-            model: 'sports-agent-wc2026-standings',
-            _sportsAgent: true,
-            wc2026: true,
-            groupLetter: _standingsRes.groupLetter,
-            liveSource: _standingsRes.liveSource,
-            found: true,
-          })
-        }
-      } catch (_standingsErr) {
-        console.error('[WC2026:Standings] error:', _standingsErr.message)
-      }
-    }
-  }
-
-  // ══ WC2026 ALGERIA SQUAD INTERCEPTOR — تشكيلة المنتخب الجزائري ═════════════
-  // يُطلَق عند السؤال عن قائمة / تشكيلة / لاعبي الجزائر في كأس العالم 2026
-  {
-    const _inWCSeason = Date.now() >= 1781136000000 && Date.now() <= 1784591999000
-    const _hasAlgeriaKw = /(?:الجزائر|الخضر|الفنيق\s*الجزائري|منتخب\s*(?:الجزائري|الوطني|الجزائر)|المنتخب\s*الجزائري|الفريق\s*الجزائري)/i.test(_rawLastMsg)
-    const _hasSquadKw   = /(?:تشكيل(?:ة|ات)?|قائمة|لاعب(?:ين|ون|و|ي)?|استدعاء|الـ\s*26|26\s*لاعب|القائمة\s*الرسمية|أسماء\s*(?:اللاعبين|اللاعبون|المنتخب)|من\s*(?:في|هم|يمثل|يشارك)\s*(?:قائمة|تشكيلة|المنتخب)?|مشاركين?|مجموعة\s*اللاعبين?|الطاقم\s*الكروي|أفضل\s*لاعبي?|أبرز\s*لاعبي?|المستدعون|المُستدعَون|مَن\s*(?:استدعى|سيلعب|سيشارك))/i.test(_rawLastMsg)
-    const _hasWCKw      = /(?:كأس\s*العالم|مونديال|2026|FIFA|WC)/i.test(_rawLastMsg)
-
-    const _isSquadQuery   = _hasAlgeriaKw && _hasSquadKw && (_hasWCKw || _inWCSeason)
-    const _isSquadGeneral = !_isSquadQuery && _inWCSeason && _hasAlgeriaKw && (
-      /(?:لاعب(?:ين|ون|و)\s*(?:الجزائر|الخضر|المنتخب)|من\s*يلعب(?:ون)?\s*(?:مع|في)?\s*(?:الجزائر|الخضر)|أبرز\s*لاعبي?\s*الجزائر|أفضل\s*لاعبي?\s*المنتخب)/i.test(_rawLastMsg)
-    )
-
-    // معالجة خاصة: سؤال عن محرز — مُستدعى رسمياً (المصدر: kooora.com يونيو 2026)
-    const _isMahrezQuery = _inWCSeason && /(?:محرز|mahrez)/i.test(_rawLastMsg) &&
-      /(?:هل|في|ضمن|مستدعى|استدعى|قائمة|تشكيل|يلعب|يشارك|مونديال|كأس\s*العالم|2026)/i.test(_rawLastMsg)
-    if (_isMahrezQuery) {
-      const _mahrezResp = [
-        `## ✅ رياض محرز — مُستدعى لكأس العالم 2026`,
-        ``,
-        `> **رياض محرز** **ضمن القائمة الرسمية** للمنتخب الجزائري في كأس العالم FIFA 2026.`,
-        ``,
-        `| | |`,
-        `|--|--|`,
-        `| **النادي** | الأهلي السعودي 🇸🇦 |`,
-        `| **المركز** | جناح أيمن / مهاجم |`,
-        `| **المجموعة** | J (مع الأرجنتين 🇦🇷 والنمسا 🇦🇹 والأردن 🇯🇴) |`,
-        ``,
-        `> **المصدر:** [كووورة](https://www.kooora.com) — يونيو 2026`,
-        ``,
-        `> للاطلاع على القائمة الكاملة: اسأل *"تشكيلة الجزائر في كأس العالم 2026"*`,
-      ].join('\n')
-      console.log(`[WC2026:AlgeriaSquad] ✅ محرز IS in squad query: "${_rawLastMsg.slice(0,60)}"`)
-      return res.status(200).json({
-        content: _mahrezResp,
-        model: 'wc2026-algeria-squad-kb',
-        _sportsAgent: true, _bypassLLM: true, wc2026: true, found: true, type: 'algeria-player-mahrez',
-      })
-    }
-    // معالجة خاصة: سؤال عن مدرب الجزائر
-    const _isCoachQuery = _inWCSeason && _hasAlgeriaKw &&
-      /(?:مدرب|مُدرب|المدرب|كوتش|coach|مُؤطّر|المؤطر|من\s+يدرب|من\s+يُدرب|من\s+هو\s+مدرب|مسؤول\s+(?:الفني|الفريق|التدريب))/i.test(_rawLastMsg)
-    if (_isCoachQuery) {
-      const _coachResp = [
-        `## 🇩🇿 مدرب المنتخب الجزائري — كأس العالم 2026`,
-        ``,
-        `| | |`,
-        `|--|--|`,
-        `| **المدرب** | **فلاديمير بيتكوفيتش** (Vladimir Petković) |`,
-        `| **الجنسية** | 🇨🇭 سويسري (من أصل صربي) |`,
-        `| **المجموعة** | J — مع الأرجنتين 🇦🇷 · النمسا 🇦🇹 · الأردن 🇯🇴 |`,
-        `| **إجمالي اللاعبين** | 26 لاعباً |`,
-        ``,
-        `> للاطلاع على القائمة الكاملة: اسأل *"تشكيلة الجزائر في كأس العالم 2026"*`,
-      ].join('\n')
-      console.log(`[WC2026:AlgeriaCoach] 🏋️ Coach query: "${_rawLastMsg.slice(0,60)}"`)
-      return res.status(200).json({
-        content: _coachResp,
-        model: 'wc2026-algeria-squad-kb',
-        _sportsAgent: true, _bypassLLM: true, wc2026: true, found: true, type: 'algeria-coach',
-      })
-    }
-
-    if (_isSquadQuery || _isSquadGeneral) {
-      console.log(`[WC2026:AlgeriaSquad] 📋 Algeria squad query intercepted: "${_rawLastMsg.slice(0,70)}"`)
-      const squadResponse = buildAlgeriaWC2026SquadResponse('full')
-      return res.status(200).json({
-        content: squadResponse,
-        model: 'wc2026-algeria-squad-kb',
-        _sportsAgent: true,
-        _bypassLLM: true,
-        wc2026: true,
-        found: true,
-        type: 'algeria-squad',
-      })
-    }
-  }
-
-  // ══ WC2026 SQUAD PIPELINE — تشكيلات كأس العالم 2026 ════════════════════════
-  // Pipeline: Intent Detection → Agent Router → Source Retrieval → LLM (تنسيق فقط) → Final Answer
-  // ⛔ LLM لا يجيب مباشرة من ذاكرة التدريب — يستخدم المصادر الحية فقط
-  {
-    const _isAnySquadQ = isWC2026SquadQuery(_rawLastMsg)
-    if (_isAnySquadQ) {
-      const _teamName = detectWC2026SquadTeam(_rawLastMsg)
-      console.log(`[WC2026:Squad] 🔍 INTENT: تشكيلة كأس العالم | Detected team: "${_teamName || 'غير محدد'}" | Query: "${_rawLastMsg.slice(0,60)}"`)
-
-      // ── STEP 1: Agent Router → Static Knowledge Base (أسرع مسار) ──────────
-      if (_teamName && WC2026_ALL_SQUADS[_teamName]) {
-        console.log(`[WC2026:Squad] ✅ SOURCE: Static KB | Team: ${_teamName} | ${WC2026_ALL_SQUADS[_teamName].players?.length} players`)
-        const _squadResp = buildWC2026SquadResponse(_teamName)
-        return res.status(200).json({
-          content: _squadResp,
-          model: 'wc2026-squad-kb',
-          _sportsAgent: true,
-          _bypassLLM: true,
-          wc2026: true,
-          found: true,
-          type: 'team-squad',
-          team: _teamName,
-        })
-      }
-
-      // ── STEP 2: Source Retrieval → Live Web Fetch (الفريق خارج قاعدة البيانات) ──
-      if (_teamName) {
-        console.log(`[WC2026:Squad] 🌐 SOURCE: Live retrieval for "${_teamName}" (not in static KB) — LLM BLOCKED until data fetched`)
-        try {
-          const _liveQuery = `تشكيلة ${_teamName} كأس العالم 2026 قائمة اللاعبين FIFA squad`
-          const _liveResult = await Promise.race([
-            runSportsAgent(_liveQuery, messages),
-            new Promise(r => setTimeout(() => r(null), 15000)),
-          ])
-          if (_liveResult?.userResponse || _liveResult?.context) {
-            const _liveContent = _liveResult.userResponse || _liveResult.context
-            console.log(`[WC2026:Squad] ✅ RETRIEVE: Live data fetched for "${_teamName}" — LLM role: FORMAT ONLY`)
-            return res.status(200).json({
-              content: _liveContent,
-              model: 'wc2026-squad-live-retrieved',
-              _sportsAgent: true,
-              _bypassLLM: true,
-              wc2026: true,
-              found: true,
-              type: 'team-squad-live',
-              team: _teamName,
-            })
-          }
-        } catch (_liveErr) {
-          console.warn(`[WC2026:Squad] ⚠️ Live retrieval failed for "${_teamName}": ${_liveErr.message}`)
-        }
-      }
-
-      // ── STEP 3: Source Not Available → Official Links ⛔ LLM PERMANENTLY BLOCKED ──
-      const _teamDisplay = _teamName ? `— ${_teamName}` : ''
-      const _squadSources = [
-        `## 📋 تشكيلة كأس العالم FIFA 2026 ${_teamDisplay}`,
-        ``,
-        `> 🔒 **مبدأ DZ Agent:** لا أجيب من ذاكرة التدريب على تشكيلات كأس العالم — المعلومات قد تكون قديمة أو غير دقيقة.`,
-        `> لم أتمكن من استرجاع بيانات حية موثّقة. تابع من المصادر الرسمية:`,
-        ``,
-        `| المصدر | الرابط المباشر |`,
-        `|--------|----------------|`,
-        `| 🏆 **FIFA الرسمي** | [قوائم WC2026](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026/teams) |`,
-        `| ⚽ **كووورة** | [قوائم المنتخبات](https://www.kooora.com/%D9%83%D8%B1%D8%A9-%D9%82%D8%AF%D9%85/%D8%A7%D9%84%D9%82%D9%88%D8%A7%D8%A6%D9%85) |`,
-        `| 📊 **SofaScore** | [WC2026 Squads](https://www.sofascore.com/tournament/football/world/fifa-world-cup-2026/1407) |`,
-        `| 📡 **Transfermarkt** | [تشكيلات كأس العالم](https://www.transfermarkt.com/weltmeisterschaft-2026/teilnehmer/pokalwettbewerb/WM26) |`,
-        ``,
-        `💡 **الفرق المتوفرة مباشرةً:** الجزائر · فرنسا · الأرجنتين · البرازيل · إسبانيا · إنجلترا · ألمانيا · البرتغال · المغرب · مصر · تونس · السنغال · السعودية · كندا · أمريكا · المكسيك · اليابان · هولندا · بلجيكا · كرواتيا · وأكثر من 30 فريقاً آخر`,
-        ``,
-        `> جرّب: **"تشكيلة الجزائر في كأس العالم 2026"** أو **"قائمة لاعبي فرنسا"**`,
-      ].join('\n')
-
-      console.log(`[WC2026:Squad] ⛔ LLM BLOCKED — returning official source links (team: ${_teamName || 'unknown'})`)
-      return res.status(200).json({
-        content: _squadSources,
-        model: 'wc2026-squad-sources',
-        _sportsAgent: true,
-        _bypassLLM: true,
-        wc2026: true,
-        found: false,
-        type: 'squad-source-links',
-      })
-    }
-  }
-
-  // ── سؤال عن لاعب بعينه في تشكيلة الجزائر ───────────────────────────────────
-  {
-    const _isPlayerInSquad = Date.now() >= 1781136000000 && Date.now() <= 1784591999000 &&
-      /(?:هل\s+(?:يلعب|يشارك|موجود|في\s*قائمة)|هل\s+(?:استُدعي|استدعى|ضمن\s*(?:القائمة|التشكيلة)))/i.test(_rawLastMsg)
-
-    if (_isPlayerInSquad) {
-      const _squadPlayers = WC2026_ALGERIA_SQUAD.players
-      const _matchedPlayer = _squadPlayers.find(p =>
-        _rawLastMsg.includes(p.name) ||
-        (p.nameEn && _rawLastMsg.toLowerCase().includes(p.nameEn.toLowerCase().split(' ')[1] || p.nameEn.toLowerCase()))
+      const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح|رياضة|رياضي|بوليفيا|البرازيل|الأرجنتين|فرنسا|إسبانيا|ألمانيا|إيطاليا|إنجلترا|البرتغال|هولندا|بلجيكا|تركيا|كرواتيا|السويد|الدنمارك|سويسرا|أوروغواي|كولومبيا|تشيلي|المكسيك|كندا|قطر|أستراليا|اليابان|كوريا|السنغال|نيجيريا|الكاميرون|غانا|ساحل العاج|مالي|بوركينا|كوت ديفوار|ليبيا|موريتانيا)/i.test(_rawLastMsg)
+      const _priorHasClarify = messages.slice(-5, -1).some(m =>
+        m.role === 'assistant' && /هل تبحث عن مباراة|واش تبحث على ماتش|نتيجة مباراة|موعد مباراة|_matchVsClarify/i.test(m.content || '')
       )
-      if (_matchedPlayer) {
-        const _playerResp = [
-          `## ✅ ${_matchedPlayer.name} في تشكيلة الجزائر — كأس العالم 2026`,
-          ``,
-          `| | |`,
-          `|--|--|`,
-          `| **الاسم** | ${_matchedPlayer.name} (${_matchedPlayer.nameEn}) |`,
-          `| **القميص** | ${_matchedPlayer.num}# |`,
-          `| **المركز** | ${_matchedPlayer.pos} |`,
-          `| **النادي** | ${_matchedPlayer.club} |`,
-          `| **المباريات الدولية** | ${_matchedPlayer.caps} مباراة |`,
-          `| **الأهداف الدولية** | ${_matchedPlayer.goals} أهداف |`,
-          ``,
-          `> ✅ نعم، **${_matchedPlayer.name}** مُستدعى رسمياً ضمن قائمة المنتخب الجزائري لكأس العالم 2026.`,
-        ].join('\n')
+
+      // ── حالة 1: سياق رياضي واضح أو المستخدم أكّد بعد clarification → وكيل رياضي
+      if (_hasExplicitSportsCtx || _priorHasClarify) {
+        console.log(`[MatchVs:EarlyRoute] ⚽ "${_earlyMatchVs.team1} vs ${_earlyMatchVs.team2}" → runSportsAgent`)
+        try {
+          const _sportRes = await runSportsAgent(_rawLastMsg, messages)
+          // runSportsAgent يُعيد { context, found, matches, ... } — لا content
+          const _sportContent = _sportRes.context || _sportRes.content || ''
+          return res.status(200).json({
+            content: _sportContent,
+            model: 'sports-agent',
+            found: _sportRes.found,
+            matches: _sportRes.matches,
+            sources: _sportRes.sources,
+            matchVsData: { team1: _earlyMatchVs.team1, team2: _earlyMatchVs.team2, temporal: _earlyMatchVs.temporal },
+            _sportsAgent: true,
+          })
+        } catch (_sae) {
+          console.error('[MatchVs:EarlyRoute] sports agent error:', _sae.message)
+          // fallback → يكمل المعالجة العادية
+        }
+      } else {
+        // ── حالة 2: لا سياق → طلب توضيح
+        const { team1, team2 } = _earlyMatchVs
+        const isDzD = /(?:واش|كيفاش|راه|تاع|بصح|شنو|هذا|هاذا|وهران|قسنطينة|جزائري)/i.test(_rawLastMsg)
+        const clarifyMsg = isDzD
+          ? `🆚 **${team1} ضد ${team2}** — واش تبحث على؟\n\n⚽ **ماتش كرة قدم** — اكتب **"نعم مباراة"** وراني نجيبلك النتيجة أو الموعد\n💡 **شيء آخر** — وضّح شنو تريد بالضبط`
+          : `🆚 **${team1} ضد ${team2}** — هل تبحث عن:\n\n⚽ **نتيجة مباراة** أو **موعد مباراة** بين **${team1}** و**${team2}**؟\n→ أجب بـ **"نعم مباراة"** لأحضر لك البيانات الحية\n\n📚 أم تريد معلومة أخرى؟ → وضّح سؤالك`
+        console.log(`[MatchVs:EarlyClarify] ${team1} vs ${team2} — no sports ctx → clarification`)
         return res.status(200).json({
-          content: _playerResp,
-          model: 'wc2026-algeria-squad-kb',
-          _sportsAgent: true,
-          _bypassLLM: true,
-          wc2026: true,
-          found: true,
-          type: 'algeria-player-check',
+          content: clarifyMsg,
+          _matchVsClarify: true,
+          matchVsData: { team1, team2 },
         })
       }
     }
   }
-
-  // ══ WC2026 GENERAL INTERCEPTOR — حاجز عام لكأس العالم 2026 (LLM BLOCKER) ════
-  // يُطلَق لأي استعلام يحتوي كلمات WC2026 وكلمات بيانات حية لم تُعالج بالمعالجات السابقة
-  // الهدف: منع LLM من الإجابة بذاكرة التدريب عن نتائج/هدافين/تشكيلات/إحصائيات
-  {
-    const _isWC2026General = (
-      /(?:كأس\s*العالم|المونديال|مونديال|FIFA\s*2026|world\s*cup\s*2026|WC\s*2026)/i.test(_rawLastMsg)
-    ) && (
-      // استعلامات بيانات حية — لا يجب أن يجيب LLM عنها أبداً
-      /(?:هداف|هدافين|ترتيب\s*الهداف|أكثر\s*لاعب\s*(?:تسجيل|سجل|هدف)|من\s*(?:يتصدر|تصدر)\s*(?:ترتيب|الهداف))/i.test(_rawLastMsg) ||
-      /(?:تشكيل|تشكيلة|تشكيلات|الأساسي|التشكيلة\s*الأساسية|التشكيل\s*المتوقع)/i.test(_rawLastMsg) ||
-      /(?:حكم|حكام|من\s*(?:هو|كان)\s*(?:حكم|الحكم)|طاقم\s*تحكيم)/i.test(_rawLastMsg) ||
-      /(?:بطاقة\s*(?:صفراء|حمراء)|إنذار|إيقاف|عقوبة\s*تحكيمية|VAR|فيديو|قرار\s*تحكيم)/i.test(_rawLastMsg) ||
-      /(?:من\s*(?:فاز|ربح|سجل|صنع)|نتيجة\s*(?:مباراة|المباراة)|أهداف\s*مباراة)/i.test(_rawLastMsg) ||
-      /(?:إحصاء|إحصائيات|تحليل|أداء|أفضل\s*(?:لاعب|منتخب|دفاع|هجوم)|منتخب\s*(?:قوي|أقوى|ضعيف))/i.test(_rawLastMsg) ||
-      /(?:أبرز\s*(?:مفاجأة|مفاجآت)|مفاجأة\s*البطولة|أحسن\s*(?:لاعب|فريق|مباراة))/i.test(_rawLastMsg) ||
-      /(?:ركلة\s*جزاء|ركلات|ضربة\s*جزاء|بنالتي|penalty)/i.test(_rawLastMsg) ||
-      /(?:تمريرة\s*حاسمة|صناعة\s*أهداف|تمريرات\s*مفتاحية|أفضل\s*صانع)/i.test(_rawLastMsg) ||
-      /(?:مبار[اة]ت?\s*(?:اليوم|الآن|الليلة|هذا\s*المساء|النهار)|نتائج\s*(?:اليوم|آخر))/i.test(_rawLastMsg) ||
-      /(?:اليوم|الليلة|النهار)\s+.*(?:مباراة|مباريات|ماتش)/i.test(_rawLastMsg) ||
-      /(?:وكيل\s*رياضي|sports?\s*agent|agent\s*riaadhi)/i.test(_rawLastMsg)
-    )
-
-    if (_isWC2026General) {
-      console.log(`[WC2026:General⛔LLM] 🔒 Intercepting WC2026 live-data query → runSportsAgent (LLM BLOCKED): "${_rawLastMsg.slice(0, 80)}"`)
-      try {
-        const _wc2026GenRes = await Promise.race([
-          runSportsAgent(_rawLastMsg, messages),
-          new Promise(r => setTimeout(() => r(null), 20000)),
-        ])
-
-        if (_wc2026GenRes?.userResponse || _wc2026GenRes?.context) {
-          const _wc2026GenContent = _wc2026GenRes.userResponse || _wc2026GenRes.context
-          console.log(`[WC2026:General⛔LLM] ✅ Sports agent responded (found=${_wc2026GenRes.found}, type=${_wc2026GenRes.type})`)
-          return res.status(200).json({
-            content: _wc2026GenContent,
-            model: 'wc2026-sports-agent',
-            _sportsAgent: true,
-            _bypassLLM: true,
-            wc2026: true,
-            found: _wc2026GenRes.found,
-            type: _wc2026GenRes.type,
-            sources: _wc2026GenRes.sources,
-          })
-        }
-
-        // الوكيل لم يجد بيانات حية → رد نظيف بدون LLM
-        const _wc2026NoData = [
-          `## ⚽ كأس العالم FIFA 2026 — بيانات مطلوبة غير متوفرة`,
-          ``,
-          `> ⚠️ **لا أملك بيانات حية موثّقة** للإجابة على هذا السؤال بدقة.`,
-          `> 🛡️ **مبدأ DZ Agent:** لا أجيب من ذاكرة التدريب على أسئلة رياضية زمنية — المعلومات قد تكون قديمة أو مختلقة.`,
-          ``,
-          `**تابع مباشرةً من المصادر الرسمية الحية:**`,
-          ``,
-          `| المصدر | الرابط |`,
-          `|--------|--------|`,
-          `| 🏆 **FIFA الرسمي** | [fifa.com/worldcup](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026) |`,
-          `| 📡 **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
-          `| ⚽ **FotMob** | [مباريات WC2026](https://www.fotmob.com/leagues/77/matches/world-cup) |`,
-          `| 📊 **SofaScore** | [إحصائيات](https://www.sofascore.com/tournament/football/world/fifa-world-cup-2026/1407) |`,
-          `| 🇩🇿 **Kooora** | [متابعة عربية](https://www.kooora.com/) |`,
-          ``,
-          `💡 **يمكنني الإجابة بدقة على:** مواعيد مباريات الجزائر · جدول المجموعة J · موعد مباراة بعينها (مثل: "الجزائر ضد النمسا")`,
-        ].join('\n')
-
-        console.log(`[WC2026:General⛔LLM] ℹ️ No live data — returning clean no-data response (LLM permanently blocked)`)
-        return res.status(200).json({
-          content: _wc2026NoData,
-          model: 'wc2026-no-live-data',
-          _sportsAgent: true,
-          _bypassLLM: true,
-          wc2026: true,
-          found: false,
-        })
-      } catch (_wc2026GenErr) {
-        console.error('[WC2026:General⛔LLM] agent error:', _wc2026GenErr.message)
-        return res.status(200).json({
-          content: [
-            `## ⚽ كأس العالم 2026 — خطأ مؤقت في الوكيل الرياضي`,
-            ``,
-            `> ⚠️ واجه الوكيل الرياضي مشكلة تقنية مؤقتة. لا أجيب من ذاكرة النموذج.`,
-            ``,
-            `🔄 **أعد المحاولة** أو تابع مباشرةً: [FIFA](https://www.fifa.com/worldcup) | [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026)`,
-          ].join('\n'),
-          model: 'wc2026-agent-error',
-          _sportsAgent: true,
-          _bypassLLM: true,
-          wc2026: true,
-          found: false,
-        })
-      }
-    }
-  }
-
-  // ── National Team MATCHES Early Handler 🇩🇿⚽ ─────────────────────────────
-  // يُعالَج هنا: المباراة القادمة، جدول المباريات، متى يلعب المنتخب
-  // يُرجع مباريات موثّقة مع عدّ تنازلي للمباراة القادمة — بدون بحث خارجي
-  {
-    const _isNTMatchQuery =
-      /(?:مباراة|مباريات|متى\s*(?:تلعب|يلعب|ستلعب)|موعد|جدول|برنامج)\s*(?:(?:ل|ال)?\s*)?(?:المنتخب\s*الجزائري|المنتخب\s*الوطني|الفريق\s*الجزائري|الفريق\s*الوطني|الخضر|محاربو\s*الصحراء|منتخب\s*الجزائر)/i.test(_rawLastMsg)
-      || /(?:المنتخب\s*الجزائري|المنتخب\s*الوطني|الفريق\s*الجزائري|الخضر|محاربو\s*الصحراء|منتخب\s*الجزائر)\s*(?:متى|مباراة|مباريات|يلعب|تلعب|ستلعب|الجدول|البرنامج|موعد\s*(?:المباراة)?|القادم[ةه]?)/i.test(_rawLastMsg)
-      || /(?:مباراة\s+الجزائر\s*القادمة|المباراة\s+القادمة\s+للجزائر|المباراة\s+القادمة\s+للمنتخب|متى\s+ستلعب\s+الجزائر|برنامج\s+المنتخب|جدول\s+مباريات\s+الجزائر|مباريات\s+الجزائر\s+في\s+كأس\s+العالم)/i.test(_rawLastMsg)
-      || /(?:آخر|أحدث|آخر\s+)\s*(?:نتيجة|نتائج|مباراة|مباريات)\s*(?:(?:ل|لل)?\s*(?:الجزائر|المنتخب\s*الجزائري|المنتخب\s*الوطني|الخضر))/i.test(_rawLastMsg)
-      || /(?:الجزائر|المنتخب\s*الجزائري|الخضر)\s*(?:آخر\s+(?:نتيجة|مباراة)|النتيجة\s+الأخيرة|المباراة\s+الأخيرة)/i.test(_rawLastMsg)
-      || /(?:متى\s+(?:تلعب|ستلعب|يلعب)|مباريات?|موعد)\s*(?:الجزائر|الخضر)/i.test(_rawLastMsg)
-
-    if (_isNTMatchQuery) {
-      console.log(`[NationalTeam:MatchRoute] ⚽ Detected upcoming match query: "${_rawLastMsg.slice(0,60)}"`)
-      try {
-        const _today2 = new Date()
-        const _todayStr = _today2.toLocaleDateString('ar-DZ', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
-
-        // ─── 1) مباريات كأس العالم القادمة ─────────────────────────────────────
-        const _wcFixtures = WORLD_CUP_2026.algeriaGroup.fixtures
-          .filter(f => !f.homeScore && !f.awayScore && f.statusType === 'upcoming')
-          .sort((a, b) => new Date(a.date) - new Date(b.date))
-
-        // ─── 2) أحدث النتائج من قاعدة البيانات المحلية ──────────────────────
-        const _recentResults = ALGERIA_MATCHES_HISTORY
-          .filter(m => m.statusType === 'finished')
-          .sort((a, b) => new Date(b.date) - new Date(a.date))
-          .slice(0, 4)
-
-        // ─── 3) بناء قسم "المباراة القادمة" مع عدّ تنازلي ───────────────────
-        let _upcomingSection = ''
-        if (_wcFixtures.length > 0) {
-          const _next = _wcFixtures[0]
-          const _matchDate = new Date(`${_next.date}T${_next.startTime || '21:00'}:00`)
-          const _diffMs = _matchDate - _today2
-          const _diffDays = Math.floor(_diffMs / 86400000)
-          const _diffHrs  = Math.floor((_diffMs % 86400000) / 3600000)
-          const _countdown = _diffMs > 0
-            ? (_diffDays > 0 ? `⏳ بعد **${_diffDays} يوم${_diffDays > 1 ? '' : ''}** و**${_diffHrs} ساعة**` : `🔴 **اليوم!**`)
-            : '✅ انتهت'
-
-          // الفريق المنافس = الفريق الآخر (ليس الجزائر)
-          const _nextOpponent = _next.homeTeam === 'الجزائر' ? _next.awayTeam : _next.homeTeam
-          const _nextOppFlag = { 'الأرجنتين':'🇦🇷','النمسا':'🇦🇹','الأردن':'🇯🇴','المغرب':'🇲🇦','البرازيل':'🇧🇷','فرنسا':'🇫🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','البرتغال':'🇵🇹','هولندا':'🇳🇱' }[_nextOpponent] || '🏴'
-          const _isAlgeriaHome = _next.homeTeam === 'الجزائر'
-          const _matchupStr = _isAlgeriaHome
-            ? `🇩🇿 **الجزائر** ضد ${_nextOppFlag} **${_nextOpponent}**`
-            : `${_nextOppFlag} **${_nextOpponent}** ضد 🇩🇿 **الجزائر**`
-
-          _upcomingSection = `## 🇩🇿 المنتخب الجزائري — كأس العالم FIFA 2026\n\n`
-            + `> 🏆 **المجموعة J** · الأرجنتين 🇦🇷 · **الجزائر 🇩🇿** · النمسا 🇦🇹 · الأردن 🇯🇴\n\n`
-            + `---\n\n`
-            + `### ⚔️ المباراة القادمة\n\n`
-            + `**${_matchupStr}**\n\n`
-            + `| 📅 التاريخ | ⏰ الموعد | 🏟️ الملعب | 📍 المدينة |\n`
-            + `|:---:|:---:|:---:|:---:|\n`
-            + `| **${new Date(_next.date).toLocaleDateString('ar-DZ', { weekday:'long', day:'numeric', month:'long', timeZone:'Africa/Algiers' })}** | **${_next.startTime || '21:00'} (توقيت الجزائر)** | ${_next.venue || '—'} | ${_next.city}${_next.country ? ', ' + _next.country : ''} |\n\n`
-            + `${_countdown ? '> ⏳ ' + _countdown + '\n\n' : ''}`
-
-          if (_wcFixtures.length > 1) {
-            _upcomingSection += `### 📅 كامل جدول مباريات الجزائر في كأس العالم 2026\n\n`
-            for (const fix of _wcFixtures) {
-              const _d = new Date(fix.date).toLocaleDateString('ar-DZ', { month:'short', day:'numeric' })
-              const _opp = fix.homeTeam === 'الجزائر' ? fix.awayTeam : fix.homeTeam
-              const _oppFlag = { 'الأرجنتين':'🇦🇷','النمسا':'🇦🇹','الأردن':'🇯🇴' }[_opp] || '🏴'
-              const _isHome = fix.homeTeam === 'الجزائر'
-              const _vs = _isHome
-                ? `🇩🇿 الجزائر ضد ${_oppFlag} **${_opp}**`
-                : `${_oppFlag} **${_opp}** ضد 🇩🇿 الجزائر`
-              _upcomingSection += `- **${fix.round}** — ${_d} ⏰ ${fix.startTime || '21:00'} | ${_vs} | 🏟️ ${fix.venue || fix.city}\n`
-            }
-            _upcomingSection += `\n> 🏆 **المجموعة J**: الأرجنتين 🇦🇷 · الجزائر 🇩🇿 · النمسا 🇦🇹 · الأردن 🇯🇴\n`
-          }
-        } else {
-          _upcomingSection = `## ⚽ جدول مباريات المنتخب الجزائري 🇩🇿\n\n📅 **اليوم:** ${_todayStr}\n\n`
-            + `🏆 **كأس العالم 2026** — المجموعة J:\n`
-            + WORLD_CUP_2026.algeriaGroup.fixtures.map(f => {
-                const _score = f.homeScore !== null ? `${f.homeScore}–${f.awayScore}` : 'vs'
-                return `- 🇩🇿 الجزائر **${_score}** ${f.awayTeam} — ${f.date} 📍 ${f.city}`
-              }).join('\n')
-        }
-
-        // ─── 4) قسم "آخر النتائج" ────────────────────────────────────────────
-        let _resultsSection = ''
-        if (_recentResults.length > 0) {
-          _resultsSection = `\n\n---\n\n### 📊 آخر نتائج المنتخب\n\n`
-          for (const m of _recentResults) {
-            const _score = m.homeScore !== null ? `**${m.homeScore}–${m.awayScore}**` : 'vs'
-            const _winner = m.winner === 'الجزائر' ? ' ✅' : (m.winner ? ' ❌' : ' 🤝')
-            const _d = new Date(m.date).toLocaleDateString('ar-DZ', { month:'short', day:'numeric', year:'numeric' })
-            _resultsSection += `- 🇩🇿 ${m.homeTeam} ${_score} ${m.awayTeam}${_winner} — ${_d} *(${m.competition})*\n`
-          }
-        }
-
-        const _finalMatchContent = _upcomingSection + _resultsSection
-          + `\n\n---\n> 📡 *البيانات من قاعدة المعرفة الرياضية الجزائرية — آخر تحديث: ${_todayStr}*`
-
-        console.log(`[NationalTeam:MatchRoute] ✅ returning WC2026 fixtures + ${_recentResults.length} recent results`)
-        return res.status(200).json({
-          content: _finalMatchContent,
-          model: 'national-team-fixtures',
-          _sportsAgent: true,
-          _nationalTeam: true,
-          wc2026: { group: 'J', nextMatch: _wcFixtures[0] || null, fixtures: _wcFixtures },
-        })
-      } catch (_nmErr) {
-        console.error('[NationalTeam:MatchRoute] error:', _nmErr.message)
-        // fallback → يكمل المعالجة العادية
-      }
-    }
-  }
-
-  // ── National Team News Early Handler 🇩🇿 ──────────────────────────────────
-  // يُعالَج هنا: كل سؤال عن أخبار المنتخب الجزائري / الخضر / محاربو الصحراء
-  // يستخدم الكاش المُفلتَر (رياضة فقط) بدل البحث العام الذي يُرجع أخباراً مختلطة
-  {
-    const _isNationalTeamNewsQuery = /(?:أخبار|خبر|آخر\s*أخبار|جديد|جديدة|آخر\s*مستجدات|تحديثات?|عاجل|آخر\s*الأخبار)\s*(?:(?:عن|حول|للـ?|عن\s*الـ?|ل)\s*)?(?:المنتخب\s*الجزائري|المنتخب\s*الوطني|الفريق\s*الجزائري|الفريق\s*الوطني|الخضر|محاربو\s*الصحراء|منتخب\s*الجزائر|الكرة\s*الجزائرية|المنتخب\s*الوطني\s*لكرة\s*القدم)/i.test(_rawLastMsg)
-      || /(?:المنتخب\s*الجزائري|المنتخب\s*الوطني|الفريق\s*الجزائري|الخضر|محاربو\s*الصحراء|منتخب\s*الجزائر)\s*(?:اليوم|الآن|الأسبوع|الشهر|الأخير|الأخيرة|هذا\s*الأسبوع|هذا\s*الشهر|جديد|جديدة|أخبار)/i.test(_rawLastMsg)
-      || /^(?:أخبار\s*)?(?:المنتخب\s*الجزائري|المنتخب\s*الوطني|الفريق\s*الوطني|الخضر|محاربو\s*الصحراء|منتخب\s*الجزائر)(?:\s*اليوم|\s*الأخيرة|\s*\?|؟)?$/i.test(_rawLastMsg.trim())
-    if (_isNationalTeamNewsQuery) {
-      console.log(`[NationalTeam:EarlyRoute] 🇩🇿 detected national team news query: "${_rawLastMsg.slice(0,60)}"`)
-      try {
-        // استخدم الكاش المُفلتَر (رياضة فقط) — إذا الكاش فارغ جلبه الآن
-        let _ntItems = NATIONAL_TEAM_CACHE.items || []
-        if (!_ntItems.length) {
-          _ntItems = await fetchNationalTeamNews()
-        }
-        if (_ntItems.length > 0) {
-          const _today = new Date().toLocaleDateString('ar-DZ', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
-          const _newsBlock = _ntItems.slice(0, 12).map((it, i) => {
-            const _date = it.pubDate ? new Date(it.pubDate).toLocaleDateString('ar-DZ', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : ''
-            return `${i+1}. **${it.title}**\n   المصدر: ${it.feedName || it.source || 'أخبار المنتخب'} | ${_date}${it.link ? `\n   [الرابط](${it.link})` : ''}`
-          }).join('\n\n')
-          const _ntSystemPrompt = `أنت محلل رياضي جزائري متخصص في المنتخب الوطني الجزائري (الخضر / محاربو الصحراء).
-اليوم: ${_today}
-مهمتك: قدّم ملخصاً منظماً وواضحاً لآخر أخبار المنتخب الجزائري فقط.
-القواعد:
-- ركّز على الأخبار الرياضية فقط (مباريات، نتائج، لاعبون، تدريبات، تصريحات رياضية)
-- لا تذكر أي موضوع خارج إطار كرة القدم والمنتخب
-- رتّب الأخبار من الأهم إلى الأقل
-- استخدم العربية الجزائرية بشكل بسيط وواضح
-- أضف ملاحظات تحليلية مختصرة حيث مناسب`
-          // محاولة ملخص AI — إذا فشل نرجع قائمة مباشرة
-          let _ntFinalContent = null
-          try {
-            const { content: _ntAI, error: _ntAIErr } = await callGroqWithFallback({
-              model: 'llama-3.3-70b-versatile',
-              messages: [
-                { role: 'system', content: _ntSystemPrompt },
-                { role: 'user', content: `هذه أحدث الأخبار المتوفرة من مصادر رياضية موثوقة عن المنتخب الجزائري:\n\n${_newsBlock}\n\nالطلب: ${_rawLastMsg}` },
-              ],
-              max_tokens: 1500,
-              temperature: 0.3,
-            })
-            if (_ntAI && !_ntAIErr) _ntFinalContent = _ntAI
-          } catch (_aiErr3) {
-            console.warn('[NationalTeam:EarlyRoute] Groq failed, using direct list:', _aiErr3.message)
-          }
-
-          // إذا فشل AI — أُعرض قائمة الأخبار مباشرة (دائماً يعمل)
-          if (!_ntFinalContent) {
-            _ntFinalContent = `## 🇩🇿 آخر أخبار المنتخب الجزائري\n📅 ${_today}\n\n${_ntItems.slice(0, 10).map((it, i) => {
-              const _d = it.pubDate ? new Date(it.pubDate).toLocaleDateString('ar-DZ', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : ''
-              return `**${i+1}. ${it.title}**\n🔗 ${it.feedName || it.source || 'أخبار المنتخب'} — ${_d}${it.link ? `\n[اقرأ المزيد](${it.link})` : ''}`
-            }).join('\n\n---\n\n')}\n\n> *المصادر: أخبار رياضية مُفلتَرة من ${[...new Set(_ntItems.map(x => x.feedName||x.source).filter(Boolean))].slice(0,4).join('، ')}*`
-          }
-
-          console.log(`[NationalTeam:EarlyRoute] ✅ response built from ${_ntItems.length} cached sports-only items`)
-          return res.status(200).json({
-            content: _ntFinalContent,
-            model: 'national-team-news',
-            _nationalTeam: true,
-            sources: _ntItems.slice(0, 5).map(it => ({ name: it.feedName || it.source, url: it.link })),
-          })
-        }
-      } catch (_ntErr2) {
-        console.error('[NationalTeam:EarlyRoute] error:', _ntErr2.message)
-        // fallback → يكمل المعالجة العادية
-      }
-    }
-  }
-
-  // ── Sports Archive Early Handler ──────────────────────────────────────────
-  // يُعالَج هنا: أين يلعب / إلى أين انتقل / متى فازت X بكأس العالم/أفريقيا
-  {
-    const _sportsClass = classifySportsQuery(_rawLastMsg)
-    const _sportsEarlyTypes = ['PLAYER_CURRENT_CLUB', 'PLAYER_TRANSFER_SPECIFIC', 'HISTORICAL_TROPHY']
-    if (_sportsEarlyTypes.includes(_sportsClass.type)) {
-      console.log(`[SportsArchive:EarlyRoute] 🏆 type=${_sportsClass.type} → runSportsAgent`)
-      try {
-        const _archiveRes = await runSportsAgent(_rawLastMsg, messages)
-        const _archiveContent = _archiveRes.userResponse || _archiveRes.context || ''
-        if (_archiveContent) {
-          return res.status(200).json({
-            content: _correctionNote + _archiveContent,
-            model: 'sports-agent-archive',
-            found: _archiveRes.found,
-            type: _archiveRes.type,
-            sources: _archiveRes.sources,
-            _sportsAgent: true,
-            _queryCorrected: _qCorrection.wasChanged,
-          })
-        }
-      } catch (_archErr) {
-        console.error('[SportsArchive:EarlyRoute] error:', _archErr.message)
-        // fallback → يكمل المعالجة العادية
-      }
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // 🏆 AGENT ROUTER SAFETY NET — شبكة الأمان النهائية لكل الاستعلامات الرياضية
-  // يُطلَق بعد جميع المعالجات السريعة — يمسك أي استعلام رياضي لم يُعالَج بعد
-  // القاعدة: لا يصل أي سؤال رياضي إلى LLM بدون المرور عبر الوكيل المتخصص
-  // ══════════════════════════════════════════════════════════════════════
-  {
-    try {
-      const _arIntent = classifyAgentIntent(_rawLastMsg)
-      if (_arIntent.intent === 'WORLD_CUP' || _arIntent.intent === 'AMBIGUOUS_TODAY') {
-        console.log(`[AgentRouter:SafetyNet] 🏆 intent=${_arIntent.intent} wcSubType=${_arIntent.wcSubType} — "${_rawLastMsg.slice(0,70)}"`)
-        const _arResult = await routeToAgent(_rawLastMsg, messages)
-        if (_arResult.handled && _arResult.response) {
-          const _arResp = _arResult.response
-          const _arValidation = validateResponse(_arResp, _arIntent.intent)
-          if (!_arValidation.valid) {
-            console.warn(`[AgentRouter:SafetyNet] ⚠️ Validation failed: ${_arValidation.reason}`)
-            const _blocked = buildBlockedResponse(_arIntent.intent, _arValidation.reason)
-            return res.status(200).json({
-              content: _blocked.userResponse,
-              model: 'wc-guard-blocked',
-              _sportsAgent: true,
-              _guardBlocked: true,
-              wc2026: _arIntent.intent === 'WORLD_CUP',
-              found: false,
-              _meta: { agent: 'guard', source: 'blocked', intent: _arIntent.intent },
-            })
-          }
-          const _enriched = addResponseMetadata(_arResp, _arIntent.intent, _rawLastMsg)
-          return res.status(200).json({
-            content: _correctionNote + (_arResp.userResponse || _arResp.context || ''),
-            model: _arIntent.intent === 'WORLD_CUP' ? 'world-cup-agent' : 'agent-router',
-            _sportsAgent: true,
-            wc2026: _arIntent.intent === 'WORLD_CUP',
-            found: _arResp.found,
-            matches: _arResp.matches,
-            sources: _arResp.sources,
-            matchCount: _arResp.matchCount,
-            needsClarification: _arResp.needsClarification || false,
-            _meta: _enriched._meta,
-            _agentRouter: true,
-          })
-        }
-      }
-      // SPORTS_GENERAL — شبكة أمان إضافية للرياضة العامة
-      if (_arIntent.intent === 'SPORTS_GENERAL' && _arIntent.confidence === 'high') {
-        console.log(`[AgentRouter:SafetyNet] ⚽ SPORTS_GENERAL (high confidence) — "${_rawLastMsg.slice(0,70)}"`)
-        const _arResult2 = await routeToAgent(_rawLastMsg, messages)
-        if (_arResult2.handled && _arResult2.response?.found) {
-          const _arResp2 = _arResult2.response
-          return res.status(200).json({
-            content: _correctionNote + (_arResp2.userResponse || _arResp2.context || ''),
-            model: 'sports-agent-router',
-            _sportsAgent: true,
-            found: _arResp2.found,
-            type: _arResp2.type,
-            sources: _arResp2.sources,
-            _meta: { agent: _arResp2.agent, source: _arResp2.source, intent: 'SPORTS_GENERAL' },
-            _agentRouter: true,
-          })
-        }
-      }
-    } catch (_arErr) {
-      console.error('[AgentRouter:SafetyNet] error (non-fatal, continuing):', _arErr.message)
-    }
-  }
-  // ══════════════════════════════════════════════════════════════════════
 
   const rawCurrentRepo = sanitizeString(req.body.currentRepo || '', 160)
   const currentRepo = isValidGithubRepo(rawCurrentRepo) ? rawCurrentRepo : ''
@@ -19301,123 +14581,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ content: _earlyMod.replyIfBlocked })
   }
 
-  // ══════════════════════════════════════════════════════════════════════
-  // 🩺 DZ HEALTH AI AGENT — EARLY (قبل كل Fast-Paths)
-  // يعمل هنا لمنع Maps/Darija/Algeria-KS من اعتراض الأعراض الطبية
-  // مثال: "راسي يضرب" → صحة (ليس خريطة) | "كيفاش ناخذ الدواء" → صحة (ليس ترجمة)
-  // ══════════════════════════════════════════════════════════════════════
-  const _earlyToolReq2 = typeof req.body.tool === 'string' ? req.body.tool.toLowerCase() : ''
-  const _isDZToolReq_early = ['jobs', 'health', 'cv', 'legal', 'chart', 'ocr', 'doctor'].includes(_earlyToolReq2)
-  if (!_isDZToolReq_early) {
-    const _healthIntentEarly = detectHealthIntent(lastUserMessage)
-    if (_healthIntentEarly.isHealthQuery && !_healthIntentEarly.isDoctorSearch) {
-      console.log(`[DZHealth] 🩺 EARLY | symptoms=${_healthIntentEarly.symptoms.join(',')} | drug=${_healthIntentEarly.hasDrugQuestion} | emergency=${_healthIntentEarly.isEmergency}`)
-
-      // طوارئ → رد فوري بدون LLM
-      if (_healthIntentEarly.isEmergency) {
-        return res.status(200).json({
-          content: '',
-          richType: 'health-analysis',
-          healthData: {
-            interpretation: 'تم الكشف عن أعراض طارئة — يرجى الاتصال فوراً بالإسعاف',
-            possible_causes: ['حالة طارئة تستدعي تدخلاً فورياً'],
-            triage_level: 'HIGH',
-            triage_reason: 'أعراض خطيرة تستوجب رعاية طبية فورية',
-            advice: [
-              '📞 اتصل بالإسعاف: 14 (الجزائر) أو 115 (SAMU)',
-              'لا تبقَ وحدك — اطلب المساعدة فوراً',
-              'لا تأكل ولا تشرب حتى تصل الرعاية الطبية',
-            ],
-            medications_info: null,
-            suggest_doctor: true,
-            emergency_note: '🚨 هذه حالة طوارئ — اتصل بـ 14 أو 115 فوراً',
-            disclaimer: 'هذا ليس تشخيصاً طبياً — اتصل بالإسعاف الآن',
-            symptoms_found: _healthIntentEarly.symptoms,
-            original_query: lastUserMessage.slice(0, 120),
-          },
-        })
-      }
-
-      // تحليل طبي عام — Groq مباشر أولاً ثم KB fallback
-      try {
-        const _eSysPrompt = buildHealthSystemPrompt(
-          _healthIntentEarly.symptoms,
-          _healthIntentEarly.hasDrugQuestion,
-          false,
-        )
-        const _eDzKb = getRelatedDZKnowledge(_healthIntentEarly.symptoms)
-        const _eDzKbNote = _eDzKb
-          ? `\n\n[معلومة من قاعدة البيانات الجزائرية: "${_eDzKb.name}" شائع في الجزائر — ${_eDzKb.prevalence}. أدوية متوفرة: ${_eDzKb.drugs.join(', ')}]`
-          : ''
-
-        const _eHealthMsgs = [
-          { role: 'system', content: _eSysPrompt + _eDzKbNote },
-          { role: 'user',   content: lastUserMessage },
-        ]
-
-        let _eContent = null
-        let _eModel   = null
-
-        // محاولة Groq مباشرة (أسرع وأنظف)
-        try {
-          const _eGroq = await callGroqWithFallback({
-            model: 'llama-3.3-70b-versatile',
-            messages: _eHealthMsgs,
-            max_tokens: 1000,
-            temperature: 0.3,
-          })
-          if (_eGroq.content && _eGroq.content.trim().length > 20) {
-            _eContent = _eGroq.content
-            _eModel   = 'groq:llama-3.3-70b-versatile'
-          }
-        } catch (_eg) { console.warn('[DZHealth:early] Groq:', _eg.message) }
-
-        // إذا فشل الأول → جرب نموذجاً ثانياً بسرعة
-        if (!_eContent) {
-          try {
-            const _eGroq2 = await callGroqWithFallback({
-              model: 'llama-3.1-8b-instant',
-              messages: _eHealthMsgs,
-              max_tokens: 800,
-              temperature: 0.3,
-            })
-            if (_eGroq2.content && _eGroq2.content.trim().length > 20) {
-              _eContent = _eGroq2.content
-              _eModel   = 'groq:llama-3.1-8b-instant'
-            }
-          } catch (_eg2) { console.warn('[DZHealth:early] Groq2:', _eg2.message) }
-        }
-        // كلا النموذجين فشلا → KB fallback فوري (لا انتظار)
-
-        const _eParsed = _eContent
-          ? parseHealthResponse(_eContent, lastUserMessage, _healthIntentEarly.symptoms)
-          : buildKBFallbackResponse(_healthIntentEarly.symptoms, _healthIntentEarly.hasDrugQuestion, lastUserMessage)
-
-        _eParsed.model_used = _eModel || 'kb_local'
-        console.log(`[DZHealth] ✅ EARLY | triage=${_eParsed.triage_level} | causes=${_eParsed.possible_causes.length} | src=${_eParsed.model_used}`)
-
-        return res.status(200).json({
-          content: '',
-          richType: 'health-analysis',
-          healthData: _eParsed,
-          model: _eModel || 'kb_local',
-        })
-      } catch (_eErr) {
-        console.error('[DZHealth:early] ❌ Error:', _eErr.message)
-        // لا نُعيد خطأً — نتابع المسار العادي للـ fallback
-      }
-    }
-  }
-  const _isHealthQuery_early = false // تحديث: الصحة تُعالَج أعلاه
-
   // ── DZ Maps EARLY Fast-Path ──────────────────────────────────────────────
   // يُطلَق قبل كل شيء: _isAgentMode، SearXNG، Algeria-KS، Person Query، Tool Redirect
   // يضمن أن "مسجد الفرقان في عنابة" دائماً تذهب للخريطة وليس لـ SearXNG
   // Guard: website-builder & map-website queries excluded (موقع مطعم = موقع ويب)
-  if (!_isHealthQuery_early && isMapQuery(lastUserMessage)
+  if (isMapQuery(lastUserMessage)
     && !detectWebsiteBuilderQuery(lastUserMessage)
-    && !detectMapWebsiteQuery(lastUserMessage)
-    && !isSportsAgentQuery(lastUserMessage)) {
+    && !detectMapWebsiteQuery(lastUserMessage)) {
     console.log(`[DZ-Maps EARLY] 🗺️ Map fast-path: "${lastUserMessage.slice(0, 80)}"`)
     const _earlyUserLoc = req.body.userLocation || null
     try {
@@ -19459,8 +14629,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     /(?:الجزائر|المنتخب\s+الجزائري).*(?:فاز|ربح|بطل|كأس\s+أمم|AFCON)/i.test(lastUserMessage) ||
     // BYPASS: Doctor / medical queries — handled by dedicated doctor search engine
     /(?:طبيب|دكتور|دكاترة|أطباء|طبيبة|عيادة|مستوصف|مركز صحي|عيادات|دبيب|دكتوره|دكترة|نقلب على طبيب|نحوس على طبيب|أسنان|سنان|ضروس|طب الأسنان|نسائية|ولادة|حمل|عيون|بصريات|جلدية|قلبي|أمراض القلب|عظام|كسور|أعصاب|مسالك|مسالك بولية|médecin|medecin|docteur|dentiste|cardiologue|ophtalmologue|dermatologue|généraliste|generaliste|gynécologue|pédiatre|pediatre|psychiatre|chirurgien|pneumologue|neurologue|urologue|oncologue)/i.test(lastUserMessage) ||
-    // BYPASS: Health / symptom queries — handled by DZ Health AI Agent
-    /(?:صداع|ألم|وجع|حمى|حرارة|سخونة|دوخة|دوار|تعب|إرهاق|غثيان|قيء|إسهال|إمساك|حرقة|برد|كحة|سعال|زكام|رشح|التهاب|تورم|طفح|حكة|ضيق.*تنفس|خفقان|نزيف|راسي.*يضرب|يدوخني|تعبان|مريض|حمة|سخنة|يوجعني|بطني.*يوجع|ظهري.*يوجع|ما نقدرش نتنفس|دواء|دوا|حبة|حبوب|مضاد.*حيوي|مسكن|باراسيتامول|إيبوبروفين|مرض|أمراض|أعراض|علاج|mal de tête|fièvre|douleur|toux|rhume|grippe|diarrhée|vertige|médicament|antibiotique|ضغط الدم|سكري|كوليسترول|ربو|أنيميا|فقر دم)/i.test(lastUserMessage) ||
     // BYPASS: YouTube / video search — handled by YouTube Insight engine
     /(?:فيديو|فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|إشرح.*بالفيديو|شرح.*بالفيديو|درس.*بالفيديو|tutorial|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب|مقطع.*فيديو)/i.test(lastUserMessage) ||
     // BYPASS: Sports / football / league queries — handled by sports data system
@@ -19478,16 +14646,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     isHistoricalGovQuery(lastUserMessage) ||
     // BYPASS: Minister / president queries (current government)
     isMinisterQuery(lastUserMessage) ||
-    // BYPASS: Image search requests — always actionable, sent directly to search engine
-    isImageSearchQuery(lastUserMessage) ||
-    /(?:pinterest|بينتريست|بنتريست)\s*(?:صور|images?|photos?)?/i.test(lastUserMessage) ||
-    /(?:صور|images?|photos?)\s*(?:من|في|على|from|on)?\s*(?:pinterest|بينتريست)/i.test(lastUserMessage) ||
-    /(?:ابحث|بحث|جيب|دور|حوس|search|find|get|show)\s*.{0,20}(?:pinterest|بينتريست|بالصور|الصور)/i.test(lastUserMessage) ||
-    // BYPASS: Translation requests — always actionable, sent directly to LLM
-    /^(?:ترجم|ترجمة|translate|traduire|übersetzen|traducir)\b/i.test(lastUserMessage.trim()) ||
-    /(?:ترجم(?:لي|لنا)?|ترجم\s+هذ|ترجم\s+الجملة|ترجم\s+النص|ترجم\s+إلى|ترجم\s+الى|translate\s+(?:to|this|the)|traduire\s+en|انقل\s+(?:هذا|هذه|النص)\s+(?:إلى|الى))/i.test(lastUserMessage) ||
-    /(?:إلى\s+(?:الإنجليزية|الإنكليزية|الفرنسية|العربية|الإسبانية|الألمانية|الروسية|الصينية|الإيطالية|البرتغالية|الهولندية|التركية|الفارسية|english|french|arabic|spanish|german|russian|chinese|italian)\s*[:،:])/i.test(lastUserMessage) ||
-    /(?:to\s+(?:arabic|french|english|spanish|german|russian|chinese|italian|portuguese|turkish|persian|darija|dz)\b)/i.test(lastUserMessage) ||
     // BYPASS: اسم لاعب معروف — يذهب للمسار الرياضي مباشرة
     detectPlayerNameInQuery(lastUserMessage) !== null ||
     // BYPASS: اسم عربي مجرد قصير (2-4 كلمات) — universal player search يعالجه
@@ -19498,10 +14656,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Also bypass clarification for website/map builder and currency — these are always actionable
   const _isWebBuildBypass = detectWebsiteBuilderQuery(lastUserMessage) || detectMapWebsiteQuery(lastUserMessage)
   const _isCurrencyBypass = detectCurrencyQuery(lastUserMessage)
-  // BYPASS: شخصية معروفة في قاعدة معرفة KB → لا حاجة لـ clarification
-  const _isKBPersonBypass = !!resolveRoleToPersonName(lastUserMessage)
-  if (!_isAgentMode && !_clarificationBypass && !_isWebBuildBypass && !_isCurrencyBypass && !_isKBPersonBypass &&
-      !isJobsQuery(lastUserMessage) && !isProverbQuery(lastUserMessage) &&
+  if (!_isAgentMode && !_clarificationBypass && !_isWebBuildBypass && !_isCurrencyBypass &&
       _intentClassification?.needsClarification &&
       _intentClassification?.clarificationMsg &&
       _intentClassification?.confidence < 40) {
@@ -19511,51 +14666,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       status: 'clarification_required',
       intent: _intentClassification.intent,
     })
-  }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // 🔄 TRANSLATION FAST-PATH — ترجمة مباشرة عبر LLM (قبل كل مسارات أخرى)
-  // يعترض كل طلبات الترجمة ويوجهها مباشرة للـ LLM دون المرور بـ intent router
-  // ══════════════════════════════════════════════════════════════════════
-  const _isTranslationQuery = (
-    /^(?:ترجم|ترجمة|translate|traduire|übersetzen|traducir)\b/i.test(lastUserMessage.trim()) ||
-    /(?:ترجم(?:لي|لنا)?|ترجم\s+هذ|ترجم\s+الجملة|ترجم\s+النص|ترجم\s+إلى|ترجم\s+الى|ترجمه|ترجميه)/i.test(lastUserMessage) ||
-    /(?:translate\s+(?:to|this|the|into)|traduire\s+en|انقل\s+(?:هذا|هذه|النص)\s+(?:إلى|الى))/i.test(lastUserMessage) ||
-    /(?:إلى\s+(?:الإنجليزية|الإنكليزية|الفرنسية|العربية|الإسبانية|الألمانية|الروسية|الصينية|الإيطالية|البرتغالية|الهولندية|التركية|الفارسية))/i.test(lastUserMessage) ||
-    /(?:to\s+(?:arabic|french|english|spanish|german|russian|chinese|italian|portuguese|turkish|persian|darija)\b)/i.test(lastUserMessage)
-  )
-  if (!_isAgentMode && _isTranslationQuery) {
-    console.log(`[Translation] 🔄 Translation request detected — routing to LLM directly`)
-    try {
-      const _transSystemPrompt = `أنت مترجم احترافي متخصص يدعم اللغات التالية: العربية، الإنجليزية، الفرنسية، الإسبانية، الألمانية، الإيطالية، البرتغالية، الروسية، الصينية، التركية، الفارسية، والدارجة الجزائرية.
-
-قواعد الترجمة:
-• قدّم الترجمة المطلوبة مباشرةً دون مقدمات أو تفسيرات إضافية ما لم يُطلب منك ذلك.
-• إذا طُلبت عدة لغات، رتّب الترجمات بشكل واضح مع ذكر اسم اللغة قبل كل ترجمة.
-• احتفظ بالمعنى الدقيق وتجنّب الترجمة الحرفية المفرطة.
-• إذا كان النص دارجة جزائرية، أشر إلى ذلك بوضوح.
-• للنصوص الطويلة، قدّم ترجمة متكاملة دون اختصار.`
-      const _transResult = await safeGenerateAI({
-        messages: [
-          { role: 'system', content: _transSystemPrompt },
-          ...messages,
-        ],
-        query: 'translate',
-        max_tokens: 2000,
-        taskHint: 'general',
-      })
-      if (_transResult?.content) {
-        console.log(`[Translation] ✅ Translated successfully (${_transResult.content.length} chars)`)
-        return res.status(200).json({
-          content: _transResult.content,
-          mode: 'translation',
-          model: _transResult.model || 'groq',
-          status: 'ok',
-        })
-      }
-    } catch (_transErr) {
-      console.warn(`[Translation] ⚠ LLM failed, continuing fallback:`, _transErr.message)
-    }
   }
 
   // ── قاعدة الحكومات التاريخية — مسار مبكر مباشر (قبل AI وVerifyPolicy) ─────
@@ -19611,9 +14721,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Static Fast-Path — إجابة فورية <1ms للمعرفة الثابتة ────────────────
-  // Guard: skip static facts for live-data queries (exchange rates, football standings, economy news, etc.)
+  // Guard: skip static facts for live-data queries (exchange rates, football standings, etc.)
   // to prevent دينار → دين conflict and ensure live data paths fire correctly
-  const _hasLiveDataKw = /سعر الصرف|سعر الدولار|سعر اليورو|سعر الجنيه|سعر الريال|دولار.*دينار|يورو.*دينار|صرف.*اليوم|كم.*دولار|كم.*يورو|كم.*الدولار|كم.*اليورو|نتائج.*مبار|مباريات.*اليوم|مباريات.*كرة|ترتيب.*دوري|جدول.*دوري|نتائج.*دوري|أسعار.*صرف|أخبار.*اقتصاد|اقتصاد.*أخبار|أخبار الاقتصاد|مستجدات.*اقتصاد|آخر.*اقتصاد|اقتصاد.*اليوم/i.test(lastUserMessage)
+  const _hasLiveDataKw = /سعر الصرف|سعر الدولار|سعر اليورو|سعر الجنيه|سعر الريال|دولار.*دينار|يورو.*دينار|صرف.*اليوم|كم.*دولار|كم.*يورو|كم.*الدولار|كم.*اليورو|نتائج.*مبار|مباريات.*اليوم|مباريات.*كرة|ترتيب.*دوري|جدول.*دوري|نتائج.*دوري|أسعار.*صرف/i.test(lastUserMessage)
   if (!currentRepo && !req.body.githubToken && !_hasLiveDataKw) {
     const _staticAnswer = lookupStaticFact(lastUserMessage)
     if (_staticAnswer) {
@@ -19704,6 +14814,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             : `في تلك الحقبة كانت الجزائر إما تحت الحكم العثماني أو كيانات تقليدية سابقة للدولة الحديثة.`,
           ``,
           `🗓️ **استقلال الجزائر:** 5 يوليو 1962 | **أول رئيس:** أحمد بن بلة (سبتمبر 1962)`,
+          `📚 **المصدر:** حقيقة تاريخية ثابتة — ثقة 100%`,
         ].join('\n'),
         model: 'anti-hallucination',
       })
@@ -19750,11 +14861,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
 
     // 6b. نتائج/مباريات "غدا أو بكرة" → مستقبلية لا نعلمها
-    // ⚠️ استثناء: استعلامات كأس العالم تُعالَج في WC2026 Tomorrow Handler أعلاه
-    if (
-      /(?:غدا?|بكر[اة]|الغد)\b.*(?:نتائج|مبار[اة]ة?|مباريات?|يلعب|ستلعب|تلعب)|(?:نتائج|مبار[اة]ة?|مباريات?|يلعب|ستلعب|تلعب).*(?:غدا?|بكر[اة]|الغد)\b/i.test(_lum) &&
-      !/(?:كأس\s*العالم|مونديال|FIFA|فيفا\s*2026|WC\s*2026)/i.test(_lum)
-    ) {
+    if (/(?:غدا?|بكر[اة]|الغد)\b.*(?:نتائج|مبار[اة]ة?|يلعب|ستلعب|تلعب)|(?:نتائج|مبار[اة]ة?|يلعب|ستلعب|تلعب).*(?:غدا?|بكر[اة]|الغد)\b/i.test(_lum)) {
       console.log(`[AntiHallucination] Tomorrow sports result query`)
       return res.status(200).json({
         content: [
@@ -19819,6 +14926,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             ..._titlesParts,
             _club.notes ? `\n> 📝 ${_club.notes}` : '',
             ``,
+            `📚 **المصدر:** حقيقة رياضية ثابتة — ثقة 100%`,
           ].filter(l => l !== '').join('\n'),
           model: 'dz-knowledge-static',
           _static: true,
@@ -20187,41 +15295,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ── Owner Learning Pipeline (unified — auto-correction FIRST, then implicit) ─
+  // ── Implicit Owner Learning — تعلم تلقائي من كل رسالة يكتبها المالك ────────
+  // يعمل حتى بدون أوامر صريحة: تصحيح / تعريف / مصدر مرجعي
   if (_ownerTok) {
-
-    // ① Auto-Correction — يعمل أولاً ويأخذ الأولوية على كل شيء ─────────────
-    // يُفعَّل عندما يختلف المالك مع الرد السابق — يُحفَظ فوراً بدون تأكيد.
-    // يشترط محتوى تصحيحياً واضحاً (كلمة "خطأ/غلط/لا الصحيح..." + محتوى ≥4 حروف).
-    const _hasCorrectionSignal = /^(?:كلا[,،]?\s*|غلط[,،]?\s*|خطأ[,،]?\s*|ماشي صحيح|مش صحيح|مش هكذا|ماشي هكا|في الحقيقة[,،\s]+[^$]|في الواقع[,،\s]+[^$]|نحن في\s|نحنا في\s|إحنا في\s|احنا في\s|راهنا في\s|حنا في\s|المعلومة الصحيحة|الصحيح أن|لا[,،]\s*(?:الصحيح|الصواب|نحن|نحنا|في الحقيقة)|لأ[,،]\s*(?:الصحيح|الصواب|نحن|نحنا))/i.test(lastUserMessage.trim())
-    if (_hasCorrectionSignal) {
-      const _isOwnerAuto = await verifyOwnerToken(_ownerTok)
-      if (_isOwnerAuto) {
-        const _lastAgentMsg = [...messages].reverse().find(m => m.role === 'assistant')?.content || ''
-        const _autoResult = autoSaveOwnerCorrection(lastUserMessage, _lastAgentMsg)
-        if (_autoResult && !_autoResult.isDup) {
-          console.log(`[AutoCorrection] ✅ owner correction saved instantly: "${_autoResult.correct}"`)
-          return res.status(200).json({
-            content: `✅ **تم اعتماد التصحيح وحفظه رسمياً فوراً** 🧠\n\n${_autoResult.wrong ? `❌ **ما كان خاطئاً:**\n> "${_autoResult.wrong.slice(0, 100)}${_autoResult.wrong.length > 100 ? '...' : ''}"\n\n` : ''}✔️ **الصواب المعتمد الآن:**\n> "${_autoResult.correct}"\n\n📌 هذا التصحيح مُسجَّل بشكل دائم — سأعتمده في جميع ردودي القادمة بأولوية قصوى.\n_لا حاجة للتأكيد — التصحيح محفوظ تلقائياً._`,
-            _ownerCorrected: true,
-          })
-        } else if (_autoResult?.isDup) {
-          return res.status(200).json({
-            content: `ℹ️ هذا التصحيح **موجود مسبقاً** في قاعدة المعرفة:\n\n✔️ "${_autoResult.correct}"\n\n> سأواصل اعتماده دائماً.`,
-          })
-        }
-      }
-    }
-
-    // ② Implicit Owner Learning — يعمل بعد التصحيح للتعريفات والمصادر ────────
-    // يشترط صيغة صريحة — "الصواب هو..." أو "تعريف:..." أو "مصدر موثوق..."
-    // لا يتعامل مع أشكال التصحيح (مُعالَجة أعلاه بـ auto-correction).
+    // نفحص هوية المالك فقط إذا كانت الرسالة تحتوي إشارة لتصحيح/تعريف/مصدر
+    // BUG-3 FIX: تشديد regex — "هو\s+" كان يلتقط "من هو؟" و"ما هو؟" كإشارة تعلم خاطئة
+    // الآن نشترط صيغة صريحة للتصحيح أو التعريف مع مساواة (=، يعني، هو X)
     const _hasLearningSignal = /الصواب\s+(?:هو\s+)?[^\s]|الصحيح\s+(?:هو\s+)?[^\s]|(?:خطأ|صحّح|تصحيح)[،,\s]+(?:الصحيح|الصواب)|ليس\s+.{2,40}\s+بل\s+|في الحقيقة\s+[^\s]|في الواقع\s+[^\s]|تعريف[:\s]+[^\s]|معنى[:\s]+[^\s]|مصدر\s+موثوق|reference:|definition:|correction:/i.test(lastUserMessage)
     if (_hasLearningSignal) {
       const _isOwnerSilent = await verifyOwnerToken(_ownerTok)
       if (_isOwnerSilent) {
         const _learned = processImplicitOwnerLearning(lastUserMessage)
         if (_learned.length > 0) {
+          // نُعلم المالك بما تعلّمناه — بدون مقاطعة التدفق الطبيعي
           const _learnSummary = _learned.map(l => {
             if (l.type === 'correction')  return `✔️ تصحيح: "${l.correct}"`
             if (l.type === 'definition')  return `📖 تعريف: **${l.term}** = ${l.definition}`
@@ -20232,6 +15318,26 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           return res.status(200).json({
             content: `✅ **تم التسجيل والحفظ تلقائياً:**\n\n${_learnSummary}\n\n> سأعتمد هذا في جميع ردودي القادمة.`,
             _ownerLearned: true,
+          })
+        }
+      }
+    }
+
+    // ── Pending Correction Buffer — تصحيح معلَّق من سياق المحادثة ─────────────
+    // يُفعَّل عندما يختلف المالك مع الرد السابق حتى بدون صيغة صريحة.
+    // المالك يؤكد لاحقاً بكتابة "احفظ التصحيح".
+    const _hasPendingSignal = /^(?:لا[,،]?\s*|لأ[,،]?\s*|كلا[,،]?\s*|غلط[,،]?\s*|خطأ[,،]?\s*|ماشي صحيح|مش صحيح|في الحقيقة|في الواقع)/i.test(lastUserMessage.trim())
+    if (_hasPendingSignal) {
+      const _isOwnerPending = await verifyOwnerToken(_ownerTok)
+      if (_isOwnerPending) {
+        // آخر رد صادر من الوكيل في سجل المحادثة
+        const _lastAgentMsg = [...messages].reverse().find(m => m.role === 'assistant')?.content || ''
+        const _pendingResult = detectAndStorePendingCorrection(lastUserMessage, _lastAgentMsg)
+        if (_pendingResult) {
+          console.log(`[PendingCorrection] 🕐 owner disagreement detected — pending stored`)
+          return res.status(200).json({
+            content: `🕐 **لاحظت تصحيحاً محتملاً:**\n\n✔️ **الصواب:** ${_pendingResult.correct}\n${_pendingResult.wrong ? `\n❌ **الخاطئ (ردي السابق):**\n> ${_pendingResult.wrong.slice(0, 120)}${_pendingResult.wrong.length > 120 ? '...' : ''}\n` : ''}\n> اكتب **احفظ التصحيح** لتأكيد الحفظ، أو أكمل المحادثة لتجاهله.`,
+            _pendingCorrection: true,
           })
         }
       }
@@ -20390,25 +15496,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
     return lines.join('\n')
   })()
-
-  // ── Dialect Coloring Block — لمسة دارجة جزائرية لجميع المستخدمين ─────────
-  // يُحقن في system prompt لكل الأنماط (MSA، دارجة، فرنسية)
-  // يُشجّع AI على توظيف 1-2 كلمات دارجة مع تعريفها: "بزاف (أي: كثيراً)"
-  // يُعطَّل تلقائياً لطلبات الكود/المواقع/الأدوات التقنية البحتة
-  const _dialectColoringBlock = (() => {
-    try {
-      if (dzStyle === 'french') return ''                       // الفرنسية — لا داعي
-      if (_isWebsiteRequest)    return ''                       // بناء مواقع — سياق تقني
-      if (isDZToolRequest)      return ''                       // أداة متخصصة — لا تدخّل
-      return getDarijaColoringBlock(lastUserMessage, 4)
-    } catch { return '' }
-  })()
-
   // ── Local knowledge base — unified developer/owner + capabilities intents ─
-  if (isSelfUpdateQuestion(lastUserMessage)) {
-    console.log(`[DZAgent] 🔄 Self-update question — returning build-info response`)
-    return res.status(200).json(buildSelfUpdateResponse())
-  }
   if (isDeveloperOrOwnerQuestion(lastUserMessage)) {
     return res.status(200).json(DEVELOPER_RESPONSE)
   }
@@ -20463,40 +15551,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ── Algerian Proverbs Engine — حِكم وأمثال جزائرية (بدون LLM) ─────────────
-  // يُفعَّل عند: "مثل جزائري" / "حكمة جزائرية" / "أمثال شعبية" ...
-  if (isProverbQuery(lastUserMessage)) {
-    console.log(`[DZ-Proverbs] Proverb/wisdom intent detected: "${lastUserMessage.slice(0, 80)}"`)
-    try {
-      const proverbs = await getProverbs(lastUserMessage, { count: 5, type: 'auto' })
-      const content = formatProverbsResponse(proverbs, lastUserMessage)
-      return res.status(200).json({
-        content,
-        mode: 'dz-proverbs',
-        _proverbs: true,
-        count: proverbs.length,
-      })
-    } catch (prvErr) {
-      console.warn('[DZ-Proverbs] Error:', prvErr.message)
-      // نتابع الطريق الطبيعي إذا فشل
-    }
-  }
-
   // ── Image Search Engine — بحث عن صور حقيقية (≠ توليد) ───────────────────
-  // يُفعَّل عند: جيبلي صورة / ابحث عن صورة / find photo / show me image / pinterest...
+  // يُفعَّل عند: جيبلي صورة / ابحث عن صورة / find photo / show me image...
   if (isImageSearchQuery(lastUserMessage)) {
-    // كشف المصدر المطلوب صراحةً (Pinterest / Wikipedia / auto)
-    const _isPinterestReq = /(?:pinterest|بينتريست|بنتريست)/i.test(lastUserMessage)
-    const _isWikiReq = /(?:ويكيبيديا|wikipedia|موسوعي|تاريخي|علمي)/i.test(lastUserMessage)
-    const _imgPreferredSource = _isPinterestReq ? 'pinterest' : _isWikiReq ? 'wikipedia' : 'auto'
-    const _imgSourceLabel = _isPinterestReq ? '📌 Pinterest' : _isWikiReq ? '📖 Wikipedia' : '🔍 Auto'
-    console.log(`[ImageSearch] Detected: "${lastUserMessage.slice(0, 80)}" | source=${_imgPreferredSource}`)
+    console.log(`[ImageSearch] Detected: "${lastUserMessage.slice(0, 80)}"`)
     try {
       const imgResult = await searchImages({
         query: lastUserMessage,
         aiGenerate: safeGenerateAI,
-        limit: 8,
-        preferredSource: _imgPreferredSource,
+        limit: 6,
       })
       const content = formatImageSearchResponse({
         images: imgResult.images,
@@ -20508,7 +15571,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         content,
         mode: 'image-search',
         _imageSearch: true,
-        imageSource: _imgPreferredSource,
         images: imgResult.images,
         totalFound: imgResult.total,
       })
@@ -20575,50 +15637,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // When tool='health'|'cv'|'legal'|etc., the prompt is pre-structured by the tool.
   // Skip maps, places, YouTube, web-reader, doctor routing — all irrelevant.
   if (isDZToolRequest) {
-    // ── وكيل الصحة من DZTools ─────────────────────────────────────────────
-    // استخدم Groq مع system prompt طبي متخصص بدل safeGenerateAI العام
-    // سبب التخصيص: القالب [TOOL:SYMPTOM_ANALYZER] يحتاج LLM طبي لا عاماً
-    if (_dzToolRequest === 'health') {
-      try {
-        // استخراج الأعراض من القالب البنيوي
-        const _dtSymLine = lastUserMessage.match(/\*\*الأعراض المُدخلة:\*\*\s*(.+)/u)
-        const _dtRawSymptoms = _dtSymLine?.[1]?.trim() || lastUserMessage
-        const _dtHealthIntent = detectHealthIntent(_dtRawSymptoms)
-        const _dtSymptoms = _dtHealthIntent.symptoms.length ? _dtHealthIntent.symptoms : ['ألم عام']
-        const _dtSysPrompt = buildHealthSystemPrompt(_dtSymptoms, _dtHealthIntent.hasDrugQuestion, false)
-        const _dtDzKb = getRelatedDZKnowledge(_dtSymptoms)
-        const _dtKbNote = _dtDzKb
-          ? `\n\n[معلومة طبية جزائرية: "${_dtDzKb.name}" — ${_dtDzKb.prevalence}. أدوية متاحة: ${_dtDzKb.drugs.join(', ')}]`
-          : ''
-        // أرسل القالب كاملاً كـ user message ليملأ LLM الأقسام الـ structured
-        const _dtMsgs = [
-          { role: 'system', content: _dtSysPrompt + _dtKbNote },
-          { role: 'user',   content: lastUserMessage },
-        ]
-        console.log(`[DZTools:Health] 🩺 symptoms="${_dtRawSymptoms.slice(0,60)}" | kb=${_dtDzKb?.name||'—'}`)
-        // محاولة Groq أولاً (النموذج الأسرع والأدق للعربية الطبية)
-        const _dtGroq = await callGroqWithFallback({
-          model: 'llama-3.3-70b-versatile',
-          messages: _dtMsgs,
-          max_tokens: 2000,
-          temperature: 0.3,
-        })
-        if (_dtGroq?.content && _dtGroq.content.trim().length > 20) {
-          console.log(`[DZTools:Health] ✅ Groq response — ${_dtGroq.content.length} chars`)
-          return res.status(200).json({ content: _dtGroq.content, model: _dtGroq.model })
-        }
-        // Fallback: safeGenerateAI مع نفس الـ messages الطبية
-        const _dtFallback = await safeGenerateAI({ messages: _dtMsgs, query: _dtRawSymptoms, max_tokens: 2000, taskHint: 'general' })
-        return res.status(200).json({
-          content: _dtFallback.content || '⚠️ تعذّر توليد تحليل الأعراض. يرجى المحاولة مرة أخرى.',
-          model: _dtFallback.model,
-        })
-      } catch (_dtErr) {
-        console.error('[DZTools:Health] ❌ error:', _dtErr.message)
-        return res.status(200).json({ content: '⚠️ خطأ في الاتصال بالذكاء الاصطناعي الطبي. يرجى المحاولة مرة أخرى.' })
-      }
-    }
-    // ── أدوات أخرى (cv, legal, jobs, chart, ocr, doctor) ───────────────────
     try {
       const toolResult = await safeGenerateAI({ messages, query: lastUserMessage, max_tokens: 2000, taskHint: 'general' })
       return res.status(200).json({ content: toolResult.content || '⚠️ فشل التحليل. يرجى المحاولة مرة أخرى.', model: toolResult.model })
@@ -20627,117 +15645,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       return res.status(500).json({ content: '⚠️ خطأ في الاتصال بالذكاء الاصطناعي. يرجى المحاولة مرة أخرى.' })
     }
   }
-
-  // ══════════════════════════════════════════════════════════════════════
-  // 🩺 DZ HEALTH AI AGENT — وكيل الصحة الجزائري
-  // يعالج الاستفسارات الطبية قبل الدخول إلى الـ routing العام
-  // قاعدة: لا تداخل مع Doctor Finder (isDoctorQuery → skip)
-  // ══════════════════════════════════════════════════════════════════════
-  if (!isDZToolRequest) {
-    const _healthIntent = detectHealthIntent(lastUserMessage)
-    if (_healthIntent.isHealthQuery && !_healthIntent.isDoctorSearch) {
-      console.log(`[DZHealth] 🩺 Health query | symptoms=${_healthIntent.symptoms.join(',')} | emergency=${_healthIntent.isEmergency}`)
-
-      // ── طوارئ فورية → رد مباشر بدون LLM ────────────────────────────────
-      if (_healthIntent.isEmergency) {
-        const _dzKb = getRelatedDZKnowledge(_healthIntent.symptoms)
-        return res.status(200).json({
-          content: '',
-          richType: 'health-analysis',
-          healthData: {
-            interpretation: 'تم الكشف عن أعراض طارئة — يرجى الاتصال فوراً بالإسعاف',
-            possible_causes: ['حالة طارئة تستدعي تدخلاً فورياً'],
-            triage_level: 'HIGH',
-            triage_reason: 'أعراض خطيرة تستوجب رعاية طبية فورية',
-            advice: [
-              '📞 اتصل بالإسعاف: 14 (الجزائر) أو 115 (SAMU)',
-              'لا تبقَ وحدك — اطلب المساعدة فوراً',
-              'لا تأكل ولا تشرب حتى تصل الرعاية الطبية',
-            ],
-            medications_info: null,
-            suggest_doctor: true,
-            emergency_note: '🚨 هذه حالة طوارئ — اتصل بـ 14 أو 115 فوراً',
-            disclaimer: 'هذا ليس تشخيصاً طبياً — اتصل بالإسعاف الآن',
-            symptoms_found: _healthIntent.symptoms,
-            original_query: lastUserMessage.slice(0, 120),
-          },
-        })
-      }
-
-      // ── تحليل طبي عام — نبني الـ system prompt ونرسل للنموذج ───────────
-      try {
-        const _healthSysPrompt = buildHealthSystemPrompt(
-          _healthIntent.symptoms,
-          _healthIntent.hasDrugQuestion,
-          false,
-        )
-        const _dzKb = getRelatedDZKnowledge(_healthIntent.symptoms)
-        const _dzKbNote = _dzKb
-          ? `\n\n[معلومة من قاعدة البيانات الجزائرية: "${_dzKb.name}" شائع في الجزائر — ${_dzKb.prevalence}. أدوية متوفرة: ${_dzKb.drugs.join(', ')}]`
-          : ''
-
-        const _healthMessages = [
-          { role: 'system', content: _healthSysPrompt + _dzKbNote },
-          { role: 'user',   content: lastUserMessage },
-        ]
-
-        // استدعاء مباشر لـ Groq أولاً (أسرع، بدون HAL overhead)
-        let _healthContent = null
-        let _healthModel = null
-        try {
-          const _directResult = await callGroqWithFallback({
-            model: 'llama-3.3-70b-versatile',
-            messages: _healthMessages,
-            max_tokens: 1000,
-            temperature: 0.3,
-          })
-          if (_directResult.content && _directResult.content.trim().length > 20) {
-            _healthContent = _directResult.content
-            _healthModel = 'groq:llama-3.3-70b-versatile'
-            console.log(`[DZHealth] ✅ Groq direct — ${_healthContent.length} chars`)
-          }
-        } catch (_directErr) {
-          console.warn('[DZHealth] Groq direct failed:', _directErr.message)
-        }
-
-        // إذا فشل Groq المباشر — جرب safeGenerateAI
-        if (!_healthContent) {
-          const _safeResult = await safeGenerateAI({
-            messages: _healthMessages,
-            query: lastUserMessage,
-            max_tokens: 1000,
-            taskHint: 'health',
-          })
-          if (_safeResult.content && _safeResult.content.trim().length > 20) {
-            _healthContent = _safeResult.content
-            _healthModel = _safeResult.model
-          }
-        }
-
-        // إذا فشل كل شيء — استخدم KB fallback الذكي
-        const _healthParsed = _healthContent
-          ? parseHealthResponse(_healthContent, lastUserMessage, _healthIntent.symptoms)
-          : buildKBFallbackResponse(_healthIntent.symptoms, _healthIntent.hasDrugQuestion, lastUserMessage)
-
-        _healthParsed.model_used = _healthModel || 'kb_local'
-        console.log(`[DZHealth] ✅ triage=${_healthParsed.triage_level} | causes=${_healthParsed.possible_causes.length} | src=${_healthParsed.model_used}`)
-
-        return res.status(200).json({
-          content: '',
-          richType: 'health-analysis',
-          healthData: _healthParsed,
-          model: _healthModel || 'kb_local',
-        })
-      } catch (_healthErr) {
-        console.error('[DZHealth] ❌ Error:', _healthErr.message)
-        return res.status(200).json({
-          content: '⚠️ حدث خطأ في تحليل الأعراض. يرجى وصف حالتك مجدداً أو استشارة طبيب.',
-          richType: 'text',
-        })
-      }
-    }
-  }
-  // ══════════════════════════════════════════════════════════════════════
 
   // ── Algeria Citizen Knowledge System ─────────────────────────────────────
   // Guard: YouTube/Map/Doctor queries must not be intercepted by Algeria routing.
@@ -20827,248 +15734,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ══ KB-PERSON FAST PATH — شخصيات معروفة من قاعدة المعرفة ════════════════════
-  // يعترض الأسئلة عن شخصيات معروفة قبل Wikipedia/Wikidata ويُجيب عبر EN-Wikipedia + LLM
-  // يُغطي: رؤساء دول، مؤلفو كتب، شهداء، شخصيات تاريخية
-  // قاعدة بيانات محلية غنية — لا تحتاج Wikipedia (تُعيد 429 عند الاستخدام المتكرر)
-  const _PERSONS_RICH_KB = {
-    'دونالد ترامب': {
-      bio: 'دونالد جون ترامب (وُلد 14 يونيو 1946، نيويورك) رجل أعمال وسياسي أمريكي، الرئيس 45 للولايات المتحدة (2017-2021) والرئيس 47 الحالي (يناير 2025-الآن). ينتمي إلى الحزب الجمهوري. أسّس إمبراطورية عقارية وظهر في برنامج "المتدرب". فاز في انتخابات 2024 على المرشحة الديمقراطية كامالا هاريس.',
-      role: 'الرئيس الأمريكي الحالي (47)',
-    },
-    'إيمانويل ماكرون': {
-      bio: 'إيمانويل ماكرون (وُلد 21 ديسمبر 1977، أميان) سياسي فرنسي، الرئيس الثامن والعشرون للجمهورية الفرنسية منذ مايو 2017. مؤسس حركة "إلى الأمام". كان وزيراً للاقتصاد قبل انتخابه.',
-      role: 'رئيس فرنسا',
-    },
-    'فلاديمير بوتين': {
-      bio: 'فلاديمير فلاديميروفيتش بوتين (وُلد 7 أكتوبر 1952، لينينغراد) سياسي روسي، رئيس روسيا الاتحادية منذ عام 2000 (مع فترة توقف 2008-2012 شغل فيها رئاسة الحكومة). ضابط سابق في KGB، يُعدّ من أبرز القادة الدوليين المؤثرين.',
-      role: 'رئيس روسيا',
-    },
-    'عبد المجيد تبون': {
-      bio: 'عبد المجيد تبون (وُلد 17 نوفمبر 1945، ندرومة، تلمسان) سياسي جزائري، الرئيس الثامن للجمهورية الجزائرية منذ ديسمبر 2019. شغل سابقاً مناصب وزارية عدة منها الإسكان والداخلية والسياحة، وكان رئيساً للحكومة عام 2017.',
-      role: 'رئيس الجزائر',
-    },
-    'فيكتور هوغو': {
-      bio: 'فيكتور ماري هوغو (1802-1885) أديب وشاعر وروائي ومسرحي فرنسي، من أبرز أعلام الرومانسية الأدبية. صاحب روايات خالدة منها "البؤساء" (Les Misérables 1862) و"أحدب نوتردام" (Notre-Dame de Paris 1831). انتُخب عضواً في الأكاديمية الفرنسية. كان أيضاً سياسياً وناشطاً في حقوق الإنسان.',
-      role: 'روائي وشاعر فرنسي — مؤلف رواية البؤساء',
-    },
-    'الجاحظ': {
-      bio: 'أبو عثمان عمرو بن بحر الكناني الجاحظ (776-868م) أديب وعالم مسلم بصري، من أبرز أعلام الأدب العربي وعلم الكلام. صاحب موسوعة "كتاب الحيوان" (7 مجلدات عن الحيوانات وطبائعها) وكتاب "البيان والتبيين" و"كتاب البخلاء". اشتُهر بعينيه الجاحظتين وسعة اطلاعه الموسوعي.',
-      role: 'أديب عربي — مؤلف كتاب الحيوان',
-    },
-    'العربي بن مهيدي': {
-      bio: 'محمد العربي بن مهيدي (1923-1957) قائد ثوري جزائري، أحد رواد ثورة نوفمبر 1954 وأحد الآباء المؤسسين لجبهة التحرير الوطني (FLN). وُلد في دوار القواسم، عين مليلة، ولاية أم البواقي. أُعدم من قِبل المستعمر الفرنسي في 3 مارس 1957. قال مقولته الخالدة: "ألقوا الثورة في الشارع يحتضنها الشعب". يُعدّ من أبرز شهداء الثورة الجزائرية.',
-      role: 'شهيد الثورة الجزائرية — أحد مؤسسي FLN',
-    },
-    'هواري بومدين': {
-      bio: 'محمد إبراهيم بوخروبة المعروف بهواري بومدين (1932-1978) قائد عسكري وسياسي جزائري، رئيس الجمهورية الجزائرية من 1965 إلى وفاته 1978. قاد انقلاباً على أحمد بن بلة. عُرف بسياسة التأميم (نفط 1971) والتوجه الاشتراكي وبناء الجيش والصناعة.',
-      role: 'رئيس الجزائر (1965-1978)',
-    },
-    'أحمد بن بلة': {
-      bio: 'أحمد بن بلة (1916-2012) سياسي جزائري، أول رئيس للجمهورية الجزائرية المستقلة (1962-1965). من الآباء التسعة مؤسسي الثورة الجزائرية. أُطيح به في انقلاب هواري بومدين 1965 وسُجن حتى 1980.',
-      role: 'أول رئيس للجزائر (1962-1965)',
-    },
-    'ابن خلدون': {
-      bio: 'عبد الرحمن بن محمد بن خلدون الحضرمي (1332-1406م) مؤرخ وعالم اجتماع وفيلسوف تونسي-أندلسي، صاحب "المقدمة" التي تُعدّ أحد أعظم الأعمال الفكرية في التاريخ وعلم الاجتماع. أسّس علم الاجتماع والعمران البشري. خدم في بلاطات تونس والمغرب والأندلس ومصر.',
-      role: 'مؤرخ وعالم اجتماع — مؤلف المقدمة',
-    },
-    'نجيب محفوظ': {
-      bio: 'نجيب محفوظ (1911-2006) روائي مصري، الحاصل على جائزة نوبل في الأدب 1988، أول عربي ينالها. صاحب "ثلاثية القاهرة" (بين القصرين، قصر الشوق، السكرية) وروايات "زقاق المدق"، "اللص والكلاب"، "أولاد حارتنا".',
-      role: 'روائي مصري — نوبل الأدب 1988',
-    },
-    'ألبير كامو': {
-      bio: 'ألبير كامو (1913-1960) كاتب وفيلسوف فرنسي-جزائري، وُلد في مدينة درارة (مندوي) بالجزائر. حاصل على جائزة نوبل في الأدب 1957. من أبرز أعماله "الغريب" و"الطاعون" و"أسطورة سيزيف". يُعدّ من رواد الفلسفة الوجودية والعبثية.',
-      role: 'كاتب جزائري-فرنسي — نوبل الأدب 1957',
-    },
-    'مولود معمري': {
-      bio: 'مولود معمري (1917-1989) روائي وأنثروبولوجي جزائري أمازيغي، أحد رواد الأدب الجزائري الحديث. من أبرز أعماله "الأفيون والعصا" و"الربوة المنسية". أسهم في توثيق اللغة والثقافة الأمازيغية.',
-      role: 'روائي جزائري — رائد الأدب الأمازيغي',
-    },
-    'كاتب ياسين': {
-      bio: 'كاتب ياسين (1929-1989) شاعر وروائي وكاتب مسرحي جزائري، يُعدّ من أبرز الأدباء الجزائريين. اشتُهر بروايته "نجمة" (1956) التي تُعدّ أيقونة الأدب الجزائري الحديث.',
-      role: 'روائي جزائري — صاحب رواية نجمة',
-    },
-    'شي جين بينغ': {
-      bio: 'شي جين بينغ (وُلد 15 يونيو 1953، بكين) سياسي صيني، الأمين العام للحزب الشيوعي الصيني ورئيس جمهورية الصين الشعبية منذ 2013. يُعدّ الزعيم الأقوى في الصين منذ ماو تسي تونغ.',
-      role: 'رئيس الصين',
-    },
-    'ناريندرا مودي': {
-      bio: 'ناريندرا دامودارداس مودي (وُلد 17 سبتمبر 1950، فاداناغار، ولاية غوجارات) سياسي هندي، رئيس وزراء الهند منذ مايو 2014. زعيم حزب بهاراتيا جاناتا (BJP) اليميني الهندوسي.',
-      role: 'رئيس وزراء الهند',
-    },
-    'إيلون ماسك': {
-      bio: 'إيلون ريف ماسك (وُلد 28 يونيو 1971، جنوب أفريقيا) رجل أعمال أمريكي-جنوب أفريقي، المدير التنفيذي لشركات Tesla وSpaceX وX (تويتر سابقاً). أثرى رجل في العالم عدة مرات. أسّس SpaceX عام 2002 واستحوذ على تويتر 2022.',
-      role: 'مدير Tesla وSpaceX',
-    },
-    'بيل غيتس': {
-      bio: 'ويليام هنري غيتس الثالث (وُلد 28 أكتوبر 1955، سياتل) رجل أعمال أمريكي، المؤسس المشارك لشركة Microsoft. أحد أثرى رجال العالم. مؤسس مؤسسة بيل وميليندا غيتس الخيرية.',
-      role: 'مؤسس Microsoft',
-    },
-    'مارك زوكربيرغ': {
-      bio: 'مارك إليوت زوكربيرغ (وُلد 14 مايو 1984، وايت بلينز، نيويورك) مبرمج ورجل أعمال أمريكي، المؤسس والرئيس التنفيذي لشركة Meta Platforms (فيسبوك سابقاً). أسّس فيسبوك عام 2004 خلال دراسته في جامعة هارفارد.',
-      role: 'مؤسس فيسبوك/Meta',
-    },
-    'رجب طيب أردوغان': {
-      bio: 'رجب طيب أردوغان (وُلد 26 فبراير 1954، إسطنبول) سياسي تركي، رئيس جمهورية تركيا منذ 2014. شغل منصب رئيس الوزراء (2003-2014). زعيم حزب العدالة والتنمية الإسلامي.',
-      role: 'رئيس تركيا',
-    },
-    'عبد الفتاح السيسي': {
-      bio: 'عبد الفتاح سعيد حسين خليل السيسي (وُلد 19 نوفمبر 1954، القاهرة) ضابط عسكري وسياسي مصري، رئيس جمهورية مصر العربية منذ يونيو 2014. كان وزيراً للدفاع قبل انتخابه.',
-      role: 'رئيس مصر',
-    },
-    'فيودور دوستويفسكي': {
-      bio: 'فيودور ميخائيلوفيتش دوستويفسكي (1821-1881) روائي وفيلسوف وصحفي روسي، يُعدّ من أعظم الأدباء في تاريخ البشرية. من أشهر أعماله "الجريمة والعقاب"، "الأخوة كارامازوف"، "الأبله"، "المقامر".',
-      role: 'روائي روسي — صاحب الجريمة والعقاب',
-    },
-    'ليو تولستوي': {
-      bio: 'ليف نيكولايفيتش تولستوي (1828-1910) روائي وفيلسوف روسي، من أعظم أدباء البشرية. صاحب ملحمتَي "الحرب والسلام" و"آنا كارنينا". أثّر تأثيراً عميقاً في الفكر الإنساني والأدب العالمي.',
-      role: 'روائي روسي — صاحب الحرب والسلام',
-    },
-    'كير ستارمر': {
-      bio: 'كير ستارمر (وُلد 2 سبتمبر 1962، أوكسفورد) سياسي بريطاني، رئيس وزراء المملكة المتحدة منذ يوليو 2024. زعيم حزب العمال. كان مدعياً عاماً (DPP) قبل دخول السياسة.',
-      role: 'رئيس وزراء بريطانيا',
-    },
-    'مسعود بزشكيان': {
-      bio: 'مسعود بزشكيان (وُلد 29 سبتمبر 1954، مهاباد) سياسي إيراني، الرئيس العاشر لجمهورية إيران الإسلامية منذ يوليو 2024. طبيب متخصص في جراحة القلب. يُعدّ من التيار الإصلاحي.',
-      role: 'رئيس إيران',
-    },
-    'محمد بن سلمان': {
-      bio: 'الأمير محمد بن سلمان بن عبد العزيز آل سعود (وُلد 31 أغسطس 1985) ولي عهد المملكة العربية السعودية ورئيس مجلس الوزراء منذ 2022. المُهندس الرئيسي لرؤية 2030 التنموية.',
-      role: 'ولي عهد المملكة العربية السعودية',
-    },
-    'محمد بن زايد آل نهيان': {
-      bio: 'الشيخ محمد بن زايد آل نهيان (وُلد 11 مارس 1961) رئيس دولة الإمارات العربية المتحدة وحاكم إمارة أبوظبي منذ مايو 2022، خلفاً لشقيقه الشيخ خليفة.',
-      role: 'رئيس الإمارات',
-    },
-    'أفلاطون': {
-      bio: 'أفلاطون (428/427-348/347 ق.م) فيلسوف إغريقي، تلميذ سقراط وأستاذ أرسطو. مؤسس الأكاديمية الأثينية. من أشهر أعماله "الجمهورية" و"الوليمة" و"فيدون". يُعدّ من أعظم الفلاسفة في تاريخ البشرية.',
-      role: 'فيلسوف إغريقي قديم',
-    },
-    'أبو الفرج الأصفهاني': {
-      bio: 'أبو الفرج علي بن الحسين الأصفهاني (897-967م) أديب وعالم عربي، صاحب موسوعة "كتاب الأغاني" الشهيرة التي تضم 24 مجلداً وتُعدّ من أهم المصادر في الأدب العربي والموسيقى.',
-      role: 'أديب عربي — مؤلف كتاب الأغاني',
-    },
-    'جيورجيا ميلوني': {
-      bio: 'جيورجيا ميلوني (وُلدت 15 يناير 1977، روما) سياسية إيطالية، رئيسة وزراء إيطاليا منذ أكتوبر 2022. زعيمة حزب "إخوة إيطاليا" اليميني القومي. أول امرأة تتولى رئاسة الوزراء في إيطاليا.',
-      role: 'رئيسة وزراء إيطاليا',
-    },
-  }
-
-  if (!_isAgentMode && !isDZToolRequest) {
-    const _kbPersonName = resolveRoleToPersonName(lastUserMessage)
-    if (_kbPersonName) {
-      console.log(`[KBPerson] 🔍 KB match: "${lastUserMessage.slice(0,50)}" → "${_kbPersonName}"`)
-      try {
-        const _kbRichData = _PERSONS_RICH_KB[_kbPersonName]
-
-        if (_kbRichData?.bio) {
-          // ── لدينا بيانات محلية → نبني سياق غني ونُرسله عبر AI ──
-          const _kbSys = [
-            'أنت DZ Agent — مساعد ذكي جزائري. أجب بالعربية الفصحى.',
-            `الشخص: **${_kbPersonName}** — ${_kbRichData.role}`,
-            `المعلومات الموثوقة: ${_kbRichData.bio}`,
-            '',
-            'اكتب إجابة منظمة وشاملة تتضمن: مقدمة عن الشخص، منصبه/مجاله، أبرز إنجازاته، معلومات ذات صلة بالسؤال.',
-            'التزم بالمعلومات الواردة أعلاه. لا تختلق بيانات.',
-          ].join('\n')
-          const _kbMsgs = [{ role: 'system', content: _kbSys }, ...messages]
-          const _kbAI = await safeGenerateAI({ messages: _kbMsgs, query: lastUserMessage, max_tokens: 900, taskHint: 'general' })
-          if (_kbAI?.content) {
-            console.log(`[KBPerson] ✅ rich-kb+ai response sent for "${_kbPersonName}"`)
-            return res.status(200).json({
-              content: _kbAI.content,
-              model: 'kb-person-ai',
-              _resolvedPerson: _kbPersonName,
-            })
-          }
-          // AI فشل → أُعيد البطاقة المحلية مباشرةً (لا سقوط)
-          const _kbCard = [
-            `## 👤 ${_kbPersonName}`,
-            `> *${_kbRichData.role}*`,
-            '',
-            _kbRichData.bio,
-          ].join('\n')
-          console.log(`[KBPerson] ✅ rich-kb direct card sent for "${_kbPersonName}"`)
-          return res.status(200).json({
-            content: _kbCard,
-            model: 'kb-person-card',
-            _resolvedPerson: _kbPersonName,
-          })
-        }
-
-        // ── لا بيانات محلية → LLM مع اسم الشخص فقط ──
-        const _kbSysMin = [
-          'أنت DZ Agent — مساعد ذكي جزائري يُجيب بالعربية الفصحى.',
-          `السؤال: "${lastUserMessage}"`,
-          `الشخص المقصود: **${_kbPersonName}**`,
-          'قدّم نبذة موثوقة: من هو، مجاله، أبرز ما اشتُهر به. صرّح إذا لم تكن متأكداً.',
-        ].join('\n')
-        const _kbMsgsMin = [{ role: 'system', content: _kbSysMin }, ...messages]
-        const _kbAIMin = await safeGenerateAI({ messages: _kbMsgsMin, query: lastUserMessage, max_tokens: 900, taskHint: 'general' })
-        if (_kbAIMin?.content) {
-          console.log(`[KBPerson] ✅ kb-min-ai response sent for "${_kbPersonName}"`)
-          return res.status(200).json({
-            content: _kbAIMin.content,
-            model: 'kb-person-ai',
-            _resolvedPerson: _kbPersonName,
-          })
-        }
-      } catch (_kbErr) {
-        console.error('[KBPerson] error:', _kbErr.message)
-      }
-    }
-  }
-
-  // ══ WC2026 جدول عام — Early Guard (قبل Wikipedia/Person handler) ══════════════
-  // يمنع توجيه "مواعيد مباريات كأس العالم" لـ Wikipedia ويُعيد الجدول مباشرةً
-  {
-    const _isWC2026SchedGuard = (
-      /(?:مواعيد|جدول|برنامج|رزنامة)\s*(?:مباريات\s+)?(?:كأس\s*العالم|المونديال|مونديال|FIFA|فيفا|world\s*cup)/i.test(lastUserMessage) ||
-      /(?:كأس\s*العالم|المونديال|مونديال|FIFA\s*2026|world\s*cup)\s*(?:مواعيد|جدول|برنامج|كامل|كل\s*المباريات|جميع)/i.test(lastUserMessage) ||
-      /(?:متى|موعد)\s+(?:انطلاق|بداية|يبدأ|ينطلق|تبدأ)\s+(?:كأس\s*العالم|المونديال)/i.test(lastUserMessage) ||
-      /(?:مواعيد|توقيت|وقت)\s+(?:المباريات|الماتشات)\s+(?:في\s+)?(?:كأس\s*العالم|المونديال|FIFA)/i.test(lastUserMessage) ||
-      (/(?:كأس\s*العالم|مونديال|FIFA\s*2026)/i.test(lastUserMessage) && /(?:مواعيد|الجدول|جدول|التوقيت)/i.test(lastUserMessage))
-    )
-    if (_isWC2026SchedGuard && !_isRetry) {
-      console.log(`[WC2026:SchedGuard] 📅 جدول عام (اعتراض قبل Wikipedia): "${lastUserMessage.slice(0, 60)}"`)
-      try {
-        const _sToday = new Date().toISOString().split('T')[0]
-        const _sUpcoming = WC2026_FULL_FIXTURES.filter(f => f.date >= _sToday).slice(0, 24)
-        const _sFlags = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','المغرب':'🇲🇦','تونس':'🇹🇳','مصر':'🇪🇬','السعودية':'🇸🇦','قطر':'🇶🇦','هولندا':'🇳🇱','اليابان':'🇯🇵','كوريا الجنوبية':'🇰🇷','البوسنة والهرسك':'🇧🇦','بلجيكا':'🇧🇪','إيطاليا':'🇮🇹','سويسرا':'🇨🇭','أوروغواي':'🇺🇾','كولومبيا':'🇨🇴','الشيلي':'🇨🇱','السنغال':'🇸🇳','نيجيريا':'🇳🇬','الكاميرون':'🇨🇲','غانا':'🇬🇭','جمهورية التشيك':'🇨🇿','النمسا':'🇦🇹','المجر':'🇭🇺','الأردن':'🇯🇴','بوليفيا':'🇧🇴','باراغواي':'🇵🇾','الإكوادور':'🇪🇨','البيرو':'🇵🇪','رومانيا':'🇷🇴','بولندا':'🇵🇱','كرواتيا':'🇭🇷','الدنمارك':'🇩🇰' }
-        const _sByDate = {}
-        for (const _sf of _sUpcoming) {
-          if (!_sByDate[_sf.date]) _sByDate[_sf.date] = []
-          _sByDate[_sf.date].push(_sf)
-        }
-        const _sLines = [
-          `## 🏆 كأس العالم FIFA 2026 — جدول المباريات القادمة`,
-          ``,
-          `> 🌍 **48 منتخباً** | 🏟️ الولايات المتحدة، المكسيك وكندا`,
-          `> 📅 انطلق: **11 يونيو 2026** | النهائي: **19 يوليو 2026**`,
-          `> 🇩🇿 الجزائر في **المجموعة J** مع النمسا، الأردن وكندا`,
-          ``,
-        ]
-        for (const [_sd, _sms] of Object.entries(_sByDate)) {
-          const _sdLabel = new Date(_sd + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })
-          _sLines.push(`### 📅 ${_sdLabel}`, ``)
-          for (const _sm of _sms) {
-            const _sf1 = _sFlags[_sm.homeTeam] || '🏴', _sf2 = _sFlags[_sm.awayTeam] || '🏴'
-            const [_sh, _smin] = _sm.startTime?.split(':') || ['??', '??']
-            const _sdzH = String((parseInt(_sh, 10) + 1) % 24).padStart(2, '0')
-            const _isDZ = _sm.homeTeam === 'الجزائر' || _sm.awayTeam === 'الجزائر'
-            _sLines.push(`${_isDZ ? '🟢 ' : ''}**${_sf1} ${_sm.homeTeam}** 🆚 **${_sm.awayTeam} ${_sf2}**`)
-            _sLines.push(`🕒 ${_sdzH}:${_smin} (توقيت الجزائر) | 🏟️ ${_sm.venue || ''}, ${_sm.city || ''} | المجموعة **${_sm.group}** | ${_sm.round || ''}`, ``)
-          }
-        }
-        if (!_sUpcoming.length) _sLines.push(`> ℹ️ انتهت مباريات دور المجموعات. تابع الأدوار الإقصائية.`)
-        _sLines.push(`---`, `🔴 **متابعة حية:** [FIFA](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026) | [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026) | [كووورة](https://www.kooora.com/)`)
-        return res.status(200).json({ content: _sLines.join('\n'), model: 'wc2026-schedule-local', _sportsAgent: true, wc2026: true, found: true, sources: ['WC2026_FULL_FIXTURES'], matchCount: _sUpcoming.length })
-      } catch (_sgErr) {
-        console.error('[WC2026:SchedGuard] error:', _sgErr.message)
-      }
-    }
-  }
-
   // ── Entity Disambiguation — توضيح الأسماء الغامضة / المتعددة ──────────────────
   // يعمل قبل البحث في ويكيبيديا لمنع اختيار الشخص الخاطئ
   // Guard: GREETING → لا توضيح شخصي أبداً (صباح الخير ≠ شخص)
@@ -21081,11 +15746,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // مبكّر — يُحسب هنا لأن VerifyPolicy يستخدمه قبل حساب _isHistoricalGovQuery الرئيسي
   const _isHistoricalGovQuery_early = isHistoricalGovQuery(lastUserMessage)
   if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isSportsLFPQuery && !_isDoctorQuery_pre && !_isHistoricalGovQuery_early && !detectMatchVsQuery(lastUserMessage) && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
-    // ── 0. Guard: إذا كان الشخص معروفاً في KB → تخطّ الـ disambiguation فوراً ──
-    const _disambigKBCheck = resolveRoleToPersonName(lastUserMessage)
-    if (_disambigKBCheck) {
-      console.log(`[Disambig] ⏭️ KB known person "${_disambigKBCheck}" — skip disambiguation`)
-    } else {
     // ── 1. كشف الغموض — Entity Ambiguity (سياسة التحقق الجديدة) ────────────
     const _entityAmbig = detectAmbiguousEntity(lastUserMessage)
     if (_entityAmbig?.needsClarification) {
@@ -21104,7 +15764,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       ]
       return res.status(200).json({ content: _disambigLines.join('\n'), mode: 'clarification' })
     }
-    } // end else (not KB-known person)
   }
 
   // ── Person / Personality — سلسلة التحقق الكاملة ──────────────────────────
@@ -21119,14 +15778,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     console.log(`[VerifyPolicy] 🔍 Detected person query: "${lastUserMessage.slice(0, 80)}"`)
     try {
       // FIX-C4: تنظيف الاستعلام قبل Wikidata — يحل "من هو X؟" → "X"
-      let _cleanedPersonQuery = _cleanQuerySFP(lastUserMessage)
-
-      // ── ROLE-POSITION RESOLVER: "الرئيس الأمريكي الحالي" → "دونالد ترامب" ──
-      const _resolvedRoleName = resolveRoleToPersonName(lastUserMessage)
-      if (_resolvedRoleName) {
-        console.log(`[RoleResolver] ✅ "${lastUserMessage.slice(0,50)}" → "${_resolvedRoleName}"`)
-        _cleanedPersonQuery = _resolvedRoleName
-      }
+      const _cleanedPersonQuery = _cleanQuerySFP(lastUserMessage)
 
       // ── أولاً: Wikidata search + بحث حي بالتوازي ────────────────────────
       const [_wikidataResult, _liveWebResult] = await Promise.all([
@@ -21291,7 +15943,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
               `> |------|-------------|------|--------|`,
               ..._mismatchLines.map(l => `> ${l}`),
               `> `,
-              ``,
+              `> *الحقائق أعلاه مستخرجة من Wikidata SPARQL (مصدر الحقيقة). النص قد يحتوي على معلومات قديمة أو مُعدَّلة.*`,
             ].join('\n')
           }
 
@@ -21393,7 +16045,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             `## 📖 ${_wikidataResult.label}`,
             _wikidataResult.description ? `*${_wikidataResult.description}*` : '',
             ``,
+            `> 🔒 *معلومات مستخرجة من Wikidata — مصدر موثوق.*`,
             _uncertBlock,
+            ``,
+            `---`,
+            `📚 **المصدر:** [Wikidata](${_wikidataResult.url}) | 🎯 **الثقة:** ${_confSystem.label} ${_wikidataResult.confidence}%`,
           ].filter(l => l !== '').join('\n')
           return res.status(200).json({ content: _response, model: 'wikidata-direct' })
         }
@@ -21493,9 +16149,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           `## 📖 ${_personWiki.title}`,
           _personWiki.description ? `*${_personWiki.description}*` : '',
           ``,
+          `> 🔒 *المعلومات التالية مستخرجة حرفياً من ويكيبيديا فقط — لا إضافات، لا تخمينات، لا اختلاق.*`,
+          ``,
           _finalExtract,
           _unverifiableBlock,
           _sportsFreshness,
+          ``,
+          `---`,
+          `📚 **المصدر:** [ويكيبيديا ${_langLabel}](${_personWiki.url}) | 🎯 **الثقة:** ${_confScore} (${_confLabel})`,
         ].filter(l => l !== '').join('\n')
 
         return res.status(200).json({
@@ -21507,12 +16168,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         // ── Wikipedia لم تجد شيئاً → نجرّب البحث الحي في الإنترنت ─────────────
         console.log(`[PersonWiki] ⚠️ No Wikipedia result — trying live web search: "${lastUserMessage.slice(0, 80)}"`)
         try {
-          // FIX-ROLE: استخدم الاسم المُحوَّل من Role Resolver إذا كان متاحاً
-          // بدلاً من استخدام lastUserMessage الخام (الذي قد يكون "الرئيس الأمريكي الحالي")
-          const _cleanName = (_resolvedRoleName || _cleanedPersonQuery)
-            || lastUserMessage
-              .replace(/^(?:من\s+هو|من\s+هي|شكون\s+هو|شكون\s+هي|معلومات\s+عن|أخبرني\s+عن|اخبرني\s+عن|حدثني\s+عن|واش\s+تعرف)\s+/i, '')
-              .trim()
+          const _cleanName = lastUserMessage
+            .replace(/^(?:من\s+هو|من\s+هي|شكون\s+هو|شكون\s+هي|معلومات\s+عن|أخبرني\s+عن|اخبرني\s+عن|حدثني\s+عن|واش\s+تعرف)\s+/i, '')
+            .trim()
 
           // ── Anti-Hallucination: لا نبحث على الويب عن أشخاص خياليين ──────────
           // اختبار الصلة: إذا كانت نتائج الويب لا تذكر الاسم → الشخص غير موجود
@@ -21558,6 +16216,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
                 .replace(/\[\/PERSON_WEB_CONTEXT\]/g, '')
                 .trim(),
               ``,
+              `---`,
+              `⚠️ *هذه المعلومات مستخرجة حرفياً من نتائج البحث المباشر — لم يُضف إليها شيء*`,
+              `🔍 *المصادر: Google News · DuckDuckGo · RSS جزائرية*`,
             ].join('\n')
 
             return res.status(200).json({
@@ -21932,7 +16593,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Intent Router Guard: لاعب رياضي (وين يلعب محرز) → لا يُحوَّل للخريطة أبداً
   const _isIRSportsPlayer = _intentClassification?.intent === 'SPORTS_PLAYER'
   const _isIRSportsFixtures = _intentClassification?.intent === 'SPORTS_FIXTURES'
-  if (isMapQuery(lastUserMessage) && !_doctorGuard.isDoctorQuery && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx && !_isIRSportsPlayer && !_isIRSportsFixtures && !isSportsAgentQuery(lastUserMessage)) {
+  if (isMapQuery(lastUserMessage) && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx && !_isIRSportsPlayer && !_isIRSportsFixtures) {
     console.log(`[DZ-Maps] Map query detected: "${lastUserMessage.slice(0, 80)}"`)
     try {
       const mapResult = await handleMapQuery(lastUserMessage, userLocation)
@@ -22029,46 +16690,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const execLang = !_isFromWebBuilder ? detectCodeExecutionQuery(lastUserMessage) : null
   if (execLang && !detectWebsiteBuilderQuery(lastUserMessage)) {
     console.log(`[Code Execution] Detected: lang=${execLang} query="${lastUserMessage.slice(0, 80)}"`)
-
-    // ── MULTI-TASK CODE ENGINE للطلبات البرمجية المعقدة ─────────────────────
-    // Spec → Core Implementation → Polish (3 خطوات متسلسلة)
-    const _isComplexCode = isComplexBuildTask(lastUserMessage, 'code')
-    if (_isComplexCode) {
-      console.log(`[Code Execution] 🏗️ MULTI-TASK CODE MODE for complex request`)
-      try {
-        const codeResult = await buildCodeMultiTask(
-          lastUserMessage,
-          (args) => safeGenerateAI(args),
-          ({ step, icon, name, status }) => console.log(`[AgentBuildEngine] ${icon} ${name}: ${status}`)
-        )
-        if (codeResult.success && codeResult.code.length > 50) {
-          const detectedL = execLang === 'python' || execLang === 'py' ? 'python' : 'javascript'
-          // If HTML in result: return as website
-          if (codeResult.code.includes('<html') && codeResult.code.includes('</html>')) {
-            const cssCode = extractCssFromHtml(codeResult.code)
-            const jsCode  = extractJsFromHtml(codeResult.code)
-            return res.status(200).json({
-              content: '✅ تم بناء التطبيق بنجاح عبر المحرك متعدد المهام!',
-              isWebsite: true,
-              htmlCode:  codeResult.code,
-              cssCode:   cssCode || '',
-              jsCode:    jsCode  || '',
-              webBuilderMeta: { type: 'code', style: 'modern', title: '💻 تطبيق', description: 'كود قابل للتشغيل', icon: '💻' },
-              _buildMode: 'multi-task',
-            })
-          }
-          return res.status(200).json({
-            content: '✅ **تم بناء الكود بنجاح!**\n\n🏗️ **MULTI-TASK CODE ENGINE**: Spec → Core → Polish',
-            isExecution:   true,
-            executionLang: detectedL,
-            executionCode: codeResult.code,
-            _buildMode:    'multi-task',
-          })
-        }
-      } catch (codeMultiErr) {
-        console.warn(`[Code Execution] Multi-task failed:`, codeMultiErr.message, '— fallback to single-shot')
-      }
-    }
 
     try {
       const execMessages = [
@@ -23133,51 +17754,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     console.log(`[WEB_BUILDER_MODE] Activated: "${lastUserMessage.slice(0, 80)}"`)
     const wbMeta = extractWebBuilderMeta(lastUserMessage)
 
-    // ══════════════════════════════════════════════════════════════════════
-    // 🏗️ MULTI-TASK BUILD ENGINE — للمشاريع المعقدة (portfolio، dashboard...)
-    // يكسر الطلب إلى خطوات متسلسلة: Blueprint → HTML → CSS → JS → Assembly
-    // بدل طلب LLM واحد ضخم → جودة أعلى + أخطاء أقل
-    // ══════════════════════════════════════════════════════════════════════
-    const _isComplexWebsite = isComplexBuildTask(lastUserMessage, 'website')
-    if (_isComplexWebsite) {
-      console.log(`[WEB_BUILDER_MODE] 🏗️ MULTI-TASK MODE activated for complex build`)
-      try {
-        const multiResult = await buildWebsiteMultiTask(
-          lastUserMessage,
-          (args) => safeGenerateAI(args),
-          ({ step, icon, name, status }) => {
-            console.log(`[AgentBuildEngine] ${icon} ${name}: ${status}`)
-          }
-        )
-
-        if (multiResult.success && multiResult.htmlCode.length > 500) {
-          const bp = multiResult.blueprint || {}
-          const siteTitle = bp.title || wbMeta.title || 'الموقع'
-          console.log(`[WEB_BUILDER_MODE] ✅ Multi-task success — ${multiResult.htmlCode.length} chars`)
-          return res.status(200).json({
-            content: `✅ **تم إنشاء ${siteTitle} بنجاح!**\n\n🏗️ **MULTI-TASK BUILD ENGINE** — 5 خطوات متسلسلة متخصصة\n🔍 Blueprint · 🏗️ HTML · 🎨 CSS · ⚡ JS · 🔧 Assembly\n\n▶️ انقر **"معاينة مباشرة"** لمشاهدته — أو استخدم **⬇ HTML** و **🗜 ZIP** للتحميل.`,
-            isWebsite:      true,
-            htmlCode:       multiResult.htmlCode,
-            cssCode:        multiResult.cssCode || '',
-            jsCode:         multiResult.jsCode  || '',
-            webBuilderMeta: { ...wbMeta, title: siteTitle },
-            _buildMode:     'multi-task',
-          })
-        }
-        console.warn(`[WEB_BUILDER_MODE] Multi-task incomplete (${multiResult.htmlCode?.length || 0}chars) — falling back to single-shot`)
-      } catch (multiErr) {
-        console.error(`[WEB_BUILDER_MODE] Multi-task error:`, multiErr.message, '— falling back to single-shot')
-      }
-    }
-
-    // ── Single-shot fallback (simple sites or multi-task failure) ─────────
+    // ── Step 1: Search for real UI inspiration from CodePen, GitHub, Flowbite ──
+    // Skip inspiration search — build directly for immediate response (no deep analysis)
     const inspirationBlock = ''
+
+    // ── Step 2: Build enriched user message with metadata hints ──────────────
     const enrichedUserMsg = [
       lastUserMessage,
       `\n[SITE TYPE: ${wbMeta.type} | STYLE: ${wbMeta.style} | TITLE: ${wbMeta.title}]`,
       `[Generate a complete, production-quality ${wbMeta.description}]`,
     ].join('\n')
 
+    // ── Step 3: Generate HTML with up to 2 attempts ───────────────────────────
     const MAX_WB_ATTEMPTS = 2
     let lastHtml = null
     let lastValidation = null
@@ -23195,6 +17783,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'user', content: enrichedUserMsg },
         ]
 
+        // Try directWebBuilderGenerate first (bypasses circuit breakers), then safeGenerateAI as fallback
         let wbResult = await directWebBuilderGenerate(wbMessages, 8000)
         if (!wbResult.content) {
           console.warn(`[Website Builder v6] directWebBuilderGenerate returned null — falling back to safeGenerateAI`)
@@ -23355,18 +17944,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
     // ══════════════════════════════════════════════════════════════════════
     // PROMPT 3 — تخصص موجود لكن لا ولاية: اسأل عن الولاية فقط
-    // استثناء: إذا كان GPS متاحاً → نحدد الولاية تلقائياً بـ findNearestWilaya
     // ══════════════════════════════════════════════════════════════════════
-    if (!doctorIntent.city) {
-      if (userLocation) {
-        const _nearWilaya = findNearestWilaya(userLocation.lat, userLocation.lng)
-        if (_nearWilaya) {
-          const _matchedDCCity = DOCTOR_CITIES.find(c => c.ar === _nearWilaya.ar)
-          doctorIntent.city = _matchedDCCity || { ar: _nearWilaya.ar, fr: _nearWilaya.en }
-          console.log(`[DoctorSearch] GPS auto-city: ${doctorIntent.city.ar} (${doctorIntent.city.fr}) from lat=${userLocation.lat.toFixed(3)},lng=${userLocation.lng.toFixed(3)}`)
-        }
-      }
-    }
     if (!doctorIntent.city) {
       return res.status(200).json({
         content: [
@@ -23908,14 +18486,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   const weatherKeywords = [
-    'الطقس', 'حالة الجو', 'درجة الحرارة', 'الحرارة', 'البرودة', 'الحر',
+    'الطقس', 'حالة الجو', 'الجو', 'درجة الحرارة', 'الحرارة', 'البرودة', 'الحر',
     'ممطر', 'مطر', 'عواصف', 'رياح', 'ضباب', 'سحاب', 'غيوم', 'شمس', 'مشمس',
     'weather', 'météo', 'température', 'temp', 'forecast', 'humidity',
     'كيف الطقس', 'ما طقس', 'طقس اليوم', 'الطقس اليوم', 'طقس', 'الجو اليوم',
   ]
-  // Guard: "الجو" كلمة مستقلة فقط — لا تطابق داخل "الجولة" أو "الجوي" أو "الجوهري"
-  const _alJawAlone = /(?:^|\s|[.،!؟])الجو(?:\s|$|[.،!؟])/.test(lowerMsg)
-  const isWeatherQuery = _alJawAlone || weatherKeywords.some(k => lowerMsg.includes(k))
+  const isWeatherQuery = weatherKeywords.some(k => lowerMsg.includes(k))
   // ── Intent Detection: detect ALL data needs up front (Task 12) ─────────────
   const hasWeatherPriority = dashboardContext?.priority === 'weather' || lowerMsg.includes('context: weather_priority') || isWeatherQuery
 
@@ -23927,7 +18503,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const isPrayerQuery = prayerKeywords.some(k => lowerMsg.includes(k))
   const isLFPQuery = detectLFPQuery(lastUserMessage)
   const isCurrencyQuery = detectCurrencyQuery(lastUserMessage)
-  const isFootballQuery = !isCurrencyQuery && detectFootballQuery(lastUserMessage)
+  const isFootballQuery = detectFootballQuery(lastUserMessage)
   // ── Match-Vs Detection — "X ضد Y" / "X vs Y" smart routing ──────────────
   const _matchVsData    = detectMatchVsQuery(lastUserMessage)
   const _isMatchVsQuery = !!_matchVsData?.isMatchVs
@@ -23935,253 +18511,26 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     console.log(`[MatchVs] 🆚 ${_matchVsData.team1} ضد ${_matchVsData.team2} | temporal=${_matchVsData.temporal}`)
   }
 
-  // ── Match-Vs Direct Route — دائماً للوكيل الرياضي بدون طلب توضيح ──────────
-  // "X ضد Y" يُوجَّه فوراً للوكيل الرياضي بغض النظر عن السياق
-  // عند إعادة المحاولة: نتجاوز هذا المسار لإعطاء إجابة مختلفة عبر LLM
-  if (_isMatchVsQuery && !_isRetry) {
-    // ══ WC2026 INTERCEPT — فحص فوري قبل أي API خارجي أو LLM ══════════════
-    // إذا كان الفريقان مشاركَين في كأس العالم 2026 → نُجيب مباشرةً من البيانات المحلية
-    // هذا يمنع تماماً أي هلوسة من الـ LLM أو APIs قديمة
-    const _wc2026MatchVsData = detectAndBuildWC2026MatchVs(lastUserMessage)
-    if (!_wc2026MatchVsData) {
-      // فحص إضافي باستخدام team1/team2 المستخرجَين من _matchVsData
-      const _wc2026Direct = buildWC2026MatchVsResponse(_matchVsData.team1, _matchVsData.team2)
-      if (_wc2026Direct) {
-        console.log(`[MatchVs:WC2026⚡] ${_matchVsData.team1} ضد ${_matchVsData.team2} → WC2026 local data (LLM/APIs BYPASSED)`)
-        return res.status(200).json({
-          content: _wc2026Direct,
-          model: 'wc2026-matchvs',
-          _sportsAgent: true,
-          wc2026: true,
-          _bypassLLM: true,
-          found: true,
-          sources: ['DZ-Sports-Knowledge-WC2026'],
-        })
-      }
-    } else {
-      console.log(`[MatchVs:WC2026⚡] ${_wc2026MatchVsData.team1} ضد ${_wc2026MatchVsData.team2} → WC2026 local data (LLM/APIs BYPASSED)`)
-      return res.status(200).json({
-        content: _wc2026MatchVsData.response,
-        model: 'wc2026-matchvs',
-        _sportsAgent: true,
-        wc2026: true,
-        _bypassLLM: true,
-        found: true,
-        sources: ['DZ-Sports-Knowledge-WC2026'],
-      })
-    }
-    // ══════════════════════════════════════════════════════════════════════
-    // الفريق/ان ليس/ا في WC2026 → APIs خارجية (مسار عادي)
-    console.log(`[MatchVs:DirectRoute] ⚽ ${_matchVsData.team1} ضد ${_matchVsData.team2} → runSportsAgent`)
-    try {
-      const _sportRes2 = await runSportsAgent(lastUserMessage, messages)
-      let _sportContent2 = _sportRes2.userResponse || _sportRes2.context || _sportRes2.content || ''
-
-      // ── HARD GATE: إذا أعاد الوكيل محتوى فارغاً → رد صريح بدون LLM ──
-      if (!_sportContent2) {
-        const _t1 = _matchVsData.team1, _t2 = _matchVsData.team2
-        const _f1 = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المغرب':'🇲🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿' }[_t1] || '🏴'
-        const _f2 = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المغرب':'🇲🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿' }[_t2] || '🏴'
-        _sportContent2 = [
-          `## ⚽ ${_f1} ${_t1} ضد ${_f2} ${_t2}`,
-          ``,
-          `> 🔍 لم أجد بيانات **حية وموثّقة** لهذه المباراة في قواعد بيانات **365score** و**FotMob** و**SofaScore**.`,
-          ``,
-          `**للتحقق يدوياً:**`,
-          `• [365score](https://www.365scores.com/ar/football/search?q=${encodeURIComponent(_t1)}) — نتائج مباشرة`,
-          `• [FotMob](https://www.fotmob.com/search?term=${encodeURIComponent(_t1)}) — مباريات حية`,
-          `• [Koora كووورة](https://www.kooora.com/) — الملعب العربي`,
-          ``,
-          `💡 جرّب إضافة **التاريخ** أو **اسم البطولة** للحصول على نتيجة أدق.`,
-        ].join('\n')
-        console.log(`[MatchVs:DirectRoute:HardGate] ⚠️ Empty agent response — returning hardcoded no-data (LLM blocked)`)
-      }
-
-      return res.status(200).json({
-        content: _sportContent2,
-        model: 'sports-agent',
-        found: _sportRes2.found,
-        type: _sportRes2.type,
-        matches: _sportRes2.matches,
-        sources: _sportRes2.sources,
-        wc2026: _sportRes2.wc2026,
-        matchVsData: (() => {
-          const _fm2 = _sportRes2.matches?.[0] || _sportRes2.wcFixtures?.[0] || null
-          return { team1: _matchVsData.team1, team2: _matchVsData.team2, temporal: _matchVsData.temporal, date: _fm2?.date||null, time: _fm2?.startTime||null, competition: _fm2?.competition||null, venue: _fm2?.venue||null, city: _fm2?.city||null, round: _fm2?.round||null, kooraLink: _fm2?.kooraLink||null, homeScore: _fm2?.homeScore??null, awayScore: _fm2?.awayScore??null }
-        })(),
-        wcGroupData: (() => {
-          if (_sportRes2.type === 'WORLD_CUP_2026') {
-            const _grpLetterMv2 = _findWC2026TeamGroup(_matchVsData.team1) || _findWC2026TeamGroup(_matchVsData.team2) || 'J'
-            return buildWC2026GroupTableData(_grpLetterMv2)
-          }
-          return undefined
-        })(),
-        _sportsAgent: true,
-      })
-    } catch (_sae2) {
-      // ── HARD GATE على مستوى الـ catch: حتى عند خطأ فني → لا LLM ──────────
-      console.error('[MatchVs:DirectRoute] sports agent error (LLM blocked):', _sae2.message)
-      const _t1c = _matchVsData.team1, _t2c = _matchVsData.team2
-      const _MINI_FLAGS = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المغرب':'🇲🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿' }
-      return res.status(200).json({
-        content: [
-          `## ⚽ ${_MINI_FLAGS[_t1c]||'🏴'} ${_t1c} ضد ${_MINI_FLAGS[_t2c]||'🏴'} ${_t2c}`,
-          ``,
-          `> ⚠️ واجهت مشكلة تقنية مؤقتة في جلب بيانات هذه المباراة من المصادر الحية.`,
-          `> لا أستطيع الإجابة من ذاكرة النموذج — المعلومات الرياضية يجب أن تكون **موثّقة وحية فقط**.`,
-          ``,
-          `**تحقق مباشرة من:**`,
-          `• [365score](https://www.365scores.com/ar/football/search?q=${encodeURIComponent(_t1c)})`,
-          `• [FotMob](https://www.fotmob.com/search?term=${encodeURIComponent(_t1c)})`,
-          `• [Koora كووورة](https://www.kooora.com/)`,
-          ``,
-          `🔄 يمكنك **إعادة المحاولة** — قد تكون المشكلة مؤقتة.`,
-        ].join('\n'),
-        model: 'sports-agent-fallback',
-        found: false,
-        _sportsAgent: true,
-        _hardGate: true,
-      })
-    }
-  }
-
-  // ══ WC2026 جدول كامل — المواعيد العامة (قبل اكتشاف المجموعات وقبل LLM) ══
-  // يُكتشف: "مواعيد مباريات كأس العالم" / "جدول المونديال" / "برنامج كأس العالم"
-  // السبب: القيد الصارم في system prompt يمنع LLM من الإجابة → handler محلي مباشر
-  {
-    const _isWC2026ScheduleQuery = (
-      /(?:مواعيد|جدول|برنامج|رزنامة)\s*(?:مباريات\s+)?(?:كأس\s*العالم|المونديال|مونديال|FIFA|فيفا|world\s*cup)/i.test(lastUserMessage) ||
-      /(?:كأس\s*العالم|المونديال|مونديال|FIFA\s*2026|world\s*cup)\s*(?:مواعيد|جدول|برنامج|الكامل|كامل|كل\s*المباريات|جميع)/i.test(lastUserMessage) ||
-      /(?:متى|موعد)\s+(?:انطلاق|بداية|يبدأ|ينطلق|تبدأ)\s+(?:كأس\s*العالم|المونديال|مونديال)/i.test(lastUserMessage) ||
-      /(?:كأس\s*العالم|مونديال|FIFA\s*2026).*(?:متى|مواعيد|الجدول|التوقيت|الوقت)/i.test(lastUserMessage) ||
-      /(?:مواعيد|توقيت|وقت)\s+(?:المباريات|الماتشات)\s+(?:في\s+)?(?:كأس\s*العالم|المونديال|FIFA)/i.test(lastUserMessage)
+  // ── Match-Vs Clarification — هل تبحث عن مباراة؟ ──────────────────────────
+  // When "X ضد Y" detected without explicit sports keywords → ask clarification
+  if (_isMatchVsQuery) {
+    const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح|رياضة|رياضي|بوليفيا|البرازيل|الأرجنتين|فرنسا|إسبانيا|ألمانيا|إيطاليا|إنجلترا|البرتغال|هولندا|بلجيكا|تركيا|كرواتيا|السويد|الدنمارك|سويسرا|أوروغواي|كولومبيا|تشيلي|المكسيك|كندا|قطر|أستراليا|اليابان|كوريا|السنغال|نيجيريا|الكاميرون|غانا|ساحل العاج|مالي|بوركينا|كوت ديفوار|ليبيا|موريتانيا)/i.test(lastUserMessage)
+    const _priorMsgHasClarify = messages.slice(-5, -1).some(m =>
+      m.role === 'assistant' && /هل تبحث عن مباراة|واش تبحث على|نتيجة مباراة|موعد مباراة/i.test(m.content || '')
     )
-
-    if (_isWC2026ScheduleQuery && !_isRetry) {
-      console.log(`[WC2026:ScheduleEarly] 📅 جدول عام: "${lastUserMessage.slice(0, 60)}"`)
-      try {
-        const _today = new Date().toISOString().split('T')[0]
-        const _upcoming = WC2026_FULL_FIXTURES.filter(f => f.date >= _today).slice(0, 24)
-        const _FLAGS = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','المغرب':'🇲🇦','تونس':'🇹🇳','مصر':'🇪🇬','السعودية':'🇸🇦','قطر':'🇶🇦','هولندا':'🇳🇱','اليابان':'🇯🇵','كوريا الجنوبية':'🇰🇷','البوسنة والهرسك':'🇧🇦','بلجيكا':'🇧🇪','إيطاليا':'🇮🇹','سويسرا':'🇨🇭','أوروغواي':'🇺🇾','كولومبيا':'🇨🇴','الشيلي':'🇨🇱','السنغال':'🇸🇳','نيجيريا':'🇳🇬','الكاميرون':'🇨🇲','غانا':'🇬🇭','جمهورية التشيك':'🇨🇿','النمسا':'🇦🇹','المجر':'🇭🇺','الأردن':'🇯🇴','بوليفيا':'🇧🇴','باراغواي':'🇵🇾','الإكوادور':'🇪🇨','البيرو':'🇵🇪' }
-
-        // تجميع المباريات حسب اليوم
-        const _byDate = {}
-        for (const _f of _upcoming) {
-          if (!_byDate[_f.date]) _byDate[_f.date] = []
-          _byDate[_f.date].push(_f)
-        }
-
-        const _lines = [
-          `## 🏆 كأس العالم FIFA 2026 — جدول المباريات القادمة`,
-          ``,
-          `> 🌍 **48 منتخباً** في 12 مجموعة | 🏟️ الولايات المتحدة، المكسيك وكندا`,
-          `> 📅 انطلق: **11 يونيو 2026** | النهائي: **19 يوليو 2026**`,
-          `> 🇩🇿 الجزائر في **المجموعة J** مع النمسا، الأردن وكندا`,
-          ``,
-        ]
-
-        for (const [_date, _matches] of Object.entries(_byDate)) {
-          const _d = new Date(_date + 'T12:00:00Z')
-          const _label = _d.toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })
-          _lines.push(`### 📅 ${_label}`)
-          _lines.push(``)
-          for (const _m of _matches) {
-            const _f1 = _FLAGS[_m.homeTeam] || '🏴'
-            const _f2 = _FLAGS[_m.awayTeam] || '🏴'
-            const [_h, _min] = _m.startTime?.split(':') || ['??', '??']
-            const _dzH = String((parseInt(_h, 10) + 1) % 24).padStart(2, '0')
-            const _isDZ = _m.homeTeam === 'الجزائر' || _m.awayTeam === 'الجزائر'
-            _lines.push(`${_isDZ ? '🟢 ' : ''}**${_f1} ${_m.homeTeam}** 🆚 **${_m.awayTeam} ${_f2}**`)
-            _lines.push(`🕒 ${_dzH}:${_min} (توقيت الجزائر) | 🏟️ ${_m.venue || ''}, ${_m.city || ''} | المجموعة **${_m.group}** | ${_m.round || ''}`)
-            _lines.push(``)
-          }
-        }
-
-        if (_upcoming.length === 0) {
-          _lines.push(`> ℹ️ انتهت مباريات دور المجموعات. تابع الأدوار الإقصائية على الروابط أدناه.`)
-        }
-
-        _lines.push(`---`)
-        _lines.push(`🔴 **متابعة حية:** [FIFA الرسمي](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026) | [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026) | [كووورة](https://www.kooora.com/)`)
-
-        return res.status(200).json({
-          content: _lines.join('\n'),
-          model: 'wc2026-schedule-local',
-          _sportsAgent: true,
-          wc2026: true,
-          found: true,
-          sources: ['WC2026_FULL_FIXTURES'],
-          matchCount: _upcoming.length,
-        })
-      } catch (_schedErr) {
-        console.error('[WC2026:ScheduleEarly] error:', _schedErr.message)
-        // fallback → يكمل التدفق الطبيعي
-      }
+    if (!_hasExplicitSportsCtx && !_priorMsgHasClarify && !detectFootballQuery(lastUserMessage)) {
+      const { team1, team2 } = _matchVsData
+      const isDzDialect = /(?:واش|كيفاش|راه|تاع|بصح|ماشي|هذا|هاذا|هادا|وهران|قسنطينة|جزائري|هنا|شنو|علاش)/i.test(lastUserMessage)
+      const clarifyMsg = isDzDialect
+        ? `🆚 **${team1} ضد ${team2}** — واش تبحث على؟\n\n⚽ **ماتش كرة قدم** — اكتب **"نعم مباراة"** وراني نجيبلك النتيجة والتفاصيل\n💡 **شيء آخر** — وضّح شنو تريد بالضبط`
+        : `🆚 **${team1} ضد ${team2}** — هل تبحث عن:\n\n⚽ **نتيجة مباراة** أو **موعد مباراة** بين **${team1}** و**${team2}**؟\n→ أجب بـ **"نعم مباراة"** لأحضر لك البيانات\n\n📚 أم تريد معلومة أخرى؟ → وضّح سؤالك`
+      console.log(`[MatchVs:Clarify] ${team1} vs ${team2} — no sports context → returning clarification`)
+      return res.status(200).json({
+        content: clarifyMsg,
+        _matchVsClarify: true,
+        matchVsData: { team1, team2 },
+      })
     }
-  }
-
-  // ══ WC2026 مجموعات — Early Direct Bypass (قبل الـ LLM وقبل الـ parallel fetch) ══
-  // يُكتشف: "مجموعة الجزائر/الأرجنتين كأس العالم" / "من مع الجزائر" / "مباريات الجزائر في كأس العالم"
-  const _isWC2026GroupQuery = (
-    /(?:مجموعة\s*(?:الجزائر|الأرجنتين|النمسا|الأردن|المنتخب\s+الجزائري|[A-La-l]\b|الـ\s*[A-La-l]))/i.test(lastUserMessage) ||
-    (
-      /(?:كأس\s*العالم|world\s*cup|مونديال|fifa|2026)/i.test(lastUserMessage) &&
-      /(?:مجموعة|منافسين?|منافسو|من\s*مع|مع\s*من|منتخبات|من\s*في|نفس\s*المجموعة|جدول|مباريات|برنامج)/i.test(lastUserMessage)
-    ) ||
-    /(?:من\s*مع\s*الجزائر|منافسو\s*الجزائر|مجموعة\s+[A-La-l]|group\s+[A-La-l]|مباريات\s+الجزائر\s+في\s+(?:كأس|مونديال))/i.test(lastUserMessage)
-  ) && !_isMatchVsQuery
-
-  if (_isWC2026GroupQuery && !_isRetry) {
-    const { buildWorldCup2026AlgeriaContext } = await import('./lib/dz-sports-knowledge.js')
-    const _wc2026Ctx = buildWorldCup2026AlgeriaContext()
-    const _wc2026GroupLetter = extractWC2026GroupFromQuery(lastUserMessage) || 'J'
-    const _wcGroupTableData = buildWC2026GroupTableData(_wc2026GroupLetter)
-    console.log(`[WC2026:GroupBypass] ⚡ Direct WC2026 group context (group=${_wc2026GroupLetter}) — LLM bypassed`)
-    return res.status(200).json({
-      content: _wc2026Ctx,
-      model: 'wc2026-direct',
-      _bypassLLM: true,
-      _sportsAgent: true,
-      wcGroupData: _wcGroupTableData,
-    })
-  }
-
-  // ── WC2026 General Query — حقن بيانات شاملة لأي سؤال عن كأس العالم ──────────
-  // يُكتشف: "أخبرني عن كأس العالم" / "ما هي فرق كأس العالم" / "جدول كأس العالم"
-  // يُجيب ببيانات محلية دقيقة ← يمنع LLM من اختراع معلومات خاطئة
-  const _isWC2026GeneralQuery = !_isRetry && !_isWC2026GroupQuery && (
-    /(?:كأس\s*العالم|مونديال|world\s*cup|FIFA\s*2026)/i.test(lastUserMessage) &&
-    /(?:جدول|برنامج|مباريات|منتخبات|فرق|مجموعات|دور|ملاعب|ملعب|نتائج|ترتيب|أهداف|هداف|منافس|موعد|تاريخ|متى|أين|وين|كم|حكم|تشكيلة|لاعبين|نتيجة|ماتش|مقابلة|الأهداف|الفائز|البطولة)/i.test(lastUserMessage)
-  )
-  if (_isWC2026GeneralQuery) {
-    try {
-      const _wc2026Date = new Date().toISOString().split('T')[0]
-      const _wcTodayRes = await Promise.race([
-        runWC2026TodayAgent(_wc2026Date),
-        new Promise(r => setTimeout(() => r(null), 10000)),
-      ])
-      if (_wcTodayRes?.userResponse) {
-        console.log(`[WC2026:GeneralBypass] ⚡ General WC query → today fixtures injected`)
-        return res.status(200).json({
-          content: _wcTodayRes.userResponse,
-          model: 'sports-agent-wc2026-today',
-          _sportsAgent: true,
-          wc2026: true,
-          found: _wcTodayRes.found,
-          sources: _wcTodayRes.sources,
-        })
-      }
-    } catch (_wcGenErr) {
-      console.warn('[WC2026:General] error:', _wcGenErr?.message)
-    }
-    // Fallback: inject full fixture context
-    const _fullCtx = buildWC2026FullContext()
-    return res.status(200).json({
-      content: _fullCtx,
-      model: 'wc2026-full-context',
-      _sportsAgent: true,
-      wc2026: true,
-    })
   }
 
   const _isMinisterQuery = isMinisterQuery(lastUserMessage)
@@ -24271,39 +18620,21 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     'الكونفرانس ليغ', 'conference league', 'copa del rey', 'كأس الملك',
     'كأس فرنسا', 'كأس إنجلترا', 'كأس ألمانيا', 'fa cup', 'league cup',
     'الدوري التركي', 'الدوري البلجيكي', 'الدوري الروسي', 'الدوري الأرجنتيني',
-    'superliga', 'super league', 'world cup', 'كأس العالم', 'يورو 2024', 'بطولة يورو', 'يورو كأس', 'euro 2024', 'euro 2025', 'euro 2026',
+    'superliga', 'super league', 'world cup', 'كأس العالم', 'يورو', 'euro 2024',
     'كأس أمم أفريقيا', 'افريقيا',
     // ── مباريات اليوم / الليلة (عاملة للاستفسار العام) ──
     'مباريات اليوم', 'مباريات الليلة', 'مباريات الليلية', 'برنامج المباريات',
     'جدول المباريات', 'ماتشات اليوم', 'كل المباريات اليوم',
     'مباراة الليلة', 'مباراة اليوم', 'الدوريات الكبرى',
     'المباريات اليوم', 'مباريات على مباشر', 'مباريات مباشرة اليوم',
-    'أهم مباريات اليوم', 'أهم مباريات', 'من الدوريات',
-    'جدول المقابلات', 'مباريات من الدوريات',
   ]
-  const isGlobalLeaguesQuery = !isCurrencyQuery && globalLeaguesKeywords.some(k => lowerMsg.includes(k))
-  // استفسار "أهم مباريات اليوم من الدوريات" — يجلب LFP + دوريات عالمية معاً
-  const isTodayAllLeaguesQuery = isGlobalLeaguesQuery && /(?:اليوم|الليلة)/i.test(lastUserMessage)
-
-  // ── WC2026 today matches — كأس العالم + اليوم ──────────────────────────────
-  // يُكتشف: "مباريات اليوم كأس العالم" / "ماتشات اليوم مونديال" / "مباريات كأس العالم الليلة"
-  const _isWCTodayQuery = (
-    detectWC2026TodayQuery(lastUserMessage) ||
-    (isGlobalLeaguesQuery &&
-      /(?:كأس\s*العالم|world\s*cup|مونديال|fifa\s*2026)/i.test(lastUserMessage) &&
-      /(?:اليوم|الليلة|الآن|live|مباشر)/i.test(lastUserMessage)) ||
-    /(?:مباريات|ماتشات|نتائج|برنامج)\s+(?:كأس\s+العالم|مونديال|FIFA).*(?:اليوم|الليلة)/i.test(lastUserMessage) ||
-    /(?:كأس\s+العالم|مونديال).*(?:مباريات|نتائج).*(?:اليوم|الليلة)/i.test(lastUserMessage) ||
-    /(?:واش|كاين|فيه)\s+.*(?:ماتش|مقابلة).*(?:مونديال|كأس\s+العالم)/i.test(lastUserMessage)
-  )
+  const isGlobalLeaguesQuery = globalLeaguesKeywords.some(k => lowerMsg.includes(k))
 
   // ── الدارجة الجزائرية — Algerian dialect football queries ──────────────────
   const isDZDialectFootballQuery = /(?:كاين\s*(?:ماتشات?|مقابلات?|في\s*الكورة|ماتش\b)|واش\s*(?:كاين|فيه)\s*(?:ماتش|في\s*الكورة|مقابلة)|شكون\s*(?:يلعب|راهم\s*يلعبو|يلعبو)|برنامج\s*(?:الماتشات|الكورة|المقابلات)|(?:ماتشات?|مقابلات?)\s*(?:اليوم|الليلة)|يلعبو?\s*(?:اليوم|الليلة)|(?:وين|فين)\s*(?:الكورة|الماتش)|الخضر\s*(?:ضد|مع|على\s*من|رايحة|تلعب)|آخر\s*ماتش\s*(?:للجزائر|الخضر)|رزنامة\s*المنتخب|برنامج\s*المنتخب|مع\s*من\s*رايحة\s*تلعب\s*الجزائر)/i.test(lastUserMessage)
 
   // ── Algeria-focused football query — فلترة على مباريات الجزائر ────────────
-  // Guard: تجاهل تام إذا كان الاستعلام عملة (مثال: "الدينار الجزائري" → لا رياضة)
-  const isAlgeriaFocusedFootball = !isCurrencyQuery &&
-    (isDZDialectFootballQuery || detectFootballQuery(lastUserMessage)) &&
+  const isAlgeriaFocusedFootball = (isDZDialectFootballQuery || detectFootballQuery(lastUserMessage)) &&
     /(?:الجزائر|المنتخب\s+الجزائري|منتخب\s+الجزائر|الخضر|الفنك|لالجيري|algeria\b|fennec)/i.test(lastUserMessage)
 
   // استفسار عام عن مباريات اليوم (حتى بدون تحديد دوري) — يشمل الدارجة الجزائرية
@@ -24329,7 +18660,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   ] = await Promise.allSettled([
     hasWeatherPriority ? fetchCityWeatherResilient(weatherCity) : Promise.resolve(null),
     isPrayerQuery ? fetchPrayerTimesAladhan(detectCityFromQuery(lastUserMessage)) : Promise.resolve(null),
-    (isLFPQuery || isStandingsQuery || isTodayAllLeaguesQuery) ? fetchLFPData() : Promise.resolve(null),
+    (isLFPQuery || isStandingsQuery) ? fetchLFPData() : Promise.resolve(null),
     isCurrencyQuery ? fetchCurrencyData() : Promise.resolve(null),
     (isFootballQuery && !isLFPQuery && !isStandingsQuery) ? Promise.allSettled([fetchSofaScoreFootball(today), fetchMultipleFeeds(INTL_FOOTBALL_FEEDS)]) : Promise.resolve(null),
     isStandingsQuery ? fetchAlgerianStandings() : Promise.resolve(null),
@@ -24483,10 +18814,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ── كشف مبكر: هل الاستعلام عن أخبار كروية (وليس نتائج مباشرة)؟ ──────────
-  // يُعرَّف هنا قبل بناء سياق كرة القدم لتجنب تطبيق القاعدة الصارمة على استعلامات الأخبار
-  const _isFootballNewsQuery = isFootballQuery && /أخبار|خبر|آخر أخبار|جديد|عاجل|news|latest|المنتخب.*أخبار|أخبار.*المنتخب/i.test(lastUserMessage)
-
   // Football context — multi-source router (FotMob→API-Football→SofaScore)
   let footballContext = ''
   if (isFootballQuery && !isLFPQuery) {
@@ -24502,16 +18829,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     } catch (_) { routerData = null }
 
     // ── القاعدة الصارمة: إذا فشلت كل المصادر → لا إجابة من الذاكرة ──
-    // استثناء: استعلامات الأخبار الكروية (أخبار المنتخب/الفريق) تستخدم RSS بدل البيانات المباشرة
     if (!routerData && !sfData && !rssData?.length) {
-      if (_isFootballNewsQuery) {
-        // لا تطبّق القاعدة الصارمة — ترك سياق كرة القدم فارغاً ليعتمد النموذج على RSS الأخبار
-        footballContext = ''
-        console.log('[DZ Agent] Football news query — strict live-data rule skipped, RSS news path will handle it')
-      } else {
-        footballContext = '\n⚠️ **بيانات كرة القدم المباشرة غير متاحة حالياً.**\n⚠️ **لا تُجِب من ذاكرة النموذج — تعذّر التحقق من المعلومات الراهنة.**\n'
-        console.warn('[DZ Agent] STRICT RULE: all football sources failed — no LLM memory answer')
-      }
+      footballContext = '\n⚠️ **بيانات كرة القدم المباشرة غير متاحة حالياً.**\n⚠️ **لا تُجِب من ذاكرة النموذج — تعذّر التحقق من المعلومات الراهنة.**\n'
+      console.warn('[DZ Agent] STRICT RULE: all football sources failed — no LLM memory answer')
     } else {
       footballContext = buildFootballContext(sfData, rssData || [], today, routerData)
       console.log(`[DZ Agent] Football context: router=${routerData?.source || 'none'}, SofaScore=${!!sfData}, RSS=${rssData?.length ?? 0}`)
@@ -24647,51 +18967,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
 
     console.log(`[MatchVs] Context built: temporal=${_mvd.temporal} | agent=${!!_sportsAgentResult?.found} | ctxLen=${matchVsContext.length}`)
-
-    // ══ ⚡ DIRECT BYPASS — المباريات لا تمر على LLM أبداً ══════════════════
-    // عندما يكون الوكيل الرياضي قد أجاب (found=true أو found=false)
-    // → نُعيد الرد مباشرةً بدون LLM لمنع تدخل النموذج من ذاكرة التدريب
-    if (_sportsAgentResult) {
-      const _directResponse = _sportsAgentResult.userResponse || _sportsAgentResult.context || ''
-      if (_directResponse) {
-        console.log(`[MatchVs:DirectBypass] ⚡ Returning sports agent response directly (found=${_sportsAgentResult.found}, type=${_sportsAgentResult.type}) — LLM bypassed`)
-        return res.status(200).json({
-          content: _directResponse,
-          model: 'sports-agent',
-          found: _sportsAgentResult.found,
-          type: _sportsAgentResult.type,
-          matches: _sportsAgentResult.matches,
-          sources: _sportsAgentResult.sources,
-          wc2026: _sportsAgentResult.wc2026,
-          matchVsData: (() => {
-            const _firstMatch = _sportsAgentResult.matches?.[0] || _sportsAgentResult.wcFixtures?.[0] || null
-            return {
-              team1: _mvd.team1,
-              team2: _mvd.team2,
-              temporal: _mvd.temporal,
-              date: _firstMatch?.date || null,
-              time: _firstMatch?.startTime || null,
-              competition: _firstMatch?.competition || null,
-              venue: _firstMatch?.venue || null,
-              city: _firstMatch?.city || null,
-              round: _firstMatch?.round || null,
-              kooraLink: _firstMatch?.kooraLink || null,
-              homeScore: _firstMatch?.homeScore ?? null,
-              awayScore: _firstMatch?.awayScore ?? null,
-            }
-          })(),
-          wcGroupData: (() => {
-          if (_sportsAgentResult.type === 'WORLD_CUP_2026') {
-            const _grpLetterLlm = _findWC2026TeamGroup(_mvd.team1) || _findWC2026TeamGroup(_mvd.team2) || 'J'
-            return buildWC2026GroupTableData(_grpLetterLlm)
-          }
-          return undefined
-        })(),
-          _sportsAgent: true,
-          _bypassLLM: true,
-        })
-      }
-    }
   }
 
   // ── NEW: Standings context injection ─────────────────────────────────────
@@ -24731,18 +19006,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
 
     if (jdwelData?.groups?.length > 0) {
-      // ── WC today filter: only World Cup groups when query is WC-specific ──
-      const _wcGroupRe = /world.?cup|كأس.?العالم|مونديال|fifa/i
-      const _rawGroups = _dedupMatchGroups(jdwelData.groups || [])
-      const _filteredGroups = _isWCTodayQuery
-        ? _rawGroups.filter(g => _wcGroupRe.test(g.name))
-        : _rawGroups
-      const _groupsToShow = _filteredGroups.length > 0 ? _filteredGroups : _rawGroups
-      const _ctxHeader = _isWCTodayQuery ? '🏆 مباريات كأس العالم 2026' : '🌍 الدوريات العالمية'
-      console.log(`[DZ Agent] Global leagues — injecting ${jdwelData.totalMatches} matches (WCfilter=${_isWCTodayQuery}, groups=${_groupsToShow.length}) from jdwel.com`)
+      console.log(`[DZ Agent] Global leagues — injecting ${jdwelData.totalMatches} matches across ${jdwelData.groups.length} leagues from jdwel.com`)
       const fetchTime = jdwelData.fetchedAt ? new Date(jdwelData.fetchedAt).toLocaleString('ar-DZ') : ''
-      globalLeaguesContext = `\n\n--- ${_ctxHeader} — ${today} (المصدر: jdwel.com — ${fetchTime}) ---\n`
-      for (const g of _groupsToShow.slice(0, 12)) {
+      globalLeaguesContext = `\n\n--- 🌍 الدوريات العالمية — ${today} (المصدر: jdwel.com — ${fetchTime}) ---\n`
+      for (const g of jdwelData.groups.slice(0, 10)) {
         globalLeaguesContext += `\n**🏟️ ${g.name}:**\n`
         for (const m of g.matches.slice(0, 6)) {
           globalLeaguesContext += `• ${m.homeTeam} ${formatJdwelMatch(m)} ${m.awayTeam}`
@@ -24851,143 +19118,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ══ ⚡ LEAGUE TOP SCORER BYPASS — هداف الدوري — مسار أولوية قبل GLOBAL ════
-  // يُطلَق عند: "هداف الدوري الإسباني" / "ترتيب الهدافين في البريميرليغ" / ...
-  // يمنع SPORTS DIRECT BYPASS من إعادة مباريات jdwel.com بدلاً من الهدافين
-  if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isMatchVsQuery) {
-    const _ltsCls = classifySportsQuery(lastUserMessage)
-    if (_ltsCls.type === 'LEAGUE_TOP_SCORER' && _ltsCls.league) {
-      console.log(`[LeagueTopScorer] 🥅 Intercept: league="${_ltsCls.league}" query="${lastUserMessage.slice(0,60)}"`)
-      try {
-        const _scorers = await Promise.race([
-          fetchLeagueTopScorers(_ltsCls.league),
-          new Promise(r => setTimeout(() => r(null), 12000)),
-        ])
-
-        if (_scorers && _scorers.length > 0) {
-          const _scLines = [
-            `## 🥅 هدافو ${_ltsCls.league} — موسم ${new Date().getFullYear()}`,
-            ``,
-            `| # | اللاعب | النادي | الأهداف |`,
-            `|---|--------|--------|---------|`,
-            ..._scorers.slice(0, 10).map((s, i) =>
-              `| ${i + 1} | ${s.name} | ${s.flag || ''}${s.club} | **${s.goals}** ⚽ |`
-            ),
-            ``,
-            `> 📊 *المصدر: 365scores.com — محدَّث تلقائياً*`,
-          ]
-          console.log(`[LeagueTopScorer] ✅ ${_scorers.length} scorers returned for ${_ltsCls.league}`)
-          return res.status(200).json({
-            content: _scLines.join('\n'),
-            model: 'league-top-scorer',
-            _sportsAgent: true,
-            _bypassLLM: true,
-            found: true,
-            type: 'LEAGUE_TOP_SCORER',
-          })
-        }
-
-        // 365scores فشل → fallback: SofaScore link
-        const _sfLink = _ltsCls.league === 'Champions League'
-          ? 'https://www.sofascore.com/tournament/football/europe/champions-league/7#standings:top-scorers'
-          : `https://www.sofascore.com/sport/football#top-scorers`
-        const _fbLines = [
-          `## 🥅 هدافو ${_ltsCls.league}`,
-          ``,
-          `> ⚠️ تعذّر جلب بيانات الهدافين مباشرةً الآن.`,
-          ``,
-          `**تابع الهدافين من المصادر الرسمية:**`,
-          `• [SofaScore — الهدافين](${_sfLink})`,
-          `• [365scores — الهدافين](https://www.365scores.com/ar/football)`,
-          `• [Transfermarkt — الهدافين](https://www.transfermarkt.com)`,
-        ]
-        return res.status(200).json({
-          content: _fbLines.join('\n'),
-          model: 'league-top-scorer-fallback',
-          _sportsAgent: true,
-          _bypassLLM: true,
-          found: false,
-          type: 'LEAGUE_TOP_SCORER',
-        })
-      } catch (_ltsErr) {
-        console.warn('[LeagueTopScorer] Error:', _ltsErr.message)
-      }
-    }
-  }
-
-  // ══ ⚡ SPORTS DIRECT BYPASS — أي دوري أو بطولة بدون تدخل LLM ═══════════
-  // الوكيل الرياضي هو المصدر الوحيد — LLM لا يُضيف شيئاً من ذاكرته أبداً
-  // يُطلَق عند: ترتيب دوري / نتائج مباريات / دوريات عالمية / كرة قدم عامة
-  if (
-    (isLFPQuery || isStandingsQuery || isGlobalLeaguesQuery || isGeneralMatchesQuery || isFootballQuery) &&
-    !_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre
-  ) {
-    const _isSportsNewsOnly = /أخبار|خبر|آخر أخبار|جديد|عاجل|news|latest/i.test(lastUserMessage)
-    const _sdParts = []
-
-    // ① ترتيب الدوري الجزائري
-    if (isStandingsQuery && standingsContext && !standingsContext.includes('تعذّر جلب جدول الترتيب')) {
-      _sdParts.push(standingsContext.trim())
-    }
-
-    // ② مباريات الدوري الجزائري المحترف LFP (يُضاف أيضاً لاستفسارات كل الدوريات)
-    if ((isLFPQuery || isTodayAllLeaguesQuery) && lfpContext && !lfpContext.includes('تعذّر جلب البيانات حالياً')) {
-      _sdParts.push(lfpContext.trim())
-    }
-
-    // ③ الدوريات العالمية (أي دوري — أبطال أوروبا، الإنجليزي، الإسباني، ...)
-    if (
-      (isGlobalLeaguesQuery || isGeneralMatchesQuery) &&
-      globalLeaguesContext &&
-      !globalLeaguesContext.includes('تعذّر جلب بيانات المباريات')
-    ) {
-      _sdParts.push(globalLeaguesContext.trim())
-    }
-
-    // ④ كرة القدم العامة (مباريات اليوم / مباشر / منتهية)
-    if (
-      isFootballQuery && !isLFPQuery && !_isSportsNewsOnly &&
-      footballContext && !footballContext.includes('غير متاحة حالياً')
-    ) {
-      _sdParts.push(footballContext.trim())
-    }
-
-    if (_sdParts.length > 0) {
-      const _sdContent = _sdParts.join('\n\n---\n\n')
-      console.log(`[SportsBypass] ⚡ LLM bypassed — sports direct return (LFP=${isLFPQuery}, Std=${isStandingsQuery}, Global=${isGlobalLeaguesQuery}, Football=${isFootballQuery}) — ${_sdContent.length} chars`)
-      return res.status(200).json({
-        content: _sdContent,
-        model: 'sports-direct',
-        _sportsAgent: true,
-        _bypassLLM: true,
-      })
-    }
-
-    // إذا فشلت كل المصادر الحية → رد نظيف "لا بيانات" بدون LLM
-    if (_sdParts.length === 0 && !_isSportsNewsOnly) {
-      const _noSportsData = [
-        `## ⚽ الوكيل الرياضي — لا بيانات حية متاحة`,
-        ``,
-        `> ⚠️ تعذّر جلب بيانات المباريات الحية حالياً من المصادر المعتمدة.`,
-        ``,
-        `**تابع مباشرةً من المصادر الرسمية:**`,
-        `• [jdwel.com/today](https://jdwel.com/today/) — كل مباريات اليوم`,
-        `• [365score.com](https://www.365scores.com/ar) — نتائج حية`,
-        `• [FotMob](https://www.fotmob.com) — مباريات عالمية`,
-        `• [lfp.dz/ar/calendar](https://lfp.dz/ar/calendar) — الدوري الجزائري`,
-        `• [UEFA.com](https://www.uefa.com) — أبطال أوروبا`,
-        `• [FIFA.com](https://www.fifa.com) — المسابقات الدولية`,
-      ].join('\n')
-      console.log(`[SportsBypass] ⚠️ All sports sources failed — returning clean no-data response (LLM bypassed)`)
-      return res.status(200).json({
-        content: _noSportsData,
-        model: 'sports-direct-no-data',
-        _sportsAgent: true,
-        _bypassLLM: true,
-      })
-    }
-  }
-
   // ── Algeria Ministers / Presidents context ────────────────────────────────
   let ministersContext = ''
   let govPersonContext = ''
@@ -25056,13 +19186,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   if (_economyIntent.isEconomy) {
     console.log(`[DZ-Economy] Intent detected: mode=${_economyIntent.mode}`)
     if (_economyIntent.mode === 'live_news') {
-      // أخبار اقتصادية حية — مصادر متعددة — مصنّفة عاجل/اليوم/الأسبوع
+      // أخبار اقتصادية حية — الأحدث أولاً
       try {
         const dzEconCached = DZ_ECONOMY_NEWS_CACHE.get('dz_economy_news')
         let econNews
         if (dzEconCached && Date.now() - dzEconCached.ts < DZ_ECONOMY_NEWS_TTL) {
           econNews = dzEconCached
-          console.log(`[DZ-Economy] ✅ Served ${econNews.items.length} economy articles from cache (${econNews.sources?.length || 0} sources)`)
+          console.log(`[DZ-Economy] ✅ Served ${econNews.items.length} economy articles from cache`)
+          // تجديد خلفي إذا قارب الكاش على الانتهاء
           if (Date.now() - dzEconCached.ts > DZ_ECONOMY_NEWS_TTL * 0.7) {
             fetchDZEconomyNews({ force: true }).catch(() => {})
           }
@@ -25071,31 +19202,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         }
         if (econNews?.items?.length) {
           _economyContext = buildEconomyNewsContext(econNews)
-          console.log(`[DZ-Economy] 📈 Live news context built: ${_economyContext.length} chars from ${econNews.sources?.length || 0} sources`)
+          console.log(`[DZ-Economy] 📈 Live news context built: ${_economyContext.length} chars`)
         }
       } catch (err) {
         console.warn('[DZ-Economy] live news fetch failed:', err.message)
       }
-    } else if (_economyIntent.mode === 'events') {
-      // أحداث اقتصادية — ملتقيات، مؤتمرات، معارض، ندوات
-      try {
-        const dzEventsCached = DZ_ECONOMY_NEWS_CACHE.get('dz_economy_events')
-        let econEvents
-        if (dzEventsCached && Date.now() - dzEventsCached.ts < DZ_ECONOMY_EVENTS_TTL) {
-          econEvents = dzEventsCached
-          console.log(`[DZ-Economy] ✅ Served ${econEvents.items.length} economy events from cache`)
-        } else {
-          econEvents = await fetchDZEconomyEvents({ force: true })
-        }
-        if (econEvents?.items?.length) {
-          _economyContext = buildEconomyEventsContext(econEvents)
-          console.log(`[DZ-Economy] 📅 Events context built: ${_economyContext.length} chars`)
-        }
-      } catch (err) {
-        console.warn('[DZ-Economy] events fetch failed:', err.message)
-      }
     } else if (_economyIntent.mode === 'wiki_data') {
-      // بيانات هيكلية — Wikipedia + Wikidata (تعريف اقتصاد الجزائر)
+      // بيانات هيكلية — Wikipedia + Wikidata
       try {
         const wikiData = await fetchAlgeriaEconomyWiki()
         if (wikiData) {
@@ -25111,20 +19224,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // Allow RSS for football NEWS queries (e.g. "أخبار المنتخب") — not just match-score queries
-  // _isFootballNewsQuery is already defined earlier (before football context building)
-  // Guard: لا تحمّل feeds الأخبار لاستعلامات العملة — "سعر الدولار اليوم" يحتوي "اليوم"
-  // لكنه ليس خبراً ← العملة لها مسارها الخاص (currency fast-path)
-  if (newsQueryType && !isPrayerQuery && !isCurrencyQuery && !isJobsQuery(lastUserMessage) && (!isFootballQuery || _isFootballNewsQuery)) {
+  const _isFootballNewsQuery = isFootballQuery && /أخبار|خبر|آخر أخبار|جديد|عاجل|news|latest|المنتخب.*أخبار|أخبار.*المنتخب/i.test(lastUserMessage)
+  if (newsQueryType && !isPrayerQuery && (!isFootballQuery || _isFootballNewsQuery)) {
     console.log(`[DZ Agent] News query detected: ${newsQueryType} (footballNews=${_isFootballNewsQuery})`)
-    // ✅ FIX: يدعم "ال" التعريف — "الذكاء الاصطناعي" / "أخبار الذكاء" / "أخبار التقنية"
-    const _isTechAIQuery = /(?:ال)?ذكاء\s*(?:ال)?اصطناعي|نموذج\s*(?:ال)?(?:ذكاء|لغوي)|أخبار\s*(?:ال)?(?:تقنية|تقني|تكنولوجيا|ذكاء)|تقنية\s*(?:ال)?ذكاء|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
-    // News cards are data cards, not LLM tasks. Keep them independent from
-    // provider availability so a bad/slow key can never leave the UI loading.
-    // لا نُفعّل وضع الأخبار المباشر لطلبات الوظائف/المسابقات أو الحِكم — لها معالجات خاصة
-    const _directNewsMode = !_isAgentMode && !isJobsQuery(lastUserMessage) && !isProverbQuery(lastUserMessage)
 
     // ── 🇩🇿 أولوية: أخبار الجزائر من الكاش المحمّل مسبقاً (فوري وسريع) ─────────
-    if ((newsQueryType === 'news' || newsQueryType === 'both') && !_isTechAIQuery) {
+    if (newsQueryType === 'news' || newsQueryType === 'both') {
       try {
         // triggerBackground = true: نجلب من الكاش مباشرة، ونجدد في الخلفية إذا قارب على الانتهاء
         const dzCached = DZ_NEWS_CACHE.get('dz_priority_all')
@@ -25158,288 +19263,101 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     }
 
-    // ── Cold-start news guard ───────────────────────────────────────────────
-    // Vercel instances have an empty in-memory cache on cold start. Without an
-    // AI key, never fall through to the multi-source/search pipeline: fetch a
-    // small, bounded RSS sample and return it (or a clear response) promptly.
-    if (_directNewsMode && !rssContext) {
-      // استخدم Google News السريع أولاً في التشغيل البارد. جلب كل المصادر
-      // المحلية ينتظر أبطأ RSS حتى 8 ثوانٍ، وكان ذلك يتجاوز المهلة
-      // ويُظهر رسالة فشل رغم توفر أخبار صالحة من Google News.
-      const _quickNewsPromise = _isTechAIQuery
-        ? fetchGNRSSArticles(TECH_FEEDS_DASHBOARD).then(items => {
-            if (items?.length) rssContext = buildGNRSSContext(items, '🤖 أخبار الذكاء الاصطناعي والتقنية')
-          })
-        : new Promise(resolve => {
-            // Google News and direct priority feeds must start together.
-            // Starting the second fetch only after an empty Google result meant
-            // the 9-second guard could expire before local RSS had a chance.
-            let pending = 2
-            const settle = () => {
-              pending -= 1
-              if (pending === 0) resolve()
-            }
-            fetchGNRSSArticles(GN_RSS_FEEDS.ar.slice(0, 3))
-              .then(items => {
-                if (items?.length && !rssContext) {
-                  rssContext = buildGNRSSContext(items, '📰 أخبار الجزائر المباشرة')
-                  resolve()
-                }
-              })
-              .catch(err => console.warn('[News Cold-Start] Google News:', err.message))
-              .finally(settle)
-            fetchDZPriorityNews({ force: true })
-              .then(data => {
-                if (data?.items?.length && !rssContext) {
-                  rssContext = buildDZNewsCachedContext(data)
-                  if (rssContext) resolve()
-                }
-              })
-              .catch(err => console.warn('[News Cold-Start] Priority RSS:', err.message))
-              .finally(settle)
-          })
-      await Promise.race([
-        _quickNewsPromise.catch(err => console.warn('[News Cold-Start]', err.message)),
-        new Promise(resolve => setTimeout(resolve, 9000)),
-      ])
-      if (rssContext) {
-        console.log(`[NoKey:News-ColdStart] Returning bounded RSS response (${rssContext.length} chars)`)
-        return res.status(200).json({
-          content: `${rssContext}\n\n---\n> ℹ️ تم جلب العناوين مباشرة من RSS لتفادي الانتظار.`,
-          status: 'rss_direct',
-        })
+    // ── TARGETED SEARCH: if a specific subject is detected, search GN-RSS for it directly ──
+    if (newsSubject) {
+      try {
+        const isArabic = /[\u0600-\u06FF]/.test(newsSubject)
+        const lang = isArabic ? 'ar' : 'en'
+        // Use fresh URL with after: operator (30 days) for targeted subject search
+        const targetedRssUrl = buildFreshGNRssUrl(newsSubject, lang, 30)
+        const targetedArticles = await searchGoogleNewsRSS(targetedRssUrl)
+        if (targetedArticles.length > 0) {
+          const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+          let targeted = `\n\n--- 🎯 أخبار خاصة بـ "${newsSubject}" — ${date} ---\n`
+          for (const art of targetedArticles.slice(0, 15)) {
+            const title = art.title || art.headline || ''
+            const url = art.link || art.url
+            const src = art.source || 'المصدر'
+            targeted += `• ${title}`
+            if (url) targeted += ` — [${src}](${url})`
+            targeted += '\n'
+          }
+          targeted += '\n---\n'
+          rssContext = targeted
+          console.log(`[DZ Agent] Targeted GN-RSS: ${targetedArticles.length} articles for "${newsSubject}"`)
+        }
+      } catch (err) {
+        console.error('[DZ Agent] Targeted GN-RSS search failed:', err.message)
       }
-      return res.status(200).json({
-        content: '## 📰 الأخبار\n\nتعذّر الوصول إلى مصادر الأخبار الآن. يرجى المحاولة بعد لحظات.',
-        status: 'news_unavailable',
-      })
-    }
-
-    // A warm cache is already a complete answer. Return before the general
-    // RSS/search/LLM pipeline, which can block on third-party providers.
-    if (_directNewsMode && rssContext) {
-      console.log(`[News Direct-Path] Returning RSS card before search/LLM (${rssContext.length} chars)`)
-      return res.status(200).json({
-        content: `${rssContext}\n\n---\n> ℹ️ تم جلب العناوين مباشرة من RSS لتفادي الانتظار.`,
-        status: 'rss_direct',
-      })
     }
 
     // ── GENERAL RSS FEEDS: fetch and filter by subject if one was detected ──
     let feedsToFetch = []
-    // ✅ FIX: لأخبار الذكاء الاصطناعي — إذا لم يكن في الكاش بيانات تقنية، ابنِ context أساسي فوري
-    if (_isTechAIQuery && !rssContext) {
-      // سيُبنى السياق من Google News RSS في الـ parallel block أدناه
-      // لكن نُعدّ placeholder لمنع skipSearch=false الذي يؤدي لـ CSE search بطيء
-      console.log('[DZ-AI-News] Tech/AI query detected — preparing for parallel RSS fetch')
-    }
-    const _isIntlNewsQ = isInternationalNewsQuery(lastUserMessage)
-    // ✅ FIX: تحقق من _isTechAIQuery قبل newsQueryType==='news' حتى تقنية الذكاء الاصطناعي
-    //         تستخدم TECH_FEEDS_DASHBOARD (ذكاء اصطناعي + تكنولوجيا) بدلاً من الصحف الجزائرية العامة
+    const _isTechAIQuery = /ذكاء\s*اصطناعي|نموذج\s*(?:ذكاء|لغوي)|أخبار\s*(?:تقنية|تقني|تكنولوجيا|ذكاء)|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
     if (newsQueryType === 'sports') feedsToFetch = RSS_FEEDS.sports
-    else if (_isIntlNewsQ) feedsToFetch = [...INTERNATIONAL_RSS_FEEDS, ...RSS_FEEDS.national.slice(-5)]
-    // ✅ FIX: لا تُضف الجرائد الوطنية للاستعلامات التقنية — تلوّث النتائج بأخبار محلية
-    else if (_isTechAIQuery) feedsToFetch = TECH_FEEDS_DASHBOARD
     else if (newsQueryType === 'news') feedsToFetch = RSS_FEEDS.national
+    else if (_isTechAIQuery) feedsToFetch = [...RSS_FEEDS.national]
     else feedsToFetch = [...RSS_FEEDS.national, ...RSS_FEEDS.sports]
 
-    // ── No-Key Cache Fast-Path ──────────────────────────────────────────────
-    // إذا الكاش جاهز ولا يوجد مفتاح Groq → تخطي جميع الجلبات الحية فوراً
-    // لا فائدة من جلب RSS إضافية إذا كان LLM لن يُعالجها على أي حال
-    const _noKeyRssSkip = (getGroqKeys().length === 0) && rssContext && rssContext.length > 500
-    if (_noKeyRssSkip) {
-      console.log(`[NoKey:RSS-Skip] No Groq key + cache ready (${rssContext.length}ch) — skipping live RSS fetches`)
-    }
-
-    // ✅ FIX: إذا لم يُستخرج newsSubject ولكن هذا استعلام تقني/ذكاء اصطناعي → اجعل الموضوع ضمنياً
-    // ══ Tech/AI + International GN-RSS — نجري جميع البحوث بالتوازي لتجنّب الانتظار المتسلسل ══
-    // ✅ FIX: كانت الطلبات متسلسلة (9+9 ثانية) → الآن متوازية (9 ثانية كحدّ أقصى للكل)
-    if (!_noKeyRssSkip) {
-      const _parallelRssPromises = []
-      const _parallelRssLabels  = []
-
-      // 0) Targeted subject search — ✅ FIX: كانت sequential await 9 ث → الآن داخل Promise.allSettled
-      // يشمل: "أخبار الجزائر" → newsSubject="الجزائر" / "ذكاء اصطناعي" → subject ضمني
-      if (newsSubject) {
-        const _tgIsArabic = /[\u0600-\u06FF]/.test(newsSubject)
-        const _tgLang = _tgIsArabic ? 'ar' : 'en'
-        const _tgRssUrl = buildFreshGNRssUrl(newsSubject, _tgLang, 30)
-        _parallelRssPromises.push(searchGoogleNewsRSS(_tgRssUrl))
-        _parallelRssLabels.push({ type: 'targeted', subject: newsSubject })
-      }
-
-      // 1) Tech/AI targeted search (forced subject)
-      if (_isTechAIQuery && !newsSubject) {
-        const _aiSubjectMatch = lastUserMessage.match(/(?:ذكاء\s*اصطناعي|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama)/i)
-        const _techForcedSubject = _aiSubjectMatch ? _aiSubjectMatch[0].trim() : 'ذكاء اصطناعي'
-        const _techLang = /[\u0600-\u06FF]/.test(lastUserMessage) ? 'ar' : 'en'
-        const _techRssUrl = buildFreshGNRssUrl(_techForcedSubject, _techLang, 30)
-        _parallelRssPromises.push(searchGoogleNewsRSS(_techRssUrl))
-        _parallelRssLabels.push({ type: 'tech-forced', subject: _techForcedSubject })
-      }
-
-      // 2) AI-specific augmentation (general AI news)
-      // ✅ FIX: gl=US دائماً لأخبار الذكاء الاصطناعي عالمية — السابق: DZ يقيّدها بالجزائر فقط
-      if (_isTechAIQuery) {
+    // For tech/AI queries, augment with AI-specific Google News RSS
+    if (_isTechAIQuery) {
+      try {
         const aiNewsLang = /[\u0600-\u06FF]/.test(lastUserMessage) ? 'ar' : 'en'
-        const aiQuery = aiNewsLang === 'ar' ? 'ذكاء اصطناعي نماذج أخبار 2026' : 'artificial intelligence AI models news 2026'
-        const aiRssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(aiQuery)}&hl=${aiNewsLang}&gl=US&ceid=${aiNewsLang === 'ar' ? 'US:ar' : 'US:en'}`
-        _parallelRssPromises.push(searchGoogleNewsRSS(aiRssUrl))
-        _parallelRssLabels.push({ type: 'ai-augment' })
-      }
-
-      // 3) International news
-      if (_isIntlNewsQ && !newsSubject) {
-        const intlQuery = encodeURIComponent('أبرز الأحداث الدولية اليوم عاجل')
-        const intlRssUrl = `https://news.google.com/rss/search?q=${intlQuery}&hl=ar&gl=DZ&ceid=DZ:ar&sort=date`
-        _parallelRssPromises.push(searchGoogleNewsRSS(intlRssUrl))
-        _parallelRssLabels.push({ type: 'intl' })
-      }
-
-      if (_parallelRssPromises.length > 0) {
-        // ✅ FIX: أضف timeout 8ث على كامل الـ block لمنع تجاوز Vercel 30ث
-        const _rssSettled = await Promise.allSettled(
-          _parallelRssPromises.map(p =>
-            Promise.race([p, new Promise(r => setTimeout(() => r({ status: 'rejected', reason: new Error('rss-timeout-8s') }), 8000))])
-          )
-        )
-        const _dateLabel = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-
-        for (let i = 0; i < _rssSettled.length; i++) {
-          const r = _rssSettled[i]
-          const lbl = _parallelRssLabels[i]
-          if (r.status !== 'fulfilled' || !r.value?.length) {
-            if (r.status === 'rejected') console.warn(`[DZ Agent] GN-RSS parallel (${lbl.type}) failed:`, r.reason?.message)
-            continue
+        const aiQuery = aiNewsLang === 'ar' ? 'ذكاء اصطناعي نماذج 2026' : 'artificial intelligence AI news 2026'
+        const aiRssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(aiQuery)}&hl=${aiNewsLang}&gl=${aiNewsLang === 'ar' ? 'DZ' : 'US'}&ceid=${aiNewsLang === 'ar' ? 'DZ:ar' : 'US:en'}`
+        const aiArticles = await searchGoogleNewsRSS(aiRssUrl)
+        if (aiArticles.length > 0) {
+          const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+          let aiCtx = `\n\n--- 🤖 أخبار الذكاء الاصطناعي والتقنية — ${date} ---\n`
+          for (const art of aiArticles.slice(0, 15)) {
+            const title = art.title || art.headline || ''
+            const url = art.link || art.url
+            const src = art.source || 'المصدر'
+            aiCtx += `• ${title}`
+            if (url) aiCtx += ` — [${src}](${url})`
+            aiCtx += '\n'
           }
-          const articles = r.value
-
-          // ✅ FIX: type='targeted' — نتيجة البحث المُدمَج من sequential إلى parallel
-          if (lbl.type === 'targeted') {
-            const _date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-            let ctx = `\n\n--- 🎯 أخبار خاصة بـ "${lbl.subject}" — ${_date} ---\n`
-            for (const art of articles.slice(0, 15)) {
-              const title = art.title || art.headline || ''
-              const url   = art.link || art.url
-              const src   = art.source || 'المصدر'
-              ctx += `• ${title}`
-              if (url) ctx += ` — [${src}](${url})`
-              ctx += '\n'
-            }
-            ctx += '\n---\n'
-            rssContext = ctx
-            console.log(`[DZ Agent] Targeted GN-RSS (parallel): ${articles.length} articles for "${lbl.subject}"`)
-
-          } else if (lbl.type === 'tech-forced') {
-            let ctx = `\n\n--- 🎯 أخبار ${lbl.subject} — ${_dateLabel} ---\n`
-            for (const art of articles.slice(0, 15)) {
-              const title = art.title || art.headline || ''
-              const url   = art.link || art.url
-              const src   = art.source || 'المصدر'
-              ctx += `• ${title}`
-              if (url) ctx += ` — [${src}](${url})`
-              ctx += '\n'
-            }
-            ctx += '\n---\n'
-            rssContext = ctx
-            console.log(`[DZ Agent] Tech/AI targeted GN-RSS: ${articles.length} articles for "${lbl.subject}"`)
-
-          } else if (lbl.type === 'ai-augment') {
-            let ctx = `\n\n--- 🤖 أخبار الذكاء الاصطناعي والتقنية — ${_dateLabel} ---\n`
-            for (const art of articles.slice(0, 15)) {
-              const title = art.title || art.headline || ''
-              const url   = art.link || art.url
-              const src   = art.source || 'المصدر'
-              ctx += `• ${title}`
-              if (url) ctx += ` — [${src}](${url})`
-              ctx += '\n'
-            }
-            ctx += '\n---\n'
-            rssContext = rssContext ? rssContext + ctx : ctx
-            console.log(`[DZ Agent] AI News RSS: ${articles.length} articles`)
-
-          } else if (lbl.type === 'intl') {
-            let ctx = `\n\n--- 🌍 أبرز الأحداث الدولية — ${_dateLabel} ---\n`
-            for (const art of articles.slice(0, 20)) {
-              const title   = art.title || ''
-              const url     = art.link || art.url || ''
-              const src     = art.source || ''
-              const rawDate = art.pubDate || art.date || ''
-              const ds      = rawDate ? ` (${new Date(rawDate).toLocaleDateString('ar-DZ',{day:'numeric',month:'short'})})` : ''
-              ctx += `• ${title}${ds}`
-              if (url) ctx += ` — [${src||'المصدر'}](${url})`
-              ctx += '\n'
-            }
-            ctx += '\n---\n'
-            rssContext = ctx + (rssContext ? '\n' + rssContext : '')
-            console.log(`[DZ-Intl] International news GN-RSS: ${articles.length} articles`)
-          }
+          aiCtx += '\n---\n'
+          rssContext = rssContext ? rssContext + aiCtx : aiCtx
+          console.log(`[DZ Agent] AI News RSS: ${aiArticles.length} articles`)
         }
+      } catch (err) {
+        console.warn('[DZ Agent] AI News RSS failed:', err.message)
       }
     }
 
-    if (!_noKeyRssSkip) {
-      // ✅ FIX: fetchMultipleFeeds + fetchGNRSSArticles بالتوازي (كانا sequential)
-      // كلاهما I/O — لا مانع من تشغيلهما معاً في Promise.allSettled
-      const _queryLangFeed = detectQueryLanguage(lastUserMessage)
-      const _gnFeedsForAug  = (!newsSubject && (newsQueryType === 'news' || newsQueryType === 'both'))
-        ? (GN_RSS_FEEDS[_queryLangFeed] || GN_RSS_FEEDS.ar)
-        : null
-      if (_gnFeedsForAug) refreshGNRSSInBackground(_gnFeedsForAug) // background — لا ننتظرها
-
-      const [_feedsResult, _gnResult] = await Promise.allSettled([
-        feedsToFetch.length > 0 ? fetchMultipleFeeds(feedsToFetch) : Promise.resolve([]),
-        _gnFeedsForAug ? fetchGNRSSArticles(_gnFeedsForAug) : Promise.resolve([]),
-      ])
-
-      const feedResults = _feedsResult.status === 'fulfilled' ? _feedsResult.value : []
-      if (feedResults.length > 0) {
-        const generalCtx = buildRSSContext(feedResults, newsQueryType, newsSubject)
-        if (generalCtx) {
-          rssContext = rssContext ? rssContext + generalCtx : generalCtx
-          console.log(`[DZ Agent] RSS fetched: ${feedResults.length} sources, context length: ${rssContext.length}`)
-        }
-      }
-
-      const gnArticles = _gnResult.status === 'fulfilled' ? _gnResult.value : []
-      if (gnArticles.length > 0) {
-        const gnCtx = buildGNRSSContext(gnArticles, '🌐 Google News RSS — أخبار حية')
-        rssContext = rssContext ? rssContext + gnCtx : gnCtx
-        console.log(`[GN-RSS] Augmented context with ${gnArticles.length} articles (lang=${_queryLangFeed})`)
+    const feedResults = await fetchMultipleFeeds(feedsToFetch)
+    if (feedResults.length > 0) {
+      // Pass newsSubject so buildRSSContext filters articles to only those mentioning the subject
+      const generalCtx = buildRSSContext(feedResults, newsQueryType, newsSubject)
+      if (generalCtx) {
+        rssContext = rssContext ? rssContext + generalCtx : generalCtx
+        console.log(`[DZ Agent] RSS fetched: ${feedResults.length} sources, context length: ${rssContext.length}`)
       }
     }
-  }
 
-  // ── Pre-retrieval direct responses ───────────────────────────────────────
-  // Avoid the expensive decision-tree/web-search stage when the specialized
-  // data path already has everything needed for the response.
-  if (isCurrencyQuery && !_isAgentMode && currencyResult?.status === 'fulfilled' && currencyResult.value?.rates) {
-    const _currencyDirect = currencyResult.value
-    console.log('[Currency Pre-Retrieval] Returning widget before web search')
-    return res.status(200).json({
-      content: '',
-      currencyData: {
-        rates: _currencyDirect.rates,
-        status: _currencyDirect.status || 'live',
-        provider: _currencyDirect.provider || 'fawazahmed0/currency-api',
-        last_update: _currencyDirect.last_update || new Date().toISOString(),
-      },
-      _bypassLLM: true,
-    })
-  }
-
-  if (!_isAgentMode && rssContext && rssContext.length > 200 && !isCurrencyQuery && !isJobsQuery(lastUserMessage) && !isProverbQuery(lastUserMessage) && getGroqKeys().length === 0) {
-    console.log(`[NoKey:RSS-PreRetrieval] Serving cached RSS directly (${rssContext.length} chars)`)
-    return res.status(200).json({
-      content: `${rssContext}\n\n---\n> 💡 **ملاحظة:** لتلقي إجابات مُلخَّصة وأكثر ذكاءً، أضف مفتاح \`AI_API_KEY\` (Groq — مجاني) في إعدادات المشروع.`,
-      status: 'rss_direct',
-    })
+    // ── GN-RSS ADD-ON: augment with general Google News RSS only when no specific subject ──
+    if (!newsSubject && (newsQueryType === 'news' || newsQueryType === 'both')) {
+      try {
+        const queryLang = detectQueryLanguage(lastUserMessage)
+        const gnFeeds = GN_RSS_FEEDS[queryLang] || GN_RSS_FEEDS.ar
+        // Hybrid Mode: serve from cache immediately, refresh in background if stale
+        refreshGNRSSInBackground(gnFeeds)
+        const gnArticles = await fetchGNRSSArticles(gnFeeds)
+        if (gnArticles.length > 0) {
+          const gnCtx = buildGNRSSContext(gnArticles, '🌐 Google News RSS — أخبار حية')
+          rssContext = rssContext ? rssContext + gnCtx : gnCtx
+          console.log(`[GN-RSS] Augmented context with ${gnArticles.length} articles (lang=${queryLang})`)
+        }
+      } catch (err) {
+        console.error('[GN-RSS] Chat augmentation failed:', err.message)
+      }
+    }
   }
 
   // ── Retrieval Engine: Google-First for all temporal/news/sports/economy queries ─
   let webSearchContext = ''
   let hasNewsResults = false
-  let _chatNewsItems = []
   const isSimpleGreeting = /^(مرحبا|سلام|هلا|hi|hello|hey|bonjour|salut|كيف حالك|كيف الحال)[\s!؟?]*$/i.test(lastUserMessage.trim())
   const msgIntent = detectQueryIntent(lastUserMessage)
   const isFootballNewsQuery = _isFootballNewsQuery
@@ -25464,12 +19382,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Match-Vs: PAST/UNKNOWN/LIVE يحتاج SearXNG — لا يُخطَأ بالمعلومات من الذاكرة
   const _matchVsNeedsSearch = _isMatchVsQuery &&
     (_matchVsData?.temporal === 'PAST' || _matchVsData?.temporal === 'UNKNOWN' || _matchVsData?.temporal === 'LIVE')
-  // ✅ FIX: تخطي البحث للأخبار العامة عندما يتوفر سياق RSS كافٍ — يوفّر 9 ثانية!
-  // الأخبار تأتي من RSS وليس CSE، والبحث يُضيف زمناً بلا قيمة مضافة
-  const _hasRichNewsCtx = !!newsQueryType && !_isTimeSensitiveEvent
-    && rssContext && rssContext.length > 300 && !newsQueryType.includes('sport')
-  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal && !_isTimeSensitiveEvent && !_matchVsNeedsSearch) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest || _isDirectFactual || isMapQuery(lastUserMessage) || _hasRichNewsCtx
-  if (_hasRichNewsCtx) console.log(`[News Fast-Path] ⚡ Skipping CSE/web search — RSS context is sufficient (${rssContext.length} chars)`)
+  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal && !_isTimeSensitiveEvent && !_matchVsNeedsSearch) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest || _isDirectFactual || isMapQuery(lastUserMessage)
 
   if (!skipSearch) {
     try {
@@ -25497,18 +19410,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
       console.log(`[DZ Retrieval] Query: "${_primarySearchQuery.slice(0,60)}" | intent=${msgIntent.primary} temporal=${msgIntent.isTemporal} timeSensitive=${_isTimeSensitiveEvent} eventType=${_timeSensitiveIntent.eventType}`)
 
-      // ── SearXNG موازٍ للأحداث الحساسة والأخبار الدولية ───────────────────────
-      // يُطلق في نفس الوقت مع CSE/GN لجلب نتائج حية
-      const _needsParallelSearXNG = (_allowSearXNG && _isTimeSensitiveEvent)
-        || (_isIntlNewsQ !== undefined ? _isIntlNewsQ : isInternationalNewsQuery(lastUserMessage))
-      const _parallelSearXNGPromise = _needsParallelSearXNG
+      // ── SearXNG موازٍ للأحداث الحساسة — يُطلق في نفس الوقت مع CSE/GN ────────
+      // الهدف: الحصول على نتائج حية قبل انتهاء CSE (لا انتظار كـ fallback)
+      const _parallelSearXNGPromise = (_allowSearXNG && _isTimeSensitiveEvent)
         ? searchSearXNG(_primarySearchQuery, { categories: 'news,general', timeoutMs: 7000, maxResults: 6 })
             .catch(e => { console.warn('[SearXNG Parallel] failed:', e.message); return [] })
         : Promise.resolve([])
 
       // Parallel: Google CSE + Google News RSS (always for temporal/news) + web fallback (always)
       // Note: searchWeb now includes Wikipedia API (free, no rate limits) + DDG — always useful
-      const _searchBlockStart = Date.now() // ✅ لقياس الوقت المُنقضي ومنع re-search إذا > 8 ث
       const [cseRes, gnRssRes, legacyRes] = await Promise.allSettled([
         searchGoogleCSE(cseQuery),
         (mustSearch || newsQueryType) ? searchGoogleNewsRSS(rssQuery) : Promise.resolve([]),
@@ -25547,9 +19457,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       })).sort((a, b) => b._score - a._score).slice(0, 8)
 
       // Staleness re-search: if mustSearch and ALL top results are > 14 days old, try broader query
-      // ✅ FIX: نتخطى re-search إذا استغرق البحث الأولي > 8 ث (نحتاج الهامش للـ LLM)
-      const _searchElapsedMs = Date.now() - _searchBlockStart
-      if (mustSearch && scoredResults.length > 0 && _searchElapsedMs < 8000) {
+      if (mustSearch && scoredResults.length > 0) {
         const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000
         const allStale = scoredResults.every(r => {
           const d = r.date || r.pubDate || r.publishedDate
@@ -25661,13 +19569,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         const lines = sections.length > 0 ? sections.join('\n\n') : temporallySorted.map((r, i) => formatResult(r, i+1)).join('\n\n')
         webSearchContext = `${sourceTag} | مرتبة زمنياً من الأحدث للأقدم\n\n${lines}`
         hasNewsResults = true
-        _chatNewsItems = temporallySorted.slice(0, 10).map(r => ({
-          title: (r.title || '').replace(/\s*[-–—]\s*[^-–—]+$/, '').trim() || r.title || '',
-          url: r.url || r.link || '',
-          date: r.date || r.pubDate || r.publishedDate || '',
-          source: r.source || '',
-          snippet: r.snippet || r.description || '',
-        })).filter(r => r.title && r.url)
         console.log(`[DZ Retrieval] Chat: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length} scored=${scoredResults.length} today=${buckets.today.length} week=${buckets.week.length} month=${buckets.month.length} older=${buckets.older.length}`)
       } else if (_allowSearXNG) {
         // ── SearXNG Fallback — للأخبار والأحداث الآنية فقط (أخبار/incidents) ──
@@ -25732,16 +19633,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   })() : ''
 
   const invocationInstruction = invocationMode === '@dz-gpt'
-    ? 'وضع الاستدعاء الحالي: @dz-gpt — أجب كمساعد DZ AGENT عام للشرح والكتابة والتفكير، بدون فرض قالب الأخبار إلا إذا كان السؤال حديثاً.'
+    ? 'وضع الاستدعاء الحالي: @dz-gpt — أجب كمساعد DZ GPT عام للشرح والكتابة والتفكير، بدون فرض قالب الأخبار إلا إذا كان السؤال حديثاً.'
     : invocationMode === '/github'
       ? 'وضع الاستدعاء الحالي: /github — ركّز على GitHub والكود والمستودعات والإجراءات البرمجية.'
       : 'وضع الاستدعاء الحالي: @dz-agent — ركّز على البحث الحي والخدمات الجزائرية وGitHub عند الحاجة.'
 
-  const _yearNow    = getCurrentYear()
-  const _seasonNow  = getCurrentSeasonAr()
+  const _yearNow = getCurrentYear()
   const _todayHuman = getCurrentDateString('ar-DZ')
-  const _hijriDate  = getHijriDateString()
-  const _timeNow    = getCurrentTimeString()
+  const _hijriDate = getHijriDateString()
+  const _timeNow = getCurrentTimeString()
   const _qType = queryAnalysis?.questionType || 'general'
   const _isCode      = ['code'].includes(_qType) || !!githubToken
   const _isEdu       = _qType === 'education'
@@ -25830,8 +19730,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       !_clarificationBypass &&
       !_layer1CurrencyBypass &&
       !_layer1WebBypass &&
-      !isJobsQuery(lastUserMessage) &&
-      !isProverbQuery(lastUserMessage) &&
       _intentClassification.needsClarification &&
       _intentClassification.clarificationMsg &&
       _intentClassification.confidence < 40 &&
@@ -25876,26 +19774,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       _intentAction === 'lookup-wikidata-wikipedia'  ? 'PUBLIC_FIGURE' :
       classifyQuery(lastUserMessage)
     )
-    // ══════════════════════════════════════════════════════════════════════
-    // 🧭 DZ SEARCH ROUTER — قرار SEARCH/NO_SEARCH + استخراج موضوع البحث
-    // يجب استدعاؤه قبل isRealtimeQuery لأنه يُحسّن الاستعلام المُرسَل لـ SearXNG
-    // ══════════════════════════════════════════════════════════════════════
-    let _searchRouterResult = null
-    let _optimizedSearchQuery = lastUserMessage
-    if (!_isWikiIntent && !isEntityDefinitionQuery(lastUserMessage)) {
-      try {
-        _searchRouterResult = dzSearchRouter(lastUserMessage)
-        if (_searchRouterResult.decision === 'SEARCH') {
-          _optimizedSearchQuery = _searchRouterResult.searchQuery || lastUserMessage
-        }
-      } catch (_sre) {
-        console.warn('[SearchRouter] failed silently:', _sre.message)
-      }
-    }
-
-    // إذا كان Intent Router يُشير لـ Wiki، أو كان السؤال تعريف كيان → لا نستخدم isRealtimeQuery
-    const _isRealtime = (_isWikiIntent || isEntityDefinitionQuery(lastUserMessage)) ? false :
-      (_searchRouterResult?.decision === 'SEARCH') || isRealtimeQuery(lastUserMessage)
+    // إذا كان Intent Router يُشير لـ Wiki → لا نستخدم isRealtimeQuery
+    const _isRealtime = _isWikiIntent ? false : isRealtimeQuery(lastUserMessage)
 
     // Decision Tree: شخصيات عامة/تاريخية/أحداث → يستخدم الـ chain الكامل
     if (['HISTORICAL_FIGURE', 'PUBLIC_FIGURE', 'HISTORICAL_EVENT', 'CURRENT_NEWS',
@@ -25919,39 +19799,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
 
     // Real-Time Search: للأخبار والمباريات والأحداث اللحظية
-    // يستخدم _optimizedSearchQuery (موضوع مستخرج) بدلاً من lastUserMessage الكامل
     if (_isRealtime && !_decisionTreeContext) {
-      const _routerCategory = _searchRouterResult?.category || 'news'
-      console.log(`[RealtimeSearch] 🔍 triggered | category=${_routerCategory} | topic="${_optimizedSearchQuery.slice(0, 60)}"`)
-      _realtimeContext = await fetchRealtimeContext(lastUserMessage, _optimizedSearchQuery) || ''
+      console.log(`[RealtimeSearch] 🔍 triggered for: "${lastUserMessage.slice(0, 60)}"`)
+      _realtimeContext = await fetchRealtimeContext(lastUserMessage) || ''
       if (_realtimeContext) console.log(`[RealtimeSearch] ✅ context injected (${_realtimeContext.length} chars)`)
     } else if (_isRealtime && _decisionTreeContext) {
       console.log(`[RealtimeSearch] ⏭ Skipped — Decision Tree already provided context`)
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // 📚 KNOWLEDGE SEARCH — البحث المعرفي التلقائي
-    // يُشغَّل عندما يسأل المستخدم عن مفهوم/نظام/موضوع لا يوجد في أي KB
-    // ولم يُعالَج بالبحث الحي أو Decision Tree.
-    // مثال: "ما هو نظام الطيبات" / "اشرح نظام البنوك" / "what is quantum computing"
-    // ══════════════════════════════════════════════════════════════════════
-    if (!_decisionTreeContext && !_realtimeContext && !_isGreetingIntent) {
-      const _needsKnowledge = _isDefinitionQ(lastUserMessage)
-      if (_needsKnowledge) {
-        const _kTopic = _extractTopicQ(lastUserMessage)
-        console.log(`[KnowledgeSearch] 📚 Auto-triggered | topic="${_kTopic}" | "${lastUserMessage.slice(0,60)}"`)
-        try {
-          const _kCtx = await _fetchDefinitionCtx(lastUserMessage)
-          if (_kCtx && _kCtx.length > 100) {
-            _realtimeContext = _kCtx
-            console.log(`[KnowledgeSearch] ✅ Wikipedia context injected (${_kCtx.length} chars)`)
-          } else {
-            console.log(`[KnowledgeSearch] ✗ No Wikipedia results for "${_kTopic}"`)
-          }
-        } catch (_ke) {
-          console.warn('[KnowledgeSearch] failed silently:', _ke.message?.slice(0, 80))
-        }
-      }
     }
     } // end else (_isGreetingIntent)
   } catch (_rse) {
@@ -25961,27 +19814,21 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Economy System Prompt Layer ───────────────────────────────────────────
   let _economySystemLayer = ''
   if (_economyIntent?.isEconomy && _economyContext) {
-    const _econModeLabel = {
-      live_news: 'أخبار اقتصادية حية (مصنّفة: عاجل / اليوم / الأسبوع)',
-      events:    'أحداث اقتصادية (ملتقيات · مؤتمرات · معارض)',
-      wiki_data: 'بيانات هيكلية Wikipedia + Wikidata',
-    }[_economyIntent.mode] || 'بيانات اقتصادية'
+    const _econMode = _economyIntent.mode === 'live_news' ? 'أخبار اقتصادية حية' : 'بيانات هيكلية Wikipedia+Wikidata'
     _economySystemLayer = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔴 قواعد الاقتصاد الإلزامية — يُحظر تجاوزها:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-نوع البيانات المُحقنة: ${_econModeLabel}
-1. استخدم فقط البيانات المُحقنة أدناه — لا مصدر آخر.
-2. ❌ يُحظر الاعتماد على بيانات التدريب للأرقام الاقتصادية — قد تكون قديمة بسنوات.
-3. 📊 رتّب الأخبار دائماً: 🔴 عاجل أولاً ← 📰 اليوم ← 📅 الأسبوع.
-4. 🇩🇿 الإجابة بالعربية دائماً حتى لو السؤال بالفرنسية أو الإنجليزية.
-5. اذكر المصدر + الوقت (منذ X ساعة / يوم) لكل خبر أو رقم.
-6. إذا لم تجد بيانات محددة → قل "لا أملك بيانات حديثة موثقة" — لا تخترع أرقاماً.
-7. للأخبار: عنوان الخبر + المصدر + الوقت فقط — بدون تحليل إضافي ما لم يُطلب.
+1. استخدم فقط البيانات المُحقنة أدناه (${_econMode}).
+2. ❌ يُحظر تماماً الاعتماد على بيانات التدريب (مثل "230 مليار دولار") — قد تكون قديمة.
+3. 📊 رتّب النتائج دائماً من الأحدث إلى الأقدم.
+4. 🇩🇿 الإجابة دائماً بالعربية حتى لو السؤال بلغة أخرى.
+5. اذكر دائماً تاريخ/مصدر كل رقم أو إحصاء.
+6. إذا لم تجد بيانات محددة في السياق → قل "لا أملك بيانات حديثة موثقة" بدل اختراع أرقام.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
   } else if (_economyIntent?.isEconomy && !_economyContext) {
     _economySystemLayer = `
-⚠️ تنبيه اقتصادي: البيانات الاقتصادية الحديثة غير متاحة الآن. أبلغ المستخدم بذلك واقترح مصادر موثوقة: ONS الجزائر (ons.dz)، البنك الدولي، صندوق النقد الدولي، وكالة APS (aps.dz).`
+⚠️ تنبيه اقتصادي: أُبلغ المستخدم أن البيانات الاقتصادية الحديثة غير متاحة الآن، وأن المعلومات قد تكون غير محدثة. اقترح عليه مصادر موثوقة (ONS الجزائر، البنك الدولي، Statista).`
   }
 
   // ── Force Arabic for economy + news queries ────────────────────────────────
@@ -25989,176 +19836,26 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     ? `\n⚠️ قاعدة اللغة للاقتصاد والأخبار: أجب دائماً بالعربية — حتى لو السؤال بالفرنسية أو الإنجليزية.`
     : ''
 
-  // ══════════════════════════════════════════════════════════════════════
-  // 🧠 MULTI-INTENT ENGINE — تحليل النوايا المتعددة قبل استدعاء LLM
-  // يكتشف الأسئلة والمهام المتعددة في رسالة واحدة ويبني طبقة system prompt
-  // خاصة تضمن الإجابة عن كل سؤال بدون تجاهل أي منها
-  // ══════════════════════════════════════════════════════════════════════
-  const _multiIntentAnalysis = analyzeMultiIntent(lastUserMessage)
-  const _multiIntentLayer    = buildMultiIntentSystemLayer(_multiIntentAnalysis)
-  logMultiIntentAnalysis(_multiIntentAnalysis)
-  // ══════════════════════════════════════════════════════════════════════
-  const _dzKBLayer = getDZKBContext(lastUserMessage)
-
-  // ── DZ Jobs & Concours Intent (معزول — بحث حي مستقل) ──────────────
-  let _jobsSystemLayer = ''
-  let _jobsSearchContext = ''
-  const _isJobsQuery = isJobsQuery(lastUserMessage)
-  if (_isJobsQuery) {
-    try {
-      console.log('[DZ-Jobs] Jobs/Concours intent detected — starting live search (11 sources)')
-      const jobsQueries = buildJobsSearchQueries(lastUserMessage)
-      const { isConcours, isPrivate } = classifyJobQuery(lastUserMessage)
-      console.log(`[DZ-Jobs] Queries: ${jobsQueries.map(q => `"${q.slice(0,50)}"`).join(' | ')} | isConcours=${isConcours} isPrivate=${isPrivate}`)
-
-      // ── بحث متوازٍ: SearXNG (عام) + Direct Scrapers (11 موقع) ──────────
-      const [searxR1, searxR2, scrapedResults] = await Promise.allSettled([
-        searchSearXNG(jobsQueries[0], { categories: 'general', language: 'ar', maxResults: 6, timeoutMs: 8000 }),
-        jobsQueries[1]
-          ? searchSearXNG(jobsQueries[1], { categories: 'general', language: 'fr', maxResults: 5, timeoutMs: 7000 })
-          : Promise.resolve([]),
-        searchDZJobsAllSources(lastUserMessage, { isConcours, isPrivate }),
-      ])
-
-      const fromSearX = [
-        ...(searxR1.status === 'fulfilled' && searxR1.value ? searxR1.value : []),
-        ...(searxR2.status === 'fulfilled' && searxR2.value ? searxR2.value : []),
-      ]
-      const fromScrapers = scrapedResults.status === 'fulfilled' ? (scrapedResults.value || []) : []
-
-      // دمج: المصادر المباشرة أولاً (أكثر دقة) ثم نتائج SearXNG
-      const combined = [...fromScrapers, ...fromSearX]
-
-      // إزالة التكرار بالـ URL
-      const seen = new Set()
-      const unique = combined.filter(r => {
-        const key = (r.url || r.title || '').toLowerCase().slice(0, 120)
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
-
-      console.log(`[DZ-Jobs] Results: scrapers=${fromScrapers.length} searx=${fromSearX.length} unique=${unique.length}`)
-      _jobsSystemLayer = DZ_JOBS_SYSTEM_LAYER
-      _jobsSearchContext = formatJobsSearchContext(unique, lastUserMessage)
-    } catch (jobsErr) {
-      console.warn('[DZ-Jobs] Search error:', jobsErr.message)
-      _jobsSystemLayer = DZ_JOBS_SYSTEM_LAYER
-      _jobsSearchContext = formatJobsSearchContext([], lastUserMessage)
-    }
-  }
-  // ── IMAGE SEARCH — guardrail: إعادة كتابة _intentBlock لضمان IMAGE_SEARCH ──────────
-  // يضمن أن طلبات الصور لا تذهب لمحرك الأخبار أو التاريخ النصي
-  if (isImageSearchQuery(lastUserMessage) && !_isJobsQuery) {
-    _intentBlock = [
-      `[PIPELINE_GATE — المسار الإلزامي السبع مراحل]`,
-      `✅ المرحلة ① فهم النية       → مكتملة (النية: IMAGE_SEARCH | الثقة: 95%)`,
-      `✅ المرحلة ② تحديد الكيان   → مكتملة`,
-      `✅ المرحلة ③ قرار البحث     → مكتملة (الإجراء: search-images-pinterest-wikimedia)`,
-      `✅ المرحلة ④ اختيار المصدر  → مكتملة (المصدر: Pinterest + Wikimedia Commons + DuckDuckGo)`,
-      `⏳ المرحلة ⑤ → اعرض الصور الواردة في النتائج`,
-      `⏳ المرحلة ⑥ → تنسيق: صورة + عنوان + مصدر + رابط لكل نتيجة`,
-      `⏳ المرحلة ⑦ → تأكد: لا نص موسوعي — الهدف صور فقط`,
-      `[/PIPELINE_GATE]`,
-      ``,
-      `[INTENT_CLASSIFICATION]`,
-      `النية: IMAGE_SEARCH | الثقة: 95% | الإجراء: search-images-pinterest-wikimedia`,
-      `المصدر المُوصى به: Pinterest + Wikimedia Commons + DuckDuckGo Images`,
-      ``,
-      `🖼️ [IMAGE_SEARCH_INTENT — ACTIVE]`,
-      `⛔ هذا طلب صور حقيقية — ليس طلب أخبار ولا نص موسوعي:`,
-      `  ① ❌ ممنوع البحث في الأخبار أو الويكيبيديا كنص — المطلوب صور`,
-      `  ② ✅ المصادر: Pinterest + Wikimedia Commons + DuckDuckGo Images`,
-      `  ③ ✅ الصور التاريخية/النادرة → Pinterest لديه أرشيف ضخم من الصور النادرة`,
-      `  ④ ✅ اعرض كل صورة: عنوان + رابط الصورة + المصدر`,
-      `  ⑤ ❌ ممنوع تحويل الطلب لإجابة نصية موسوعية — الهدف عرض الصور`,
-      `[/IMAGE_SEARCH_INTENT]`,
-      `[/INTENT_CLASSIFICATION]`,
-    ].join('\n')
-  }
-  // ──────────────────────────────────────────────────────────────────────────────
-
-  // ── JOBS/CONCOURS — guardrail: إعادة كتابة _intentBlock لضمان JOBS_CONCOURS ──────
-  // يضمن أن [INTENT_CLASSIFICATION] المُحقن في system prompt يعكس النية الصحيحة
-  // حتى لو أخفق Intent Router (طبقة أمان إضافية — لا تتعارض مع الطبقات الأخرى)
-  if (_isJobsQuery) {
-    _intentBlock = [
-      `[PIPELINE_GATE — المسار الإلزامي السبع مراحل]`,
-      `✅ المرحلة ① فهم النية       → مكتملة (النية: JOBS_CONCOURS | الثقة: 97%)`,
-      `✅ المرحلة ② تحديد الكيان   → مكتملة`,
-      `✅ المرحلة ③ قرار البحث     → مكتملة (الإجراء: search-jobs-concours-live)`,
-      `✅ المرحلة ④ اختيار المصدر  → مكتملة (المصدر: jobs-concours-live-search)`,
-      `⏳ المرحلة ⑤ التحقق من الدليل → اقرأ [DZ_JOBS_SEARCH_RESULTS] أسفله — إلزامي`,
-      `⏳ المرحلة ⑥ صياغة الجواب   → اعرض نتائج [DZ_JOBS_SEARCH_RESULTS] كبطاقات منظّمة`,
-      `⏳ المرحلة ⑦ المراجعة الذاتية → تأكد: لا معلومة من بيانات التدريب`,
-      `[/PIPELINE_GATE]`,
-      ``,
-      `[INTENT_CLASSIFICATION]`,
-      `النية: JOBS_CONCOURS | الثقة: 97% | الإجراء: search-jobs-concours-live`,
-      `المصدر المُوصى به: jobs-concours-live-search`,
-      ``,
-      `🚨 [DZ_JOBS_CONCOURS_INTENT — ACTIVE]`,
-      `⛔ هذا طلب وظائف أو مسابقات — القواعد التالية غير قابلة للتجاوز:`,
-      `  ① ❌ ممنوع منعاً باتاً الإجابة من بيانات التدريب — الوظائف تتغير يومياً`,
-      `  ② ✅ اقرأ [DZ_JOBS_SEARCH_RESULTS] الموجود أسفله واعرضه كبطاقات منظّمة`,
-      `  ③ ✅ إذا كانت النتائج فارغة → اقترح فقط: concours.mfp.gov.dz | anem.dz | emploitic.com`,
-      `  ④ ❌ قاعدة "ما هو X = إجابة مباشرة" لا تنطبق هنا — انتظر [DZ_JOBS_SEARCH_RESULTS]`,
-      `[/DZ_JOBS_CONCOURS_INTENT]`,
-      `[/INTENT_CLASSIFICATION]`,
-    ].join('\n')
-  }
-  // ────────────────────────────────────────────────────────────────────────────
-
   const systemPrompt = [
-    // ── LAYER -2: JOBS/CONCOURS MANDATORY OVERRIDE (يأتي أولاً — يتغلب على كل شيء) ──
-    // يُحقن فقط عند كشف نية الوظائف/المسابقات — يمنع LLM من الإجابة من ذاكرته الداخلية
-    _isJobsQuery ? `🚨 OVERRIDE MANDATORY — DZ_JOBS_CONCOURS_INTENT 🚨
-⛔ هذا طلب وظائف أو مسابقات. القواعد التالية تُبطل كل قاعدة أخرى في هذا الـ prompt:
-① ممنوع منعاً باتاً الإجابة من بيانات تدريبك الداخلية — بيانات الوظائف تنتهي صلاحيتها يومياً
-② يجب قراءة [DZ_JOBS_SEARCH_RESULTS] الموجود في هذا الـ prompt والإجابة منه حصراً
-③ قاعدة "ما هو X / ما هي X = إجابة مباشرة" لا تنطبق هنا — اقرأ نتائج البحث أولاً
-④ إذا كانت [DZ_JOBS_SEARCH_RESULTS] فارغة → اقترح المصادر الرسمية ولا تخترع بيانات أبداً` : '',
-    // ── LAYER -1: MULTI-INTENT OVERRIDE (يأتي أولاً لضمان الإجابة عن كل سؤال) ─
-    _multiIntentLayer || '',
     // ── LAYER 0: INTENT SEPARATION GUARD (mandatory — always first) ───────
     INTENT_SEPARATION_GUARD,
-    // ── LAYER 0-A: DEVELOPER LOCK (حماية هوية المطور + هرمية التعليمات) ──
-    DEVELOPER_LOCK_LAYER,
-    // ── LAYER 0-B: ADVANCED INJECTION GUARD (درع حقن البرومبت المتقدم) ──
-    ADVANCED_INJECTION_GUARD,
     // ── LAYER 0.5: 7-STAGE MANDATORY PIPELINE (إلزامي على كل النماذج) ────
     SEVEN_STAGE_MANDATORY_PIPELINE,
     // ── LAYER 1: INTENT CLASSIFIER POLICY (القاعدة الذهبية — صنّف أولاً) ──
     INTENT_CLASSIFIER_POLICY,
     // ── LAYER 1b: INTENT CLASSIFICATION RESULT (نتيجة التصنيف الفعلي) ─────
     _intentBlock || '',
-    // ── LAYER 1c: SPORTS AGENT ORCHESTRATOR (إلزامي للاستعلامات الرياضية) ──
-    (_isSports || isGeneralMatchesQuery || isDZDialectFootballQuery || _isMatchVsQuery || isGlobalLeaguesQuery || isLFPQuery || isStandingsQuery || isFootballQuery)
-      ? SPORTS_AGENT_ORCHESTRATOR_POLICY
-      : '',
     // ── LAYER 2: COGNITIVE BEHAVIOR RULES (قواعد السلوك المعرفي — إلزامية) ─
     COGNITIVE_BEHAVIOR_RULES,
-    // ── LAYER 2b: ALGERIAN KNOWLEDGE BASE (معلومات جزائرية موثوقة) ─────────
-    _dzKBLayer || '',
     // ── LAYER 17: PUBLIC FIGURES & HISTORICAL EVENTS VERIFICATION POLICY ──
     PUBLIC_FIGURES_VERIFICATION_POLICY,
     // ── LAYER 18: SEARCH & KNOWLEDGE ARCHITECTURE (SearXNG Edition) ───────
     SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY,
-    // ── LAYER C: SERVICES GUIDE (دليل الخدمات + برومبتات لكل خدمة) ────────
-    SERVICES_GUIDE_LAYER,
     // ── ADVANCED REASONING CORE ───────────────────────────────────────────
     DZ_ADVANCED_REASONING_PROMPT,
     // ── CORE (always) ─────────────────────────────────────────────────────
     `أنت DZ Agent 🇩🇿 — وكيل ذكاء اصطناعي متعدد الوكلاء أنشأه Nadir Houamria (Nadir Infograph) — منصة DZ-GPT.`,
-    `اليوم: ${_todayHuman} | الوقت الحالي: ${_timeNow} (توقيت الجزائر) | التاريخ الهجري: ${_hijriDate} | السنة الحالية: ${_yearNow} (عام ${_yearNow}) | الفصل الحالي: ${_seasonNow} | ${invocationInstruction}`,
-    `⏰ وعيك الزمني الإلزامي: أنت تعمل في عام ${_yearNow}. الوقت الحالي الآن هو ${_seasonNow} من عام ${_yearNow}. أي سؤال عن "الآن" أو "اليوم" أو "هذه السنة" أو "الفصل الحالي" → أجب بناءً على هذه المعطيات الحقيقية. لا تستخدم تاريخاً من بيانات تدريبك إذا تعارض مع هذا التاريخ الحقيقي.`,
-    `🗣️ تعلّم الدارجة الجزائرية المستمر (إلزامي):
-أنت تتعلم وتتطور باستمرار لفهم اللهجة الجزائرية (الدارجة). عندما يكتب المستخدم بالدارجة:
-① افهم المعنى حتى لو لم تعرف الكلمة تحديداً — استنبط من السياق
-② أجب بنفس أسلوبه (دارجة إذا كتب دارجة، فصحى إذا كتب فصحى)
-③ إذا صادفت كلمة دارجة جديدة → تعلّمها وخزّنها في ذاكرتك للمحادثات القادمة
-④ الكلمات الدارجة الشائعة التي تعرفها: واش (هل/ماذا) | بزاف (كثيراً) | كاين/ماكاينش (يوجد/لا يوجد) | طاح (سقط) | ولاّ (أو/أصبح) | نتا/نتي (أنت) | حنا/إحنا (نحن) | هاك/هاكا (هذا) | حانوت (دكان) | حنكورة (طماطم) | شنو/واش (ما/ماذا) | عندي/معندكش (عندي/ليس عندك) | راهو/راهي (هو/هي الآن) | نروح (أذهب) | جاء (أتى)
-⑤ إذا لم تفهم كلمة دارجة → اسأل المستخدم عن معناها بأسلوب ودود واحفظها`,
+    `اليوم: ${_todayHuman} | الوقت الحالي: ${_timeNow} (توقيت الجزائر) | التاريخ الهجري: ${_hijriDate} | السنة: ${_yearNow} | ${invocationInstruction}`,
     `⚠️ قاعدة اللغة الإلزامية (صارمة جداً): أجب دائماً بنفس لغة المستخدم فقط. إذا كتب بالعربية → أجب بالعربية الفصحى أو الدارجة الجزائرية حصراً. إذا كتب بالفرنسية → أجب بالفرنسية. إذا كتب بالإنجليزية → أجب بالإنجليزية. ❌ يُحظر تماماً وبشكل مطلق إدراج أي كلمة أو مقطع بالفيتنامية أو الصينية أو اليابانية أو الكورية أو التايلاندية أو الهندية أو الإندونيسية أو الملايوية أو البرتغالية أو الروسية أو أي لغة أخرى غير مطلوبة — حتى كلمة واحدة. ❌ لا تستبدل كلمة عربية بمرادفها في لغة أجنبية مهما كان السبب. إذا كانت لغة المستخدم غير واضحة → استخدم العربية الفصحى. لا استثناءات.`,
     // ── SELF-AWARENESS (يُجيب إذا سأل المستخدم عن هويتك/مهاراتك/تقنياتك) ──
     `إذا سأل المستخدم عن نفسك (من أنت / كم وكيل تستخدم / ما مهاراتك / ما تقنياتك / ما قدراتك) أجب بهذا دون كشف أسماء المزودين أو مفاتيح API:
@@ -26200,8 +19897,8 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
 ⑬ 👤 الأشخاص المجهولون: "أبو مامي / أبو مامد / شخصية لا تجدها في مصادرك" → قُل مباشرةً: "لا أعرف هذا الشخص ولا أملك معلومات موثوقة عنه." — ممنوع اختراع هوية أو منصب لشخص مجهول.
 ⑭ ❓ أسئلة القيمة الرأسمالية/الرأي: "من هو أفضل رئيس / أفضل لاعب في التاريخ" → هذه آراء وليست حقائق. أجب: "هذا سؤال رأي — لا توجد إجابة موضوعية واحدة."`,
     `🟢 استثناء صريح — بيانات ثابتة (لا تطبّق عليها قواعد المصادر الخارجية أبداً):
-① معلومات المطور: Nadir Houamria / نذير حوامرية / Nadir Infograph / DZ AGENT — بيانات ثابتة ومحقونة مسبقاً، صحيحة 100%. أجب عنها بثقة تامة فورياً دون أي تحذير ⚠️ ودون طلب مصدر خارجي.
-   أسئلة المطور تشمل: "ما هو DZ AGENT" | "شكون أنت" | "شكون طورك" | "شكون خدمك" | "من هو مطورك" | "من صنعك" | "شكون نذير حوامرية" | "خدمك شكون" | "صنعك شكون" → الإجابة دائماً: DZ AGENT صنعه Nadir Houamria (نذير حوامرية) — Nadir Infograph — منصة DZ AGENT 🇩🇿
+① معلومات المطور: Nadir Houamria / نذير حوامرية / Nadir Infograph / DZ-GPT / DZ Agent — بيانات ثابتة ومحقونة مسبقاً، صحيحة 100%. أجب عنها بثقة تامة فورياً دون أي تحذير ⚠️ ودون طلب مصدر خارجي.
+   أسئلة المطور تشمل: "ما هو DZ Agent" | "شكون أنت" | "شكون طورك" | "شكون خدمك" | "من هو مطورك" | "من صنعك" | "شكون نذير حوامرية" | "خدمك شكون" | "صنعك شكون" → الإجابة دائماً: DZ Agent صنعه Nadir Houamria (نذير حوامرية) — Nadir Infograph — منصة DZ-GPT 🇩🇿
 ② الحقائق الثابتة (عواصم، تواريخ تأسيس، جغرافيا، تعريفات، شخصيات تاريخية راسخة كالأمير عبد القادر وهواري بومدين ونيلسون مانديلا...): أجب مباشرةً من معرفتك بدون تحذير.
 
 🔴 FIX-③ — استثناءات مُقيّدة صارمة (ليست حقائق ثابتة — تتطلب مصدراً دائماً):
@@ -26229,7 +19926,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
 
 لكل الأشخاص الآخرين — عدا المطور: لا تُجب عن معلومات شخص حقيقي (رياضي، سياسي، فنان، وزير، مسؤول...) من معرفتك الداخلية وحدها. يُشترط وجود [WIKIPEDIA_CONTEXT] أو [PERSON_WEB_CONTEXT] أو بيانات حية. إذا لم يُحقن أي سياق → ✅ قُل: "لم أجد معلومات مؤكدة عن هذه الشخصية."`,
     `🏆 قاعدة الترتيبات الرياضية (صارمة): إذا سُئلت عن "من يتصدر الدوري" أو "الترتيب الحالي" ولم يكن هناك [LFP_CONTEXT] أو [STANDINGS_CONTEXT] محقون → ❌ لا تُجب من معرفتك الداخلية → ✅ قُل "لا أملك بيانات الترتيب الحالية — يمكنك التحقق على [LFP](https://lfp.dz) أو [SofaScore](https://www.sofascore.com)".`,
-    `🎯 قاعدة نسب المصادر: عند الإجابة بمعلومات حساسة (شخصيات، أحداث، إحصاءات)، أشر إلى المصدر: (📚 ويكيبيديا) أو (📰 Google News) أو (🔍 بحث حي) أو (📊 LFP/SofaScore) أو (⚡ حقيقة ثابتة). ⚠️ استثناء صريح: معلومات المطور Nadir Houamria ومنصة DZ AGENT لا تحتاج مصدراً خارجياً — هي بيانات ثابتة محقونة.`,
+    `🎯 قاعدة نسب المصادر: عند الإجابة بمعلومات حساسة (شخصيات، أحداث، إحصاءات)، أشر إلى المصدر: (📚 ويكيبيديا) أو (📰 Google News) أو (🔍 بحث حي) أو (📊 LFP/SofaScore) أو (⚡ حقيقة ثابتة). ⚠️ استثناء صريح: معلومات المطور Nadir Houamria ومنصة DZ-GPT لا تحتاج مصدراً خارجياً — هي بيانات ثابتة محقونة.`,
     `روابط: ادمج الرابط في اسم المصدر فقط [اسم](url) — لا تكتب URL خاماً كنص أبداً. مثال الصحيح: [الخبر](https://elkhabar.com/...) | مثال خاطئ: https://elkhabar.com/... استخدم Markdown. أجب بلغة المستخدم (عربية/فرنسية/إنجليزية).`,
     queryAnalysis?.suggestions?.length
       ? `اقتراحات المتابعة (أضفها في نهاية إجابتك كـ "💡 قد يهمك أيضاً:"): ${queryAnalysis.suggestions.join(' / ')}`
@@ -26350,15 +20047,10 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 1500)}\n> انسخ الجدول أعلاه كما هو. لا تخترع أرقاماً.` : '',
     rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 7000)}\n> ⚠️ قواعد عرض الأخبار (إلزامية):\n> 1. ابدأ مباشرةً بأول مصدر — بدون مقدمة ولا "راني نخمم"\n> 2. رتّب حسب المصدر: **اسم الصحيفة:** ثم 5 أخبار على الأقل لكل مصدر\n> 3. عناوين الأخبار فقط — بدون روابط ولا URLs ولا markdown links\n> 4. في نهاية الإجابة: 💡 قد يهمك أيضاً: 📰 رياضية / 💰 اقتصادية / 🌍 دولية\n> 5. لا تخترع أي معلومة${_economyIntent?.isEconomy ? '\n> 💡 اقتصاد: لا تستخدم أرقام بيانات التدريب — هذه الأخبار أحدث وأدق.' : ''}` : '',
     webSearchContext ? `🔍 نتائج البحث الحي:\n${_trim(webSearchContext, 3000)}\n> هذا مصدرك الوحيد للمعلومات الآنية. لا تخترع. [اسم](رابط) فقط.` : '',
-    // ── DZ Jobs Intent (معزول) ──────────────────────────────────────────
-    _jobsSystemLayer || '',
-    _jobsSearchContext ? `\n${_jobsSearchContext}` : '',
-    // ────────────────────────────────────────────────────────────────────
     weatherPriorityContext ? `🌤️ بيانات الطقس (جدول جاهز للعرض — لا تعيد صياغته):\n${_trim(weatherPriorityContext, 600)}\n> ابدأ إجابتك بهذا الجدول مباشرةً. لا تضف أي عناوين قبله. اذكر المصدر في آخر سطر فقط.` : '',
     educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',
     clientBehaviorContext ? `🧠 سياق المستخدم: ${clientBehaviorContext}` : '',
     dzLanguageContext ? `🗣️ ${dzLanguageContext}` : '',
-    _dialectColoringBlock || '',
     // ── موقع المستخدم الجغرافي (GPS) ─────────────────────────────────────
     userWilaya ? [
       `📍 LOCATION CONTEXT — موقع المستخدم المُحدَّد بـ GPS:`,
@@ -26388,8 +20080,6 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     _realtimeContext || '',
     // ── DECISION TREE CONTEXT (SearXNG → Crawl4AI → Wikidata → Wikipedia → DBpedia) ──
     _decisionTreeContext || '',
-    // ── RETRY HINT — يُطبَّق فقط عند إعادة المحاولة ──────────────────────────
-    _isRetry ? `\n🔄 RETRY MODE (seed=${_retrySeed}): المستخدم طلب إجابة مختلفة. قدّم نهجاً بديلاً أو معلومات تكميلية أو زاوية مغايرة عن إجابتك السابقة. لا تكرر نفس الإجابة. كن أكثر تفصيلاً أو ابدأ من منظور مختلف.` : '',
   ].filter(Boolean).join('\n\n')
 
   const apiMessages = [
@@ -26407,7 +20097,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   // ── Weather fast-path: return table directly — no AI needed ─────────────
   // When real weather data is available, skip AI entirely to avoid latency
   // and prevent the model from adding "شرح:" or unwanted preamble.
-  if (hasWeatherPriority && weatherPriorityContext && !weatherPriorityContext.includes('fallback:') && !_multiIntentAnalysis.isMulti) {
+  if (hasWeatherPriority && weatherPriorityContext && !weatherPriorityContext.includes('fallback:')) {
     // ── "أريد طقس مدينة أخرى" chip → ask user for city name ────────────────
     const _isAskAnotherCity = /أريد طقس مدينة أخرى|🏙️ أريد طقس مدينة أخرى|بغيت طقس مدينة أخرى/i.test(lastUserMessage)
     if (_isAskAnotherCity) {
@@ -26450,7 +20140,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   // ── LFP + Standings fast-path: return directly — no AI needed ───────────
   // lfpContext is now always populated when isLFPQuery or isStandingsQuery.
   // Return it directly to guarantee: source = lfp.dz only, no BBC/SofaScore.
-  if ((isLFPQuery || isStandingsQuery) && !webReaderContext && !_isAgentMode && !_multiIntentAnalysis.isMulti) {
+  if ((isLFPQuery || isStandingsQuery) && !webReaderContext && !_isAgentMode) {
     const parts = []
     if (lfpContext && lfpContext.length > 30) parts.push(lfpContext.trim())
     if (isStandingsQuery && standingsContext && standingsContext.length > 30) {
@@ -26462,79 +20152,46 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     }
   }
 
-  // ── Currency hard-fallback: إذا كانت isCurrencyQuery لكن currencyContext فارغ
-  // يحدث عند فشل fetchCurrencyResilient — نُعيد الطلب مرة أخيرة من الكاش
-  if (isCurrencyQuery && (!currencyContext || currencyContext.length < 50) && !_isAgentMode) {
-    try {
-      const _retryData = await fetchCurrencyData(true) // force refresh
-      if (_retryData?.rates) {
-        const _retryCtx = buildCurrencyContext(_retryData)
-        if (_retryCtx && _retryCtx.length > 50) {
-          return res.status(200).json({
-            content: '',
-            currencyData: {
-              rates: _retryData.rates,
-              status: _retryData.status || 'live',
-              provider: _retryData.provider || 'fawazahmed0/currency-api',
-              last_update: _retryData.last_update || new Date().toISOString(),
-            },
-            _bypassLLM: true,
-          })
-        }
-      }
-    } catch (_ce) { console.warn('[Currency:retry]', _ce.message) }
-    // إذا فشل الـ retry كذلك → رد نصي صريح
-    return res.status(200).json({
-      content: [
-        '## 💱 أسعار الصرف — غير متاحة مؤقتاً',
-        '',
-        '> ⚠️ تعذّر جلب أسعار العملات الآن من جميع المصادر.',
-        '> يرجى المحاولة مرة أخرى بعد لحظات.',
-        '',
-        '**بدائل للتحقق يدوياً:**',
-        '• [Algerian Dinar — Google Finance](https://www.google.com/finance/quote/USD-DZD)',
-        '• [XE.com — سعر الدولار](https://www.xe.com/currencyconverter/convert/?Amount=1&From=USD&To=DZD)',
-      ].join('\n'),
-    })
-  }
-
-  // ── Currency fast-path: return CurrencyWidget data directly ─────────────
+  // ── Currency fast-path: return table directly when live data available ────
   if (isCurrencyQuery && currencyContext && currencyContext.length > 50 && !_isAgentMode) {
-    console.log(`[Currency Fast-Path] Returning exchange rates as CurrencyWidget`)
-
-    // جلب البيانات الخام مرة أخرى (تكون مخزّنة في الكاش — لا API call إضافي)
-    const _cwRaw = currencyResult?.status === 'fulfilled' ? currencyResult.value : null
-
-    if (_cwRaw?.rates) {
-      // إرجاع البيانات المنظمة لـ CurrencyWidget في الـ frontend
-      return res.status(200).json({
-        content: '',   // الـ widget يُعرض بدل النص
-        currencyData: {
-          rates:       _cwRaw.rates,
-          status:      _cwRaw.status || 'live',
-          provider:    _cwRaw.provider || 'fawazahmed0/currency-api',
-          last_update: _cwRaw.last_update || new Date().toISOString(),
-        },
-        _bypassLLM: true,
-      })
-    }
-
-    // fallback نصي (إذا لم تتوفر البيانات الخام)
+    console.log(`[Currency Fast-Path] Returning exchange rates directly without AI`)
     const today = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-    const _xr = (code) => {
+
+    // Extract USD and EUR from the markdown table produced by buildCurrencyContext
+    // Table row format: | **USD** | دولار أمريكي 🇺🇸 | **134.50 دج** |
+    const _extractRate = (code) => {
       const m = currencyContext.match(new RegExp(`\\|\\s*\\*\\*${code}\\*\\*\\s*\\|[^|]*\\|\\s*\\*\\*([\\d.,]+)\\s*دج\\*\\*`))
       return m ? m[1] : null
     }
-    const fallbackLines = [`## 💱 أسعار الصرف مقابل الدينار الجزائري`, `📅 ${today}`, '']
-    const pairs = [['USD','🇺🇸','دولار أمريكي'],['EUR','🇪🇺','يورو'],['GBP','🇬🇧','جنيه إسترليني'],['SAR','🇸🇦','ريال سعودي'],['AED','🇦🇪','درهم إماراتي']]
-    pairs.forEach(([code, flag, name]) => {
-      const r = _xr(code)
-      if (r) fallbackLines.push(`> ${flag} **1 ${name} = ${r} دينار جزائري**`)
-    })
-    fallbackLines.push('', '---', '')
-    const tableLines = currencyContext.split('\n').filter(l => l.startsWith('|') || (l.startsWith('>') && l.includes('⚠️')))
-    fallbackLines.push(...tableLines, '', `> ℹ️ الأسعار تقريبية — يُنصح بمراجعة الصراف لأسعار السوق الموازية`)
-    return res.status(200).json({ content: fallbackLines.join('\n') })
+    const usdRate = _extractRate('USD')
+    const eurRate = _extractRate('EUR')
+    const gbpRate = _extractRate('GBP')
+    const sarRate = _extractRate('SAR')
+    const aedRate = _extractRate('AED')
+
+    // Build prominent summary + full table
+    const summaryLines = ['## 💱 أسعار الصرف مقابل الدينار الجزائري', `📅 ${today}`, '']
+    if (usdRate) summaryLines.push(`> 🇺🇸 **1 دولار أمريكي = ${usdRate} دينار جزائري**`)
+    if (eurRate) summaryLines.push(`> 🇪🇺 **1 يورو = ${eurRate} دينار جزائري**`)
+    if (gbpRate) summaryLines.push(`> 🇬🇧 **1 جنيه إسترليني = ${gbpRate} دينار جزائري**`)
+    if (sarRate) summaryLines.push(`> 🇸🇦 **1 ريال سعودي = ${sarRate} دينار جزائري**`)
+    if (aedRate) summaryLines.push(`> 🇦🇪 **1 درهم إماراتي = ${aedRate} دينار جزائري**`)
+    summaryLines.push('')
+    summaryLines.push('---')
+    summaryLines.push('')
+    summaryLines.push('### 📊 جدول كامل لأسعار الصرف')
+    summaryLines.push('')
+    // Append the full markdown table from buildCurrencyContext (skip the header lines, keep table)
+    const tableLines = currencyContext.split('\n').filter(l =>
+      l.startsWith('|') || (l.startsWith('>') && l.includes('⚠️'))
+    )
+    summaryLines.push(...tableLines)
+    summaryLines.push('')
+    const srcMatch = currencyContext.match(/المصدر:\s*(.+)/)
+    if (srcMatch) summaryLines.push(`> 📡 ${srcMatch[0].trim()}`)
+    summaryLines.push(`> ℹ️ الأسعار تقريبية — يُنصح بمراجعة الصراف لأسعار السوق الموازية`)
+
+    return res.status(200).json({ content: summaryLines.join('\n') })
   }
 
   // ── Autonomous Reasoning Layer ────────────────────────────────────────────
@@ -26571,42 +20228,18 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   // Smart token budget — avoid paying 3000 tokens for a simple greeting
   const _chatArabicN = (lastUserMessage.match(/[\u0600-\u06FF]/g) || []).length
   const _chatHasComplexKw = /شرح|اكتب|أنشئ|انشئ|برمجة|كود|خطة|حلّل|قارن|generate|create|write|code|موقع|website/.test(lastUserMessage)
-  // ── رفع سقف الـ tokens تلقائياً عند وجود أسئلة متعددة ────────────────────
-  const _multiIntentTokenBoost = _multiIntentAnalysis.isMulti
-    ? Math.min(_multiIntentAnalysis.taskCount * 600, 3000)
-    : 0
-
-  const _chatTokens = Math.min(
-    (
-      _queryComplexity === 'multi_step' ? 4000 :
-      _queryComplexity === 'complex'    ? 3000 :
-      (_chatArabicN > 15 || _chatHasComplexKw || lastUserMessage.length > 80) ? 2000 :
-      lastUserMessage.length > 30 ? 1200 : 700
-    ) + _multiIntentTokenBoost,
-    6000  // الحد الأقصى المطلق
+  const _chatTokens = (
+    _queryComplexity === 'multi_step' ? 4000 :
+    _queryComplexity === 'complex'    ? 3000 :
+    (_chatArabicN > 15 || _chatHasComplexKw || lastUserMessage.length > 80) ? 2000 :
+    lastUserMessage.length > 30 ? 1200 : 700
   )
-
-  // ── No-Key RSS Fast-Path ─────────────────────────────────────────────────
-  // إذا لم يكن هناك مفتاح Groq API ويوجد محتوى RSS جاهز → رجوع فوري
-  // يمنع انتظار stallGuard (13 ثانية) بدون فائدة
-  // يُطبَّق على: أخبار / ذكاء اصطناعي / تقنية — لا يُطبَّق على: عملة / وكيل
-  {
-    const _groqAvail = getGroqKeys().length > 0
-    if (!_groqAvail && rssContext && rssContext.length > 200 && !isCurrencyQuery && !_isAgentMode && !isJobsQuery(lastUserMessage) && !isProverbQuery(lastUserMessage)) {
-      console.log(`[NoKey:RSS-FastPath] No Groq key — serving RSS context directly (${rssContext.length} chars)`)
-      return res.status(200).json({
-        content: `${rssContext}\n\n---\n> 💡 **ملاحظة:** لتلقي إجابات مُلخَّصة وأكثر ذكاءً، أضف مفتاح \`AI_API_KEY\` (Groq — مجاني) في إعدادات المشروع.`,
-        status: 'rss_direct',
-      })
-    }
-  }
 
   const aiResult = await safeGenerateAI({
     messages: _halMessages,
     query: lastUserMessage,
-    max_tokens: _isRetry ? Math.min(_chatTokens + 500, 6000) : _chatTokens,
+    max_tokens: _chatTokens,
     taskHint: _taskHint,
-    temperature: _isRetry ? 0.85 : undefined,
   })
 
   // Self-Reflection disabled — was triggering a full second AI call on complex queries
@@ -26620,18 +20253,6 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
       .replace(/(?:^|\n)\*\*STEP\s*\d+[^*]*\*\*[^\n]*/gi, '')
       .replace(/(?:^|\n)###\s*STEP\s*\d+[^\n]*/gi, '')
       .replace(/(?:^|\n)(?:النية|التصنيف|ما يريده المستخدم حقاً?)[^\n]*\n?/gi, '')
-      // ── Strip "راني نخمم أصبر شوية" and all variants ─────────────────────
-      .replace(/🤔\s*\*\*راني نخمم[^*]*\*\*/gi, '')
-      .replace(/راني نخمم[،,\s]*أصبر[^\n]*/gi, '')
-      .replace(/راني نخمم[^\n]{0,40}/gi, '')
-      // ── Strip internal developer/system notes leaking into responses ──────
-      .replace(/(?:^|\n)(?:هذا النص مستخرج حرفيا[^\n]*)/gi, '')
-      .replace(/(?:^|\n)(?:بدون هلوسة[^\n]*)/gi, '')
-      .replace(/(?:^|\n)(?:ملاحظة للنموذج[^\n]*)/gi, '')
-      .replace(/(?:^|\n)(?:ملاحظة للمطور[^\n]*)/gi, '')
-      .replace(/(?:^|\n)(?:هذا رد داخلي[^\n]*)/gi, '')
-      .replace(/(?:^|\n)(?:تعليمات النظام[^\n]*)/gi, '')
-      .replace(/\[?(?:هذا النص مستخرج|بدون هلوسة|no hallucin)[^\]]*\]?/gi, '')
       .replace(/^\s*\n/, '').trim()
 
     // ── Strip foreign-language words injected by AI (Vietnamese, Thai, CJK…) ──
@@ -26716,39 +20337,6 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
       }
     }
 
-    // ── MULTI-INTENT VERIFICATION — تحقق من اكتمال الإجابة للأسئلة المتعددة ─
-    if (_multiIntentAnalysis.isMulti && _bestContent) {
-      const _verify = verifyCompleteness(_bestContent, _multiIntentAnalysis)
-      logMultiIntentAnalysis(_multiIntentAnalysis, _verify)
-
-      // إذا فشل التحقق → محاولة واحدة إضافية بـ retry instruction مدمج مع الإجابة الناقصة
-      if (!_verify.passed && !_isRetry) {
-        try {
-          const _retryHint = buildRetryInstruction(_verify, _multiIntentAnalysis)
-          const _retryMessages = [
-            ...reasonedMessages.slice(0, -1),  // كل الرسائل ما عدا الأخيرة
-            {
-              role: 'user',
-              content: `${lastUserMessage}\n\n${_retryHint}`,
-            },
-          ]
-          const _multiRetryResult = await safeGenerateAI({
-            messages: _retryMessages,
-            query: lastUserMessage,
-            max_tokens: Math.min(_chatTokens + 1000, 6000),
-            taskHint: 'multilingual',
-          })
-          if (_multiRetryResult?.content && _multiRetryResult.content.length > (_bestContent?.length || 0) + 50) {
-            _bestContent = _cleanRawUrls(_stripThinking(_multiRetryResult.content))
-            console.log(`[MultiIntent] ✅ Retry succeeded — أضفنا ${_verify.missingTasks.length} إجابات ناقصة`)
-          }
-        } catch (_mErr) {
-          console.warn('[MultiIntent] retry error (non-fatal):', _mErr.message)
-        }
-      }
-    }
-    // ─────────────────────────────────────────────────────────────────────────
-
     _bestContent = applyReactLoop(_bestContent)
 
     const _responsePayload = {
@@ -26757,7 +20345,6 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
       reasoning: _reasoningStrategy !== 'passthrough' ? _reasoningStrategy : undefined,
       hasMoreNews: hasNewsResults,
       newsQuery: hasNewsResults ? lastUserMessage : undefined,
-      newsItems: _chatNewsItems.length > 0 ? _chatNewsItems : undefined,
       webReaderIntent: isWebReaderQuery ? _webReaderIntent : undefined,
       halRisk: _halMeta.risk,
       halTrust: _halMeta.trustScore,
@@ -26851,8 +20438,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   }
 
   // If RSS context available, return it directly even without AI
-  // (استثناء: الوظائف والحِكم لها محتوى خاص — لا نُخفيه بأخبار عامة)
-  if (rssContext && !_isJobsQuery && !isProverbQuery(lastUserMessage)) {
+  if (rssContext) {
     return res.status(200).json({
       content: `${rssContext}\n\n---\n> **ملاحظة:** لتلقي إجابات أكثر ذكاءً وتلخيصاً للأخبار، يمكن إضافة مفتاح \`AI_API_KEY\` (Groq) في إعدادات المشروع.`,
     })
@@ -26874,16 +20460,6 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
         isExecution: true,
         executionLang: _tmplLang,
         executionCode: _tmplCode,
-      })
-    }
-
-    // ── Jobs fallback — عند فشل LLM نُعيد نتائج البحث مباشرةً ──────────────
-    if (_isJobsQuery && _jobsSearchContext) {
-      console.log('[DZ-Jobs] LLM unavailable — returning raw search context directly')
-      return res.status(200).json({
-        content: _jobsSearchContext,
-        status: 'jobs_direct',
-        mode: 'dz-jobs',
       })
     }
 
@@ -26923,53 +20499,13 @@ const _streamSSEHeaders = (res) => {
 }
 
 // Queries that require LIVE data injection — redirect to full endpoint
-const _LIVE_DATA_RE = new RegExp(
-  // ── طقس وأحوال جوية ──────────────────────────────────────────────────────
-  'طقس|حرارة|أمطار|ضباب|رياح|الجو اليوم|weather|' +
-  // ── كرة القدم عامة ────────────────────────────────────────────────────────
-  'مباراة|ماتش|ماتشات|أهداف|هدف\\s*من|ترتيب الدوري|ترتيب\\s*المجموعة|' +
-  'كأس أفريقيا|بطولة|دوري|الرابطة|lfp|لفب|' +
-  // ── كأس العالم 2026 (الأهم — يجب أن يتجه دائماً للـ full endpoint) ──────
-  'كأس\\s*العالم|المونديال|مونديال|FIFA|فيفا|WC\\s*2026|world\\s*cup|' +
-  // ── تشكيلة / قائمة اللاعبين ───────────────────────────────────────────────
-  'تشكيل|تشكيلة|تشكيلات|قائمة\\s*اللاعبين|القائمة\\s*الرسمية|استدعاء|' +
-  'الـ\\s*26|26\\s*لاعب|أسماء\\s*اللاعبين|من\\s*استدعى|المستدعون|' +
-  // ── هداف / إحصائيات ───────────────────────────────────────────────────────
-  'هداف|هدافين|ترتيب\\s*الهداف|أكثر\\s*لاعب|إحصائيات|' +
-  // ── المنتخب الجزائري / الخضر ───────────────────────────────────────────────
-  'المنتخب\\s*الجزائري|المنتخب\\s*الوطني|الفريق\\s*الجزائري|' +
-  'منتخب\\s*الجزائر|الخضر|محاربو\\s*الصحراء|' +
-  // ── حكام / طاقم تحكيم ──────────────────────────────────────────────────────
-  'حكم\\s*المباراة|طاقم\\s*تحكيم|بطاقة\\s*صفراء|بطاقة\\s*حمراء|VAR|' +
-  // ── نتائج مباشرة ───────────────────────────────────────────────────────────
-  'نتيجة\\s*مباراة|نتائج\\s*اليوم|مباريات\\s*اليوم|مباريات\\s*الليلة|' +
-  'ماذا\\s*كانت\\s*نتيجة|من\\s*فاز|من\\s*ربح|' +
-  // ── صلاة وأذان ────────────────────────────────────────────────────────────
-  'صلاة|أذان|فجر|مغرب|عشاء|ظهر|عصر|' +
-  // ── أسعار الصرف ────────────────────────────────────────────────────────────
-  'سعر الصرف|دولار.*دينار|يورو.*دينار|صرف اليوم|' +
-  // ── أخبار عاجلة ────────────────────────────────────────────────────────────
-  'آخر الأخبار|أخبار اليوم|أخبار.*الجزائر|واش صرا|وش صرا|واش صار|' +
-  'واش صاري|واش كاين جديد|ماذا حدث|آخر مستجدات|عاجل|' +
-  'حادثة|انفجار|زلزال|فيضان|حريق|استقال|اغتيل|اعتُقل|مات.*اليوم|توفي.*اليوم',
-  'i'
-)
+const _LIVE_DATA_RE = /طقس|حرارة|أمطار|ضباب|رياح|الجو اليوم|weather|مباراة|ماتش|أهداف|ترتيب الدوري|كأس أفريقيا|بطولة|صلاة|أذان|فجر|مغرب|عشاء|ظهر|عصر|سعر الصرف|دولار.*دينار|يورو.*دينار|صرف اليوم|آخر الأخبار|أخبار اليوم|أخبار.*الجزائر|واش صرا|وش صرا|واش صار|واش صاري|واش كاين جديد|ماذا حدث|آخر مستجدات|عاجل|حادثة|انفجار|زلزال|فيضان|حريق|استقال|اغتيل|اعتُقل|مات.*اليوم|توفي.*اليوم/i
 
 app.post('/api/dz-agent-stream', async (req, res) => {
   const messages = normalizeChatMessages(req.body.messages)
   if (!messages?.length) return res.status(400).json({ error: 'messages required' })
 
   const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
-
-  // 🛡️ Static guards — أول فحص قبل أي شيء، تتخطى LLM بالكامل
-  const _dzStreamGuard = applyStaticGuards(lastUserMessage)
-  if (_dzStreamGuard) {
-    console.log(`[DZ-Stream] 🛡️ static guard matched — bypassing LLM`)
-    _streamSSEHeaders(res)
-    res.write(`data: ${JSON.stringify({ token: _dzStreamGuard.content })}\n\n`)
-    res.write('data: [DONE]\n\n')
-    return res.end()
-  }
 
   // ── Step 1: Moderation ───────────────────────────────────────────────────
   const mod = moderateMessage(lastUserMessage)
@@ -26992,62 +20528,10 @@ app.post('/api/dz-agent-stream', async (req, res) => {
 
   // ── Step 2b: Live-data detection — redirect to full endpoint ─────────────
   if (_LIVE_DATA_RE.test(lastUserMessage)) {
-    console.log(`[Stream→LiveData] 🔄 live-data redirect for: "${lastUserMessage.slice(0, 60)}"`)
     _streamSSEHeaders(res)
     res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
     res.write('data: [DONE]\n\n')
     return res.end()
-  }
-
-  // ── Step 2b2: WC2026 / Sports strict guard ────────────────────────────────
-  // أي سؤال يحتوي كلمات رياضية/WC2026 لم يُعالج بعد → full endpoint إلزامياً
-  // يمنع الـ LLM من الإجابة بذاكرة التدريب عن تشكيلات/نتائج/ترتيبات
-  const _streamSportsGuard = (
-    // كأس العالم بأي صياغة
-    /(?:كأس\s*العالم|مونديال|المونديال|FIFA\s*2026|world\s*cup|WC\s*2026)/i.test(lastUserMessage) ||
-    // تشكيلة / قائمة لاعبين
-    /(?:تشكيل(?:ة|ات)?|قائمة\s*(?:اللاعبين|الرسمية)|استدعاء|المستدعون|26\s*لاعب)/i.test(lastUserMessage) ||
-    // المنتخب الجزائري بأي صياغة
-    /(?:المنتخب\s*(?:الجزائري|الوطني)|الفريق\s*الجزائري|منتخب\s*الجزائر|الخضر|محاربو\s*الصحراء)/i.test(lastUserMessage) ||
-    // ترتيب / جدول مجموعات
-    /(?:ترتيب\s*(?:الفرق|المنتخبات|المجموعة)|جدول\s*(?:المجموعة|كأس)|ترتيب\s*[A-La-l]\b)/i.test(lastUserMessage) ||
-    // هداف / إحصائيات حية
-    /(?:هداف|هدافين|ترتيب\s*الهداف|أكثر\s*(?:لاعب|هداف)|من\s*(?:تصدر|يتصدر)\s*ترتيب)/i.test(lastUserMessage) ||
-    // نتائج / من فاز / أهداف مباراة بعينها
-    /(?:من\s*(?:فاز|ربح|سجل)\s*(?:في|ب)?|نتيجة\s*(?:مباراة|المباراة)|أهداف\s*(?:مباراة|ماتش))/i.test(lastUserMessage) ||
-    // مباريات المنتخب الجزائري القادمة أو الجدول
-    /(?:مباريات?\s*(?:الجزائر|الخضر|المنتخب)|موعد\s*(?:مباراة\s*)?(?:الجزائر|الخضر)|متى\s*(?:تلعب|يلعب)\s*(?:الجزائر|الخضر|المنتخب))/i.test(lastUserMessage)
-  )
-  if (_streamSportsGuard) {
-    console.log(`[Stream→SportsGuard] ⛔ WC2026/Sports query intercepted → full endpoint: "${lastUserMessage.slice(0, 70)}"`)
-    _streamSSEHeaders(res)
-    res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
-    res.write('data: [DONE]\n\n')
-    return res.end()
-  }
-
-  // ── Step 1a: WC2026 Squad DIRECT answer — لا redirect لا LLM ───────────────
-  {
-    const _dz_squad_re = /(?:تشكيل(?:ة|ات)?|شكيل(?:ة|ات)?|قائمة\s*(?:اللاعبين|الرسمية|بيتكو|المدرب)?|لاعب(?:ون|ين|و|ي)?\s*(?:المنتخب|الفريق|الخضر|الجزائر)?|استدعاء|المستدعون|26\s*لاعب|الـ\s*26|منو\s*(?:يلعب|فيهم|في\s*القائمة|دعا|جاب)|واش\s*(?:راهم|يلعبو|عندنا|جابو)|كروسة|الكرو|كرو\s*الجزائر|لاعبي\s*(?:الخضر|الجزائر|المنتخب)|دعاهم\s*(?:بيتكو|المدرب)|كاش\s*(?:تشكيل|قائمة)|من\s+(?:في|هم)\s*القائمة|من\s+يلعب|من\s+سيلعب|\bsquad\b|\broster\b|\bline.?up\b|\bformation\b|\bplayers?\s+list\b|\bstarting\s+(?:eleven|xi|lineup)\b|\bnational\s+team\s+squad\b|\bworld\s*cup\s+squad\b|\bwho\s+(?:is\s+)?in\s+(?:the\s+)?(?:squad|team)\b)/i
-    const _dz_ctx_re = /(?:كأس\s*العالم|مونديال|المونديال|FIFA|WC\s*2026|2026|الخضر|الجزائر|الجزائري|المنتخب\s*الجزائري|الخضرة|بيتكوفيتش|بيتكو|\bworld\s*cup\b|\bwc\s*2026\b|\balgeria\b|\balgerian\b|\bargentina\b|\bfrance\b|\bmorocco\b|\btunisia\b)/i
-    const _ssIsSquad = _dz_squad_re.test(lastUserMessage) && _dz_ctx_re.test(lastUserMessage)
-    if (_ssIsSquad) {
-      const _ssTeam = detectWC2026SquadTeam(lastUserMessage)
-      const _ssIsAlg = !_ssTeam && /(?:الجزائر|الجزائري|الخضر|الخضرة|الخضار|المنتخب\s*الجزائري|منتخب\s*(?:الجزائر|الجزائري|الوطني)|كروسة|الكرو|بيتكوفيتش|بيتكو|خضرنا|منتخبنا)/i.test(lastUserMessage)
-      let _ssContent = null
-      if (_ssIsAlg || _ssTeam === 'الجزائر') {
-        _ssContent = buildAlgeriaWC2026SquadResponse('full')
-      } else if (_ssTeam && WC2026_ALL_SQUADS[_ssTeam]) {
-        _ssContent = buildWC2026SquadResponse(_ssTeam)
-      }
-      if (_ssContent) {
-        console.log(`[Stream:SquadDirect] ✅ Direct squad response for "${_ssTeam || 'الجزائر'}" — LLM BYPASSED`)
-        _streamSSEHeaders(res)
-        res.write(`data: ${JSON.stringify({ token: _ssContent })}\n\n`)
-        res.write('data: [DONE]\n\n')
-        return res.end()
-      }
-    }
   }
 
   // ── Step 1b: Static Fast-Path — إجابة فورية <1ms بدون LLM ──────────────
@@ -27060,16 +20544,6 @@ app.post('/api/dz-agent-stream', async (req, res) => {
       res.write('data: [DONE]\n\n')
       return res.end()
     }
-  }
-
-  // ── Step 1b-update: Self-update question — answer directly (no redirect needed) ──
-  if (isSelfUpdateQuestion(lastUserMessage)) {
-    console.log(`[Stream→SelfUpdate] 🔄 self-update question — returning build-info`)
-    _streamSSEHeaders(res)
-    const _updResp = buildSelfUpdateResponse()
-    res.write(`data: ${JSON.stringify({ content: _updResp.content })}\n\n`)
-    res.write('data: [DONE]\n\n')
-    return res.end()
   }
 
   // ── Step 1c: Developer / Owner identity — redirect to full endpoint for DeveloperCard ──
@@ -27122,69 +20596,6 @@ app.post('/api/dz-agent-stream', async (req, res) => {
     return res.end()
   }
 
-  // ── Step 2e: Intent-Based Redirect — أي سؤال يحتاج retrieval يذهب للـ full endpoint ──
-  // المشكلة: الـ stream endpoint يستدعي LLM مباشرة بدون Decision Tree/SearXNG/Wikipedia.
-  // الـ full endpoint يُشغّل resolveQuery() (Wikidata → Wikipedia → SearXNG → Crawl4AI).
-  // القاعدة: اكتشف نية المستخدم — إذا كانت تحتاج مصادر خارجية → حوّل للـ full endpoint.
-  // استثناء: GREETING / CODING / MATH / CASUAL_CHAT → ابقَ في البث (لا retrieval مطلوب).
-  {
-    const _STREAM_RETRIEVAL_INTENTS = new Set([
-      'PUBLIC_FIGURE',       // شخصية عامة — Wikipedia/Wikidata
-      'HISTORICAL_FIGURE',   // شخصية تاريخية — Wikipedia
-      'HISTORICAL_EVENT',    // حدث تاريخي — Wikipedia
-      'CURRENT_NEWS',        // أخبار حالية — SearXNG
-      'SPORTS_LIVE',         // رياضة مباشرة — sports agents
-      'SPORTS_GENERAL',      // رياضة عامة — sports agents
-      'SPORTS_PLAYER',       // لاعب — 365score/sports data
-      'SPORTS_FIXTURES',     // مباريات — sports calendar
-      'OFFICIAL_ANNOUNCEMENT', // إعلان رسمي — SearXNG
-      'DEFINITION',          // تعريف/موسوعي — Wikipedia
-      'LOCATION',            // مكان/جغرافيا — Wikipedia/Maps
-    ])
-    try {
-      const _sIntent = classifyIntent(lastUserMessage, messages)
-      const _sIntentName = _sIntent?.intent || 'UNKNOWN'
-      const _sIntentConf = _sIntent?.confidence ?? 0
-
-      // سجّل قرار التوجيه في كل حالة لمراقبة الـ routing
-      if (_STREAM_RETRIEVAL_INTENTS.has(_sIntentName) && _sIntentConf >= 30) {
-        console.log(`[Stream→IntentRedirect] 🔄 ROUTE=full | intent=${_sIntentName} conf=${_sIntentConf}% | retrieval REQUIRED | "${lastUserMessage.slice(0, 70)}"`)
-        _streamSSEHeaders(res)
-        res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
-        res.write('data: [DONE]\n\n')
-        return res.end()
-      }
-
-      // فحص إضافي: isRealtimeQuery — استعلامات الحياة الآنية التي فاتت التصنيف
-      // ⚠️ استثناء: أسئلة تعريف الكيان (من هو/ما هو + منصب) لا تُعاد توجيهها حتى لو تطابقت
-      if (isRealtimeQuery(lastUserMessage) && !isEntityDefinitionQuery(lastUserMessage)) {
-        console.log(`[Stream→RealtimeRedirect] 🔄 ROUTE=full | isRealtime=true intent=${_sIntentName} | "${lastUserMessage.slice(0, 70)}"`)
-        _streamSSEHeaders(res)
-        res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
-        res.write('data: [DONE]\n\n')
-        return res.end()
-      }
-
-      // سؤال "من هو / ما هو / ما هي" يحتاج Wikipedia حتى لو لم يُصنَّف
-      if (/^(?:من\s+(?:هو|هي|هم)|ما\s+(?:هو|هي|هم)|ماذا\s+(?:تعرف|تعني)|عرّف|اشرح\s+لي|أخبرني\s+عن)\s+/i.test(lastUserMessage) && _sIntentConf < 40) {
-        console.log(`[Stream→WhoWhatRedirect] 🔄 ROUTE=full | "من هو/ما هو" pattern | intent=${_sIntentName} conf=${_sIntentConf}% | "${lastUserMessage.slice(0, 70)}"`)
-        _streamSSEHeaders(res)
-        res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
-        res.write('data: [DONE]\n\n')
-        return res.end()
-      }
-
-      console.log(`[Stream:Routing] ✅ ROUTE=stream | intent=${_sIntentName} conf=${_sIntentConf}% | LLM direct (no retrieval needed) | "${lastUserMessage.slice(0, 60)}"`)
-    } catch (_sieErr) {
-      // فشل التصنيف → نحوّل للـ full endpoint احتياطياً
-      console.warn(`[Stream:IntentCheck] ⚠ classification failed → fallback to full endpoint: ${_sieErr.message}`)
-      _streamSSEHeaders(res)
-      res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
-      res.write('data: [DONE]\n\n')
-      return res.end()
-    }
-  }
-
   // ── Step 3: Core system prompt (slim — no heavy reasoning block) ─────────
   const _yearNow  = getCurrentYear()
   const _today    = getCurrentDateString('ar-DZ')
@@ -27193,7 +20604,7 @@ app.post('/api/dz-agent-stream', async (req, res) => {
   const _training = (() => { try { return getTrainingContext() } catch { return '' } })()
 
   const coreSystemPrompt = [
-    `أنت DZ AGENT 🇩🇿 (Nadir Houamria). اليوم: ${_today} | الوقت: ${_timeNowS} (الجزائر) | الهجري: ${_hijriNow} | ${_yearNow}. أجب مباشرةً بدون مقدمات. أجب بنفس لغة المستخدم.`,
+    `أنت DZ Agent 🇩🇿 (DZ-GPT — Nadir Houamria). اليوم: ${_today} | الوقت: ${_timeNowS} (الجزائر) | الهجري: ${_hijriNow} | ${_yearNow}. أجب مباشرةً بدون مقدمات. أجب بنفس لغة المستخدم.`,
     `❌ لا تخترع أخباراً أو أسعاراً | ✅ إذا لم تعرف → قُل ذلك | روابط: [اسم](url) فقط.`,
     `⚠️ قاعدة اللغة الصارمة: ❌ يُحظر تماماً الردّ بالصينية أو اليابانية أو الكورية أو أي رموز غير مفهومة. أجب بالعربية إذا كتب المستخدم بالعربية، وبالفرنسية إذا كتب بالفرنسية، وبالإنجليزية إذا كتب بالإنجليزية.`,
     _training ? `━━━ تدريب المالك (مُلزِم) ━━━\n${_training}` : '',
@@ -27253,96 +20664,6 @@ app.get('/api/analytics/summary', (req, res) => {
   const { _dirty, events, ...summary } = _analyticsData
   const recent = events.slice(-50)
   res.json({ ...summary, recentEvents: recent })
-})
-
-// ─── Track Visit Endpoint — يُستدعى من الفرونتاند عند كل تحميل صفحة ────────────
-// يعمل على Vercel لأن الفرونتاند يستدعيه بنفسه (لا يعتمد على Express middleware)
-app.post('/api/analytics/track-visit', (req, res) => {
-  try {
-    const { path: visitPath, referrer: clientReferrer, device } = req.body || {}
-    const rawIp = (req.headers['x-forwarded-for']?.split(',')[0]?.trim())
-      || req.headers['x-real-ip']
-      || req.socket?.remoteAddress
-      || 'anon'
-    const ua = (req.headers['user-agent'] || '').slice(0, 200)
-    const sessionHash = _vaHash(rawIp + ua)
-    const isNew = !_visitorsStore.knownSessions.has(sessionHash)
-    if (isNew) _visitorsStore.knownSessions.add(sessionHash)
-
-    const country = (
-      req.headers['x-vercel-ip-country'] ||
-      req.headers['cf-ipcountry'] ||
-      ''
-    ).toUpperCase().slice(0, 3) || 'UNKNOWN'
-
-    const city = (
-      req.headers['x-vercel-ip-city'] ||
-      req.headers['cf-ipcity'] ||
-      ''
-    ).slice(0, 60)
-
-    const wilaya = country === 'DZ' ? _vaGetWilaya(city) : null
-
-    let referrer = clientReferrer || 'direct'
-    if (!clientReferrer || clientReferrer === 'direct') {
-      try {
-        const ref = req.headers['referer'] || ''
-        if (ref) referrer = new URL(ref).hostname.replace(/^www\./, '').slice(0, 40)
-      } catch {}
-    }
-
-    _visitorsStore.visits.push({
-      ts: Date.now(),
-      session_hash: sessionHash,
-      country,
-      wilaya: wilaya || undefined,
-      city: city || undefined,
-      is_new: isNew,
-      device_type: device || _vaGetDevice(ua),
-      referrer,
-      path: (visitPath || '/').slice(0, 60),
-    })
-    if (_visitorsStore.visits.length > _VA_MAX_VISITS) {
-      _visitorsStore.visits = _visitorsStore.visits.slice(-(_VA_MAX_VISITS - 1000))
-    }
-    _visitorsStore._dirty = true
-    // Also mark as active-now
-    _activeNow.set(sessionHash, Date.now())
-    console.log(`[VA] visit tracked — country=${country} wilaya=${wilaya||'—'} new=${isNew} session=${sessionHash}`)
-    res.json({ ok: true, isNew })
-  } catch (e) {
-    console.warn('[VA] track-visit error:', e.message)
-    res.json({ ok: false })
-  }
-})
-
-// ─── Heartbeat — يُستدعى من الواجهة كل 45 ثانية للإبقاء على الجلسة "نشطة الآن"
-app.post('/api/analytics/heartbeat', (req, res) => {
-  try {
-    const rawIp = (req.headers['x-forwarded-for']?.split(',')[0]?.trim())
-      || req.headers['x-real-ip']
-      || req.socket?.remoteAddress
-      || 'anon'
-    const ua = (req.headers['user-agent'] || '').slice(0, 200)
-    const sessionHash = _vaHash(rawIp + ua)
-    _activeNow.set(sessionHash, Date.now())
-    res.json({ ok: true, activeNow: _activeNowCount() })
-  } catch {
-    res.json({ ok: false })
-  }
-})
-
-// ─── Visitor Analytics API ────────────────────────────────────────────────────
-app.get('/api/analytics/visitors', (req, res) => {
-  try {
-    const period = ['today','yesterday','week','last7days','month','last30days','last90days']
-      .includes(req.query.period) ? req.query.period : 'today'
-    const stats = _vaComputeStats(period)
-    res.json(stats)
-  } catch (e) {
-    console.error('[VA] /api/analytics/visitors error:', e.message)
-    res.status(500).json({ error: 'Analytics error' })
-  }
 })
 
 // ===== DZ AGENT GITHUB API ROUTES =====
@@ -28824,7 +22145,7 @@ app.post('/api/dz-agent/github/smart-push', async (req, res) => {
       vercelTriggered: report.vercelTriggered,
       vercelDeployId: report.vercelDeployId || null,
       errors: report.errors,
-      liveUrl: 'https://dzagent.app',
+      liveUrl: 'https://dz-gpt.vercel.app',
     })
   } catch (err) {
     console.error('[SmartPush] error:', err.message)
@@ -28960,7 +22281,7 @@ app.post('/api/dz-agent/github/agent-build', async (req, res) => {
 
     const projectFiles = [
       { path: 'index.html', content: generatedHtml },
-      { path: 'README.md',  content: `# ${safeRepo}\n\n> ${task}\n\n**نوع التصميم:** ${detectedSiteType}\n\nتم الإنشاء تلقائياً بواسطة [DZ Agent](https://dzagent.app) 🤖\n\n## 🌐 عرض مباشر\nhttps://${repoOwner}.github.io/${safeRepo}\n\n## 🚀 تقنيات مستخدمة\n- Tailwind CSS\n- Font Awesome 6\n- AOS Animations\n- Google Fonts` },
+      { path: 'README.md',  content: `# ${safeRepo}\n\n> ${task}\n\n**نوع التصميم:** ${detectedSiteType}\n\nتم الإنشاء تلقائياً بواسطة [DZ Agent](https://dz-gpt.vercel.app) 🤖\n\n## 🌐 عرض مباشر\nhttps://${repoOwner}.github.io/${safeRepo}\n\n## 🚀 تقنيات مستخدمة\n- Tailwind CSS\n- Font Awesome 6\n- AOS Animations\n- Google Fonts` },
     ]
 
     send({ type: 'detail', step: 'generate', text: `✅ موقع ${detectedSiteType} جاهز (${(generatedHtml.length / 1024).toFixed(1)} KB)` })
@@ -29093,7 +22414,7 @@ app.post('/api/dz-agent/github/agent-build', async (req, res) => {
       data: {
         repoUrl: `https://github.com/${repoOwner}/${safeRepo}`,
         pagesUrl,
-        vercelUrl: 'https://dzagent.app',
+        vercelUrl: 'https://dz-gpt.vercel.app',
         commitSha: lastCommitSha,
         files: pushedFiles,
         vercelDeployId,
@@ -29121,53 +22442,52 @@ app.post('/api/dz-agent/android/build', async (req, res) => {
   })
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`)
 
-  const { task, appName = '', repoOwner = 'Nadirinfograph23', htmlContent = '', detectedSiteUrl = '' } = req.body
+  const { task, appName, repoOwner = 'Nadirinfograph23' } = req.body
   if (!task) { send({ type: 'error', message: 'task مطلوب' }); return res.end() }
-
-  // ── Auto-detect app type from task text (caller's appType is a hint, not required) ──
-  const callerHint = req.body.appType || ''
-  const appType = (callerHint && callerHint !== 'webview')
-    ? callerHint
-    : (detectAndroidBuildQuery(task)?.appType || detectAppType(task) || 'webview')
-
-  send({ type: 'detail', step: 'detect', text: `🔍 نوع التطبيق المكتشف: ${appType}` })
 
   const tok = resolveGitHubToken()
   if (!tok) { send({ type: 'error', message: 'GITHUB_TOKEN غير مضبوط' }); return res.end() }
-
   const hdr = ghHeaders(tok)
-  const templateInfo = getTemplateInfo(appType)
-  const typeSuffix = appType === 'webview' ? 'android' : appType
-  const safeAppName = (appName || task).toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().replace(/\s+/g, '-').slice(0, 20) || 'app'
-  const safeRepo = (safeAppName.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'dz-app') + '-' + typeSuffix
-  const packageName = 'com.dzapp.' + (safeRepo.replace(new RegExp('-' + typeSuffix + '$'), '').replace(/-/g, '_').slice(0, 20) || 'app')
+
+  const safeAppName = appName || task.slice(0, 40).trim() || 'DZ App'
+  const safeRepo = (safeAppName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'dz-android-app') + '-android'
 
   try {
-    const projectFiles = generateProjectByType({
-      appType,
+    // ── STEP 1: Generate web content with AI ────────────────────────────────
+    send({ type: 'step', step: 'web', status: 'running', detail: '🌐 توليد موقع الويب بالذكاء الاصطناعي...' })
+
+    let htmlContent = ''
+    try {
+      const aiRes = await safeGenerateAI({
+        messages: [
+          { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT },
+          { role: 'user', content: `أنشئ تطبيق ويب احترافي لـ: "${task}"\nالنتيجة ستُحمَّل داخل WebView أندرويد — استخدم HTML/CSS/JS كامل في ملف واحد، بدون خطوط خارجية، بدون CDN خارجي، بدون روابط خارجية. كل الأنماط مضمّنة inline.` },
+        ],
+        query: task,
+        max_tokens: 8000,
+        taskHint: 'web-builder',
+      })
+      htmlContent = extractHtmlFromResponse(aiRes.content || '') || aiRes.content || ''
+      send({ type: 'detail', step: 'web', text: `✅ تم توليد الموقع (${Math.round(htmlContent.length / 1024)} KB)` })
+    } catch (aiErr) {
+      send({ type: 'detail', step: 'web', text: `⚠️ AI timeout — استخدام template افتراضي` })
+      htmlContent = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safeAppName}</title><style>body{font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:linear-gradient(135deg,#1a73e8,#0d47a1);color:#fff;text-align:center;padding:20px}h1{font-size:2rem;margin-bottom:1rem}p{opacity:.85}</style></head><body><h1>📱 ${safeAppName}</h1><p>تطبيق مُنشأ بواسطة DZ Agent</p></body></html>`
+    }
+    send({ type: 'step', step: 'web', status: 'done' })
+
+    // ── STEP 2: Generate Android project files ───────────────────────────────
+    send({ type: 'step', step: 'android', status: 'running', detail: '🤖 توليد ملفات مشروع أندرويد...' })
+    const packageName = `com.dzapp.${safeRepo.replace(/-android$/, '').replace(/[^a-z0-9]/g, '')}`
+    const projectFiles = generateAndroidProject({
       appName: safeAppName,
       packageName,
       htmlContent,
       themeColor: '#1a73e8',
-      siteUrl: detectedSiteUrl || '',
-      appDescription: task.slice(0, 120),
     })
-
-    // إضافة Splash Screen فقط لـ WebView
-    const totalFiles = projectFiles.length
-    send({ type: 'detail', step: 'android', text: `✅ ${totalFiles} ملف مُولَّد (${templateInfo.label} + GitHub Actions + README)` })
+    send({ type: 'detail', step: 'android', text: `✅ ${projectFiles.length} ملف مُولَّد (Gradle + AndroidManifest + WebView + GitHub Actions)` })
     send({ type: 'step', step: 'android', status: 'done' })
 
-    // ── STEP 2.5: عرض المستودعات المرجعية ─────────────────────────────────────
-    if (templateInfo.refs?.length) {
-      send({ type: 'step', step: 'refs', status: 'running', detail: '📚 مستودعات GitHub المرجعية...' })
-      templateInfo.refs.forEach(ref => {
-        send({ type: 'detail', step: 'refs', text: `📌 ${ref}` })
-      })
-      send({ type: 'step', step: 'refs', status: 'done' })
-    }
-
-    // ── STEP 3: إنشاء مستودع GitHub ورفع الملفات ─────────────────────────────
+    // ── STEP 3: Create GitHub repo & push files ──────────────────────────────
     send({ type: 'step', step: 'push', status: 'running', detail: `📦 رفع المشروع على GitHub: ${repoOwner}/${safeRepo}...` })
 
     const repoCheck = await fetch(`https://api.github.com/repos/${repoOwner}/${safeRepo}`, {
@@ -29177,18 +22497,12 @@ app.post('/api/dz-agent/android/build', async (req, res) => {
       send({ type: 'detail', step: 'push', text: `📦 إنشاء مستودع جديد: ${safeRepo}` })
       const cr = await fetch('https://api.github.com/user/repos', {
         method: 'POST', headers: hdr, signal: AbortSignal.timeout(15000),
-        body: JSON.stringify({
-          name: safeRepo,
-          description: `${templateInfo.icon} ${safeAppName} — ${templateInfo.label} app by DZ Agent`,
-          auto_init: true,
-          private: false,
-          topics: ['android', 'dz-agent', appType],
-        }),
+        body: JSON.stringify({ name: safeRepo, description: `📱 ${safeAppName} — Android app by DZ Agent`, auto_init: true, private: false }),
       })
       if (!cr.ok) { const e = await cr.json(); throw new Error(`فشل إنشاء المستودع: ${e.message}`) }
       await new Promise(r => setTimeout(r, 2500))
     } else {
-      send({ type: 'detail', step: 'push', text: `✅ المستودع موجود بالفعل: ${safeRepo}` })
+      send({ type: 'detail', step: 'push', text: `✅ المستودع موجود: ${safeRepo}` })
     }
 
     let pushedCount = 0
@@ -29204,27 +22518,25 @@ app.post('/api/dz-agent/android/build', async (req, res) => {
       const pr = await fetch(`https://api.github.com/repos/${repoOwner}/${safeRepo}/contents/${encodeURIComponent(file.path)}`, {
         method: 'PUT', headers: hdr, signal: AbortSignal.timeout(15000),
         body: JSON.stringify({
-          message: `${templateInfo.icon} DZ Agent: add ${file.path}`,
+          message: `🤖 DZ Agent: add ${file.path}`,
           content: Buffer.from(file.content).toString('base64'),
           ...(fileSha ? { sha: fileSha } : {}),
         }),
       })
       if (pr.ok) {
         pushedCount++
-        if (pushedCount % 5 === 0 || pushedCount <= 3) {
-          send({ type: 'detail', step: 'push', text: `✅ رُفع ${pushedCount}/${totalFiles} ملف...` })
-        }
+        send({ type: 'detail', step: 'push', text: `✅ ${file.path}` })
       } else {
         const e = await pr.json().catch(() => ({}))
-        send({ type: 'detail', step: 'push', text: `⚠️ ${file.path}: ${e.message || pr.status}` })
+        send({ type: 'detail', step: 'push', text: `❌ ${file.path}: ${e.message || pr.status}` })
       }
     }
     send({ type: 'step', step: 'push', status: 'done' })
 
-    // ── STEP 4: النتيجة النهائية ──────────────────────────────────────────────
-    const repoUrl      = `https://github.com/${repoOwner}/${safeRepo}`
-    const actionsUrl   = `${repoUrl}/actions`
-    const releasesUrl  = `${repoUrl}/releases`
+    // ── STEP 4: Return result ────────────────────────────────────────────────
+    const repoUrl = `https://github.com/${repoOwner}/${safeRepo}`
+    const actionsUrl = `${repoUrl}/actions`
+    const releasesUrl = `${repoUrl}/releases`
 
     send({
       type: 'result',
@@ -29235,12 +22547,10 @@ app.post('/api/dz-agent/android/build', async (req, res) => {
         actionsUrl,
         releasesUrl,
         filesCount: pushedCount,
-        appType,
-        buildTime: templateInfo.build_time,
       },
     })
 
-    console.log(`[AndroidBuilder] ✅ ${appType} | ${repoOwner}/${safeRepo} — ${pushedCount}/${totalFiles} files pushed`)
+    console.log(`[AndroidBuilder] ✅ ${repoOwner}/${safeRepo} — ${pushedCount} files pushed`)
 
   } catch (err) {
     send({ type: 'error', message: err.message })
@@ -29592,39 +22902,8 @@ const chatSessions = new Map()  // id → { id, name, gender, isAdmin, lastSeen,
 const mutedUsers = new Map()    // userId → { until: timestamp, durationMs: number }
 const bannedIPs = new Set()     // Permanent IP bans
 let pinnedMessage = null        // { id, text, from, timestamp } | null
-// ── Admin secret: server-only, memory-hashed, constant-time verification ──
-// The real value must exist only in Replit/Vercel Secrets. Never put a password
-// or a decoy in client code, generated bundles, or source control.
-const _ADMIN_SALT = process.env.DZ_CHAT_ADMIN_SALT || 'dz-gpt-chat-admin-v1'
-const _ADMIN_PASSWORD = String(
-  process.env.DZ_CHAT_ADMIN_PASSWORD || process.env.CHAT_ADMIN_SECRET || ''
-).trim()
-const _ADMIN_HASH = _ADMIN_PASSWORD
-  ? crypto.scryptSync(_ADMIN_PASSWORD, _ADMIN_SALT, 32)
-  : null
-function _checkAdminSecret(incoming) {
-  if (!_ADMIN_HASH || typeof incoming !== 'string' || !incoming) return false
-  const candidate = crypto.scryptSync(incoming, _ADMIN_SALT, 32)
-  return candidate.length === _ADMIN_HASH.length && crypto.timingSafeEqual(candidate, _ADMIN_HASH)
-}
+const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || 'openit1979##'
 const MAX_CHAT_MSGS = 200
-// ── Site-wide announcement store (in-memory, survives until cleared or server restart) ──
-let _siteAnnouncement = null  // { id, text, link, linkText, timestamp, from }
-
-// ── Pending Broadcasts Queue — للمستخدمين الغائبين (طابور الإشعارات) ───────
-const _pendingBroadcasts = []        // [{id, text, from, timestamp, link, linkText}]
-const _PENDING_BROADCASTS_TTL = 24 * 60 * 60 * 1000  // 24 ساعة
-const _PENDING_BROADCASTS_MAX = 20
-
-function _pushPendingBroadcast(b) {
-  const now = Date.now()
-  // حذف المنتهية الصلاحية
-  while (_pendingBroadcasts.length > 0 && now - _pendingBroadcasts[0].timestamp > _PENDING_BROADCASTS_TTL) {
-    _pendingBroadcasts.shift()
-  }
-  _pendingBroadcasts.push(b)
-  if (_pendingBroadcasts.length > _PENDING_BROADCASTS_MAX) _pendingBroadcasts.shift()
-}
 
 function chatId() {
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36)
@@ -29920,7 +23199,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 هويتك (أجب بهذه المعلومات عند السؤال عنك):
 - اسمك: DZ Agent
 - مطوّرك ومنشئك: نذير حوامرية (Nadir Haoumeriya)، المعروف بـ Nadir Infograph، مطوّر جزائري.
-- منصّتك: DZ AGENT — منصة ذكاء اصطناعي جزائرية متكاملة.
+- منصّتك: DZ-GPT — منصة ذكاء اصطناعي جزائرية متكاملة.
 - عند السؤال "من صنعك / من طوّرك / من خدمك": أجب بجملة واحدة مختصرة مثل: "صنعني نذير حوامرية (Nadir Infograph) 🇩🇿، مطوّر جزائري."
 
 قواعد الإجابة (إلزامية):
@@ -29937,7 +23216,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 - 📊 إحصاءات الجزائر → **DZ Stats** (/stats)
 - 🛠️ CV ومخططات وقانون → **DZ Tools** (/tools)
 - 🎵 راديو وموسيقى → **DZ Radio** (/radio)${liveContext ? `\n\n━━━ بيانات مباشرة محدّثة ━━━${liveContext}` : ''}`
-      : `أنت DZ AGENT، مساعد ذكي عام ومفيد، جزء من منصة DZ AGENT التي طوّرها نذير حوامرية (Nadir Infograph) 🇩🇿.
+      : `أنت DZ GPT، مساعد ذكي عام ومفيد، جزء من منصة DZ-GPT التي طوّرها نذير حوامرية (Nadir Infograph) 🇩🇿.
 
 قواعد الإجابة (إلزامية):
 1. أجب فوراً بدون مقدمات أو عبارات تمهيدية.
@@ -29946,34 +23225,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 4. عند السؤال عن منشئك أو مطوّرك: أجب بجملة واحدة — "طوّرني نذير حوامرية (Nadir Infograph) 🇩🇿."
 5. لا تتجاوز 6 جمل.`
 
-    // ── @dzagent: call full DZ Agent chat (WC2026 + sports + news + all tools) ──
-    if (isAgent) {
-      try {
-        const _agentRes = await fetch(`http://localhost:${process.env.PORT || 5000}/api/dz-agent-chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: [{ role: 'user', content: question }], source: 'dzchat' }),
-          signal: AbortSignal.timeout(28000),
-        })
-        const _agentData = await _agentRes.json().catch(() => ({}))
-        const _agentText = _agentData?.content || 'عذراً، حدث خطأ في المعالجة.'
-        const botMsg = pushChatMsg({
-          id: chatId(), from: 'DZ Agent', fromId: 'bot', gender: 'bot',
-          text: _agentText,
-          timestamp: Date.now(), isBot: true, botType: 'agent',
-          triggeredBy: authorSession.name,
-          showDevCard: isDeveloperOrOwnerQuestion(question),
-          isMarkdown: true,
-        })
-        broadcastChat({ type: 'message', msg: botMsg })
-        return botMsg
-      } catch (_agentErr) {
-        console.error('[ChatAI/@dzagent]', _agentErr.message)
-        return null
-      }
-    }
-
-    // ── @dzgpt: general AI router ────────────────────────────────────────────
+    // ── Call full AI router (Groq → Gemini → Mistral → NVIDIA → Cohere → ...) ──
     const result = await safeGenerateAI({
       messages: [
         { role: 'system', content: systemPrompt },
@@ -29985,13 +23237,13 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 
     const botMsg = pushChatMsg({
       id: chatId(),
-      from: 'DZ AGENT',
+      from: isAgent ? 'DZ Agent' : 'DZ GPT',
       fromId: 'bot',
       gender: 'bot',
       text: result.content ? stripForeignLang(result.content.replace(/(?<!\]\()(?<!['"=])(https?:\/\/(?:www\.)?([a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+)(?:\/[^\s)\]"'<>]*)?)/g, (u, _, d) => `[${d.replace(/^www\./,'').split('.')[0].replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}](${u})`)) : 'عذراً، حدث خطأ في المعالجة.',
       timestamp: Date.now(),
       isBot: true,
-      botType: 'gpt',
+      botType: isAgent ? 'agent' : 'gpt',
       triggeredBy: authorSession.name,
       showDevCard: isDeveloperOrOwnerQuestion(question),
     })
@@ -30023,10 +23275,19 @@ function sendDmNotify(recipSession, senderName, senderId, preview, timestamp, ms
 import { spawn } from 'child_process'
 import fs from 'fs'
 import os from 'os'
-import ytdl from '@distube/ytdl-core'
 import YouTubeSR from 'youtube-sr'
 
 const YouTube = YouTubeSR.default || YouTubeSR
+// Do not load ytdl-core while the server module is booting. Its Node-only
+// CookieAgent dependency crashes the Cloudflare bundle before any REST route
+// can respond. YouTube routes load it only when they are actually requested.
+let _ytdlPromise = null
+function getYtdl() {
+  if (!_ytdlPromise) {
+    _ytdlPromise = import('@distube/ytdl-core').then(mod => mod.default || mod)
+  }
+  return _ytdlPromise
+}
 
 let _ytDlpAvailable = null
 function ytDlpAvailable() {
@@ -30084,74 +23345,29 @@ let _uaIdx = 0
 const YT_DLP_USER_AGENT = YT_DLP_USER_AGENTS[0]
 function _nextUA() { _uaIdx = (_uaIdx + 1) % YT_DLP_USER_AGENTS.length; return YT_DLP_USER_AGENTS[_uaIdx] }
 
-// Modern YouTube (2025–2026) enforces "PO Tokens" (proof-of-origin / BotGuard)
-// for GVS (stream) and player requests on most clients. Without one, datacenter
-// IPs are typically limited to muxed format 18 (360p mp4): audio-only streams
-// (itag 140/251) and higher-res video return HTTP 403.
-//
-// The free, confirmed, modern fix is to provide a PO Token. Set
-// YOUTUBE_PO_TOKEN to "<client>+<token>" (e.g. "web+eyJ..."), usually produced
-// by a PO-Token provider (bgutil-ytdlp-pot-provider / yt-dlp-getpot-wpc) or the
-// newer yt-dlp built-in handling. With it, yt-dlp unlocks every format from
-// any IP. Docs: https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
-function ytDlpPoTokenArgs() {
-  const raw = (process.env.YOUTUBE_PO_TOKEN || '').trim()
-  if (!raw) return []
-  return ['--extractor-args', `youtube:po_token=${raw}`]
-}
-
-// Client rotation order for multi-attempt retry — 2026 TESTED results.
-// TESTED 2026-08-23 on datacenter IP (Cloudflare Workers):
-//   android     ✅ format 18 (360p combined) always available — NOT SABR-protected
-//   android_vr  ✅ works without PO token for non-SABR formats
-//   tv          ✅ TV client — no PO token needed, reliable fallback
-//   web_safari  ✅ Safari client — works without JS runtime
-//   mweb        ❌ needs PO Token but worth a try as last resort
-//   ios         ❌ needs PO Token — absolute last resort
-// → android is the ONLY reliable client from datacenter IPs without cookies/tokens.
-// When YOUTUBE_PO_TOKEN is configured the later clients become viable, so the
-// rotation order stays the same but every attempt also sends the token.
+// Client rotation order for multi-attempt retry.
+// ios first — returns HLS m3u8 manifest (best for background audio + no SABR issues).
+// android second — reliable direct googlevideo URL.
+// web third — sometimes needs SABR workaround but ytdl-core handles it.
 const YT_DLP_CLIENTS = [
-  'android',       // ✅ PRIMARY — format 18 always works, SABR formats auto-skipped
-  'android_vr',    // no PO token needed for non-SABR formats; some IPs expose more
-  'tv',            // ✅ TV client — no PO token needed, reliable fallback
-  'web_safari',    // ✅ Safari client — works without JS runtime
-  'mweb',          // ❌ needs PO Token but worth a try as last resort
-  'ios',           // ❌ needs PO Token — absolute last resort
+  'ios',
+  'android,ios,web',
+  'tv_embedded',
+  'mweb',
 ]
 
 function ytDlpAntiBotArgs(clientIdx = 0) {
   const client = YT_DLP_CLIENTS[clientIdx % YT_DLP_CLIENTS.length]
   return [
     '--extractor-args', `youtube:player_client=${client}`,
-    ...ytDlpPoTokenArgs(),
     '--user-agent', _nextUA(),
     '--geo-bypass',
     '--no-check-certificate',
     '--no-check-formats',
     '--retries', '3',
     '--fragment-retries', '3',
-    '--socket-timeout', '20',
-    '--sleep-requests', '0.2',
-    // ✅ FIX 2026: تخطي التحقق بدون إيقاف التحميل
-    '--ignore-errors',
-    '--no-abort-on-error',
-  ]
-}
-
-// Non-YouTube platforms: no YouTube-specific extractor args, shorter socket timeout
-function ytDlpNonYtArgs() {
-  return [
-    '--user-agent', _nextUA(),
-    '--geo-bypass',
-    '--no-check-certificate',
-    '--no-check-formats',
-    '--retries', '2',
-    '--fragment-retries', '2',
-    '--socket-timeout', '12',
-    '--sleep-requests', '0.1',
-    '--ignore-errors',
-    '--no-abort-on-error',
+    '--socket-timeout', '25',
+    '--sleep-requests', '0.3',
   ]
 }
 
@@ -30251,6 +23467,7 @@ async function jsSearch(q, limit) {
 }
 
 async function jsInfo(url) {
+  const ytdl = await getYtdl()
   const info = await ytdl.getInfo(url)
   const vd = info.videoDetails
   const heights = Array.from(new Set(
@@ -30283,300 +23500,6 @@ function isValidYouTubeUrl(u) {
   } catch { return false }
 }
 
-// ── Social media platform URL validator (all yt-dlp supported platforms) ──────
-function isValidMediaPlatformUrl(u) {
-  if (typeof u !== 'string' || u.length > 2048) return false
-  try {
-    const host = new URL(u).hostname.replace(/^(www\.|m\.|l\.|vm\.)/i, '')
-    return /^(youtube\.com|youtu\.be|music\.youtube\.com|youtube-nocookie\.com|facebook\.com|fb\.watch|fb\.com|tiktok\.com|instagram\.com|pinterest\.com|x\.com|twitter\.com|reddit\.com|redd\.it|vimeo\.com|twitch\.tv|dailymotion\.com|soundcloud\.com)$/i.test(host)
-  } catch { return false }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// 📥 DOWNLOAD INTENT DETECTOR — كاشف نوايا تحميل الوسائط الاجتماعية
-// Spec: DOWNLOAD_MEDIA | NORMAL_CHAT + confidence + platform + detected_keywords
-// ══════════════════════════════════════════════════════════════════════════════
-function detectDownloadIntent(text) {
-  const empty = { intent: 'NORMAL_CHAT', confidence: 0, platform: null, detected_keywords: [] }
-  if (!text || typeof text !== 'string') return empty
-  const t = text.trim()
-
-  // ── Detect platform from URL ──────────────────────────────────────────────
-  let platform = null
-  const urlRe = /https?:\/\/[^\s<>"،,\u060C\u061B\u200c]+/
-  const urlMatch = t.match(urlRe)
-  if (urlMatch) {
-    try {
-      const host = new URL(urlMatch[0]).hostname.replace(/^(www\.|m\.|vm\.|l\.)/i, '')
-      if (/youtu\.?be/.test(host))                   platform = 'youtube'
-      else if (/facebook\.com|fb\.watch/.test(host)) platform = 'facebook'
-      else if (/tiktok\.com/.test(host))             platform = 'tiktok'
-      else if (/instagram\.com/.test(host))          platform = 'instagram'
-      else if (/pinterest\.com/.test(host))          platform = 'pinterest'
-      else if (/x\.com|twitter\.com/.test(host))     platform = 'twitter'
-      else if (/reddit\.com|redd\.it/.test(host))    platform = 'reddit'
-      else if (/vimeo\.com/.test(host))              platform = 'vimeo'
-      else if (/twitch\.tv/.test(host))              platform = 'twitch'
-      else if (/dailymotion\.com/.test(host))        platform = 'dailymotion'
-      else if (/soundcloud\.com/.test(host))         platform = 'soundcloud'
-    } catch {}
-  }
-
-  const detected_keywords = []
-  const requestedFormat = /mp3|audio\s*only|extract\s+audio|استخرج\s+(?:لي\s+)?الصوت|الصوت\s*فقط|حوّل?\s*(?:ه|ها)?\s*(?:إلى|ل)\s*mp3|convertis\s+en\s+mp3/i.test(t) ? 'audio' : 'video'
-
-  // ── Arabic keywords ───────────────────────────────────────────────────────
-  const arKws = [
-    // Verb forms
-    [/حمّ?ل/i, 'حمّل'], [/نزّ?ل/i, 'نزّل'], [/هبط(?!ة|ات)/i, 'هبط'],
-    [/هبطلي/i, 'هبطلي'], [/نزّ?للي/i, 'نزّللي'],
-    // Noun / gerund forms — الأشكال الاسمية
-    [/تحميل/i, 'تحميل'], [/تنزيل/i, 'تنزيل'], [/تهبيط/i, 'تهبيط'],
-    [/حمّ?له?ا?/i, 'تحميل'],
-    // Commands / requests
-    [/جيبلي\s+الفيديو/i, 'جيبلي الفيديو'], [/جيبلي\s+الصوت/i, 'جيبلي الصوت'],
-    [/دير\s+تحميل/i, 'دير تحميل'], [/استخرج\s+الصوت/i, 'استخرج الصوت'],
-    [/حول\s+إلى\s+mp3/i, 'حول إلى mp3'], [/حولو?\s+ل\s*mp3/i, 'حول إلى mp3'],
-    [/ابعثلي\s+الفيديو/i, 'ابعثلي الفيديو'], [/عطيني\s+الفيديو/i, 'عطيني الفيديو'],
-    [/خرجلي\s+الأغنية/i, 'خرجلي الأغنية'],
-    // Darja shortcuts
-    [/حملو?لي/i, 'حمّللي'], [/نزلو?لي/i, 'نزّللي'],
-  ]
-  for (const [re, kw] of arKws) { if (re.test(t)) detected_keywords.push(kw) }
-
-  // ── French keywords ───────────────────────────────────────────────────────
-  const frKws = [
-    [/télécharg/i, 'télécharger'], [/récupère\s+la\s+vidéo/i, 'récupère la vidéo'],
-    [/récupère\s+l.audio/i, "récupère l'audio"], [/convertis\s+en\s+mp3/i, 'convertis en mp3'],
-  ]
-  for (const [re, kw] of frKws) { if (re.test(t)) detected_keywords.push(kw) }
-
-  // ── English keywords ──────────────────────────────────────────────────────
-  const enKws = [
-    [/\bdownload\b/i, 'download'], [/save\s+video/i, 'save video'],
-    [/save\s+audio/i, 'save audio'], [/\bmp3\b/i, 'mp3'],
-    [/extract\s+audio/i, 'extract audio'], [/get\s+video/i, 'get video'],
-  ]
-  for (const [re, kw] of enKws) { if (re.test(t)) detected_keywords.push(kw) }
-
-  if (detected_keywords.length === 0) return { intent: 'NORMAL_CHAT', confidence: 0, platform, detected_keywords, requestedFormat }
-
-  // Condition 1: supported URL + download keyword → high confidence
-  if (platform && detected_keywords.length > 0) {
-    return { intent: 'DOWNLOAD_MEDIA', confidence: 0.97, platform, detected_keywords, requestedFormat }
-  }
-  // Condition 2-4: keywords only (no URL) → still DOWNLOAD_MEDIA, lower confidence
-  return { intent: 'DOWNLOAD_MEDIA', confidence: 0.82, platform: null, detected_keywords, requestedFormat }
-}
-
-// ── Download orchestrator boundary ──────────────────────────────────────────
-// Keep this parser independent from the chat prompt. Downloaders only ever
-// receive a URL extracted from the user message, never the complete sentence.
-function extractDownloadUrls(text) {
-  if (typeof text !== 'string') return []
-  const found = text.match(/(?:https?:\/\/|www\.)[^\s<>"'،؟!؛\u060C\u061B]+/gi) || []
-  const seen = new Set()
-  const urls = []
-  for (const raw of found) {
-    let value = raw.trim().replace(/^www\./i, 'https://www.')
-    // Punctuation outside query/path is removed; URL query delimiters remain.
-    value = value.replace(/[.,;:!?'"،؛)\]}]+$/g, '')
-    try {
-      const u = new URL(value)
-      if (!/^https?:$/.test(u.protocol) || u.username || u.password || u.href.length > 2048) continue
-      const clean = u.href
-      if (!seen.has(clean)) { seen.add(clean); urls.push(clean) }
-    } catch {}
-  }
-  return urls
-}
-
-function mediaPlatformForUrl(url) {
-  try {
-    const host = new URL(url).hostname.toLowerCase().replace(/^(www\.|m\.|mobile\.|vm\.|l\.)/, '')
-    if (/^(youtube\.com|youtu\.be|youtube-nocookie\.com|music\.youtube\.com)$/.test(host)) return 'youtube'
-    if (/^(facebook\.com|fb\.watch|fb\.com)$/.test(host)) return 'facebook'
-    if (/^tiktok\.com$|\.tiktok\.com$/.test(host)) return 'tiktok'
-    if (/^instagram\.com$|\.instagram\.com$/.test(host)) return 'instagram'
-    if (/^pinterest\.(com|co\.[a-z]{2})$|\.pinterest\./.test(host)) return 'pinterest'
-    if (/^(x\.com|twitter\.com)$/.test(host)) return 'twitter'
-    if (/^reddit\.com$|^redd\.it$|\.reddit\.com$/.test(host)) return 'reddit'
-    if (/^vimeo\.com$|\.vimeo\.com$/.test(host)) return 'vimeo'
-    if (/^twitch\.tv$|\.twitch\.tv$/.test(host)) return 'twitch'
-    if (/^dailymotion\.com$|\.dailymotion\.com$/.test(host)) return 'dailymotion'
-    if (/^soundcloud\.com$|\.soundcloud\.com$/.test(host)) return 'soundcloud'
-    return null
-  } catch { return null }
-}
-
-function classifyDownloadError(err) {
-  const m = String(err?.message || err || '').toLowerCase()
-  if (/login|sign.?in|private|privacy|auth|forbidden|401|403/.test(m)) return 'PRIVATE_CONTENT'
-  if (/rate|429|too many/.test(m)) return 'RATE_LIMITED'
-  if (/geo|region|country/.test(m)) return 'GEO_RESTRICTED'
-  if (/unsupported|not support/.test(m)) return 'UNSUPPORTED_PLATFORM'
-  if (/no video|no media|not found|no url|no stream/.test(m)) return 'MEDIA_NOT_FOUND'
-  if (/timeout|abort|network|fetch|econn|socket/.test(m)) return 'NETWORK_ERROR'
-  if (/format/.test(m)) return 'FORMAT_UNAVAILABLE'
-  return 'PROVIDER_ERROR'
-}
-
-function hasUsableMedia(info) {
-  const streams = [...(info?.video || []), ...(info?.audio || [])]
-  return streams.some(s => typeof s?.url === 'string' && /^https?:\/\//i.test(s.url))
-}
-
-function downloadProviderPlan(platform) {
-  // ── Viddari FIRST wrapper (no API key needed) ─────────────────────
-  // Uses the public API powering https://viddari.com
-  // Supported: TikTok, Instagram, Reddit, X/Twitter, Pinterest, YouTube Shorts
-  const _viddariProvider = async url => {
-    const info = await viddariResolve(url)
-    return { ...info, source: 'viddari' }
-  }
-
-  // ── Giststack PRIMARY wrapper ─────────────────────────────────────
-  // Powers https://giststack.com/tools/social-media-downloader via
-  // social-download-all-in-one RapidAPI. Requires RAPIDAPI_KEY secret.
-  const _giststackProvider = async url => {
-    const info = await giststackFetchInfo(url)
-    return { ...info, source: 'giststack' }
-  }
-
-  // ── Fast yt-dlp wrapper for non-YouTube platforms ─────────────────
-  const _ytDlpFastProvider = async url => {
-    const raw = await extractWithYtDlpFast(url)
-    const { audio, video } = processFormats(raw.formats)
-    return { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
-  }
-
-  // Build Viddari entry — only prepend if platform is supported
-  const vd = (url) => {
-    try { return isViddariSupported(url) ? [['viddari', _viddariProvider]] : [] } catch { return [] }
-  }
-
-  // Build Giststack entry — only prepend if API key is configured
-  const gs = isGiststackAvailable() ? [['giststack', _giststackProvider]] : []
-
-  // Viddari placeholder (evaluated per-call in specialized map below)
-  // We use a static check here since downloadProviderPlan receives platform not url
-  const vdStatic = ['tiktok','instagram','reddit','twitter','pinterest','youtube'].includes(platform)
-    ? [['viddari', _viddariProvider]]
-    : []
-
-  const specialized = {
-    // ── Facebook: حلّ الرابط المختصر أولاً ثم تشغيل جميع المستخرجات بالتوازي ──
-    // share/r/ و fb.watch لا يعمل معها معظم المستخرجات → نتبع الـ redirect أولاً
-    // Promise.any: أول مستخرج ينجح يوقف البقية — يقلل الانتظار من 90s إلى <15s
-    facebook: [
-      ...gs,
-      ['facebook-parallel', async (url) => {
-        const resolved = await _resolveFacebookShareUrl(url)
-        console.log(`[FB:parallel] Starting 7 extractors in parallel for ${resolved.slice(-40)}`)
-        return await Promise.any([
-          _extractFacebookSnapsave(resolved),
-          _extractFacebookGetMyFB(resolved),
-          _extractFacebookSSVid(resolved),
-          _extractFacebookY2Down(resolved),
-          _extractFacebookSaveFrom(resolved),
-          _extractFacebookFdownloaderNet(resolved),
-          _extractFacebookSaveclip(resolved),
-        ].map(p => p.then(r => {
-          if (!r?.video?.length && !r?.audio?.length) throw new Error('no media in response')
-          return r
-        })))
-      }],
-      ['cobalt',   extractWithCobaltAPI],
-      ['yt-dlp',   _ytDlpFastProvider],
-    ],
-    instagram: [
-      ...vdStatic,
-      ...gs,
-      ['cobalt',    extractWithCobaltAPI],
-      ['saveclip',  _extractInstagramSaveclip],
-      ['yt-dlp',    _ytDlpFastProvider],
-    ],
-    tiktok: [
-      ...vdStatic,
-      ...gs,
-      ['tikwm',     _extractTikTokTikwm],
-      ['cobalt',    extractWithCobaltAPI],
-    ],
-    twitter: [
-      ...vdStatic,
-      ...gs,
-      ['fxtwitter', _extractTwitterFxtwitter],
-      ['cobalt',    extractWithCobaltAPI],
-    ],
-    pinterest: [
-      ...vdStatic,
-      ...gs,
-      ['pinterest-oembed-pindown', _extractPinterestPindown],
-      ['cobalt', extractWithCobaltAPI],
-    ],
-    reddit: [
-      ...vdStatic,
-      ...gs,
-      ['cobalt',    extractWithCobaltAPI],
-      ['yt-dlp',    _ytDlpFastProvider],
-    ],
-    vimeo: [
-      ...gs,
-      ['cobalt',    extractWithCobaltAPI],
-      ['yt-dlp',    _ytDlpFastProvider],
-    ],
-    twitch: [
-      ...gs,
-      ['cobalt',    extractWithCobaltAPI],
-      ['yt-dlp',    _ytDlpFastProvider],
-    ],
-    dailymotion: [
-      ...gs,
-      ['cobalt',    extractWithCobaltAPI],
-      ['yt-dlp',    _ytDlpFastProvider],
-    ],
-    soundcloud: [
-      ...gs,
-      ['cobalt',    extractWithCobaltAPI],
-      ['yt-dlp',    _ytDlpFastProvider],
-    ],
-    youtube: [
-      ...vdStatic,
-      ...gs,
-      ['cobalt',    extractWithCobaltAPI],
-      ['yt-dlp',    _ytDlpFastProvider],
-    ],
-  }
-  return [...(specialized[platform] || [...vdStatic, ...gs]), ['cobalt', extractWithCobaltAPI], ['yt-dlp', _ytDlpFastProvider]]
-}
-
-async function orchestrateMediaDownload(url, platform) {
-  const plan = downloadProviderPlan(platform)
-  const attempts = []
-  for (const [provider, extractor] of plan) {
-    const started = Date.now()
-    try {
-      const info = await extractor(url)
-      if (!hasUsableMedia(info)) throw new Error('media validation: no usable media URL')
-      const result = { ...info, provider, platform, fallbackAttempts: attempts.length }
-      console.log(`[DownloadOrchestrator] job=${url.slice(-24)} platform=${platform} provider=${provider} success duration=${Date.now() - started}ms`)
-      return result
-    } catch (err) {
-      const errorType = classifyDownloadError(err)
-      attempts.push({ provider, errorType })
-      console.warn(`[DownloadOrchestrator] platform=${platform} provider=${provider} failed type=${errorType}`)
-    }
-  }
-  const final = attempts[attempts.length - 1]?.errorType || 'UNKNOWN_ERROR'
-  const error = final === 'PRIVATE_CONTENT'
-    ? '❌ هذا المحتوى يتطلب تسجيل الدخول أو غير متاح للعامة.'
-    : '❌ تعذر تحميل الوسائط من المصادر المتاحة.'
-  const e = new Error(error)
-  e.errorType = final
-  e.attempts = attempts
-  throw e
-}
-
 function extractYouTubeVideoId(u) {
   try {
     const url = new URL(u)
@@ -30589,22 +23512,14 @@ function extractYouTubeVideoId(u) {
 }
 
 const PIPED_API_INSTANCES = [
-  // Refreshed 2026-08 — the Piped network has shrunk to a handful of instances.
-  'https://api.piped.private.coffee',
+  // Refreshed 2026-05-12 (live-probed) — sorted fastest-first.
   'https://pipedapi.kavin.rocks',
+  'https://api.piped.private.coffee',
   'https://piapi.ggtyler.dev',
   'https://pipedapi.tokhmi.xyz',
   'https://api.piped.privacydev.net',
   'https://piped-api.garudalinux.org',
   'https://pipedapi.in.projectsegfau.lt',
-  'https://pipedapi.adminforge.de',
-  'https://piped-api.codespace.cz',
-  'https://api.piped.yt',
-  'https://pa.il.ax',
-  'https://pipedapi.moomoo.me',
-  'https://pipedapi.drgns.space',
-  'https://piped-api.privacy.com.de',
-  'https://piped.yt/api',
 ]
 
 // Invidious is a separate free YouTube proxy network. Unlike Piped, every
@@ -30613,11 +23528,8 @@ const PIPED_API_INSTANCES = [
 // bypasses googlevideo's IP-bound signed URL restrictions. We use it as a
 // third independent source raced alongside ytdown.to + Piped.
 const INVIDIOUS_API_INSTANCES = [
-  // Refreshed 2026-08 (live-probed) — currently-listed https instances first.
-  'https://invidious.nerdvpn.de',
-  'https://invidious.f5.si',
+  // Refreshed 2026-05-12 (live-probed) — sorted fastest-first.
   'https://inv.nadeko.net',
-  'https://invidious.tiekoetter.com',
   'https://invidious.fdn.fr',
   'https://iv.ggtyler.dev',
   'https://invidious.materialio.us',
@@ -30630,24 +23542,8 @@ const INVIDIOUS_API_INSTANCES = [
 // Returns { url, mime, ext, instance } where `url` already proxies through
 // the Invidious instance (so no IP-bound issues), or null if every instance
 // fails. The proxy URL is `${instance}/latest_version?id=VID&itag=ITAG&local=true`.
-//
-// 2026-08: most Invidious instances have DISABLED the `/api/v1/videos` JSON
-// endpoint, but the `/latest_version?id=...&itag=...&local=true` byte-proxy
-// still works. So instead of querying the API for available itags (dead), we
-// use the universal YouTube itags directly:
-//   itag 18  = 360p mp4 (muxed audio+video)
-//   itag 22  = 720p mp4 (muxed audio+video)
-//   itag 140 = m4a audio
-//   itag 251 = webm/opus audio
 async function fetchInvidiousStreams(videoId, { isAudio, height = 720 } = {}) {
   if (!videoId) return null
-  let pickItag, mime, ext
-  if (isAudio) {
-    pickItag = 140; mime = 'audio/mp4'; ext = 'm4a'
-  } else {
-    pickItag = height >= 720 ? 22 : 18
-    mime = 'video/mp4'; ext = 'mp4'
-  }
   // PERF: race all instances in parallel. Sequential iteration paid up to
   // 8s × N for every dead instance before reaching a working one. With
   // Promise.any the first responder wins and the rest are abandoned.
@@ -30655,21 +23551,40 @@ async function fetchInvidiousStreams(videoId, { isAudio, height = 720 } = {}) {
     const ctrl = new AbortController()
     const t = setTimeout(() => ctrl.abort(), 6000)
     try {
-      // HEAD first to confirm the instance will actually serve media bytes
-      // (dead instances / bot-challenges answer with HTML, JSON or a plain
-      // "stop abusing my instance" text body).
-      const r = await fetch(
-        `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pickItag}&local=true`,
-        { signal: ctrl.signal, method: 'HEAD', headers: { 'User-Agent': 'Mozilla/5.0 DZ-GPT/1.0' } },
-      )
-      const ctype = (r.headers.get('content-type') || '').toLowerCase()
-      const isMedia = ctype.includes('video/') || ctype.includes('audio/') || ctype.includes('octet-stream')
-      if (!r.ok || !isMedia) {
-        throw new Error(`http ${r.status} ${ctype || 'no-media'}`)
+      const r = await fetch(`${base}/api/v1/videos/${encodeURIComponent(videoId)}?fields=formatStreams,adaptiveFormats,title`, {
+        signal: ctrl.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 DZ-GPT/1.0', 'Accept': 'application/json' },
+      })
+      clearTimeout(t)
+      if (!r.ok) throw new Error(`http ${r.status}`)
+      const j = await r.json()
+      if (isAudio) {
+        const audios = (j.adaptiveFormats || []).filter(a => a && a.type && a.type.startsWith('audio/'))
+        if (!audios.length) throw new Error('no audio formats')
+        const m4a = audios.filter(a => a.type.includes('mp4') || a.type.includes('m4a'))
+        const pool = m4a.length ? m4a : audios
+        pool.sort((a, b) => Number(b.bitrate || 0) - Number(a.bitrate || 0))
+        const pick = pool[0]
+        if (!pick?.itag) throw new Error('no itag')
+        const isWebm = pick.type.includes('webm') || pick.type.includes('opus')
+        return {
+          url: `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pick.itag}&local=true`,
+          mime: isWebm ? 'audio/webm' : 'audio/mp4',
+          ext: isWebm ? 'webm' : 'm4a',
+          instance: base,
+        }
       }
+      const combined = (j.formatStreams || [])
+        .filter(v => v && v.itag && (!v.type || v.type.includes('mp4')))
+        .map(v => ({ ...v, h: parseInt(v.resolution || '0', 10) || 0 }))
+      combined.sort((a, b) => b.h - a.h)
+      const pick = combined.find(v => v.h <= height) || combined[0]
+      if (!pick?.itag) throw new Error('no video itag')
       return {
-        url: `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pickItag}&local=true`,
-        mime, ext, instance: base,
+        url: `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pick.itag}&local=true`,
+        mime: 'video/mp4',
+        ext: 'mp4',
+        instance: base,
       }
     } finally {
       clearTimeout(t)
@@ -30821,64 +23736,19 @@ function processFormats(formats) {
   return { audio, video }
 }
 
-async function extractWithYtDlp(url, clientIdx = 0) {
+async function extractWithYtDlp(url) {
   const dlpBin = await ytDlpBinaryPath()
   if (!dlpBin) throw new Error('yt-dlp binary not available')
   const cookies = await ytDlpCookiesArgs()
-  const runOnce = (idx) => new Promise((resolve, reject) => {
-    const args = ['-J', '--no-warnings', '--no-playlist', ...ytDlpAntiBotArgs(idx), ...cookies, url]
+  const data = await new Promise((resolve, reject) => {
+    const args = ['-J', '--no-warnings', '--no-playlist', ...ytDlpAntiBotArgs(), ...cookies, url]
     const proc = spawn(dlpBin, args)
     let stdout = ''
     let stderr = ''
     const killTimer = setTimeout(() => {
       try { proc.kill('SIGKILL') } catch {}
       reject(new Error('yt-dlp timeout'))
-    }, 20000)
-    proc.stdout.on('data', d => { stdout += d.toString() })
-    proc.stderr.on('data', d => { stderr += d.toString() })
-    proc.on('error', err => { clearTimeout(killTimer); reject(err) })
-    proc.on('close', code => {
-      clearTimeout(killTimer)
-      if (code !== 0) return reject(new Error((stderr || `yt-dlp exited ${code}`).slice(0, 300)))
-      try { resolve(JSON.parse(stdout)) } catch (e) { reject(e) }
-    })
-  })
-
-  // ✅ FIX 2026: retry with different client if first attempt fails
-  let lastErr
-  const maxClients = YT_DLP_CLIENTS.length
-  for (let i = clientIdx; i < clientIdx + Math.min(2, maxClients); i++) {
-    try {
-      const data = await runOnce(i % maxClients)
-      return {
-        title: data.title || '',
-        duration: Number(data.duration) || 0,
-        thumbnail: data.thumbnail || (Array.isArray(data.thumbnails) && data.thumbnails.length ? data.thumbnails[data.thumbnails.length - 1].url : ''),
-        uploader: data.uploader || data.channel || '',
-        formats: data.formats || [],
-      }
-    } catch (e) {
-      lastErr = e
-      console.warn(`[yt-dlp:client${i % maxClients}] failed: ${e.message?.slice(0, 80)} — retrying next client`)
-    }
-  }
-  throw lastErr
-}
-
-// Fast yt-dlp for non-YouTube platforms (no YT-specific args, 10s timeout, 1 attempt only)
-async function extractWithYtDlpFast(url) {
-  const dlpBin = await ytDlpBinaryPath()
-  if (!dlpBin) throw new Error('yt-dlp binary not available')
-  const cookies = await ytDlpCookiesArgs()
-  const data = await new Promise((resolve, reject) => {
-    const args = ['-J', '--no-warnings', '--no-playlist', ...ytDlpNonYtArgs(), ...cookies, url]
-    const proc = spawn(dlpBin, args)
-    let stdout = ''
-    let stderr = ''
-    const killTimer = setTimeout(() => {
-      try { proc.kill('SIGKILL') } catch {}
-      reject(new Error('yt-dlp-fast timeout'))
-    }, 10000)
+    }, 22000)
     proc.stdout.on('data', d => { stdout += d.toString() })
     proc.stderr.on('data', d => { stderr += d.toString() })
     proc.on('error', err => { clearTimeout(killTimer); reject(err) })
@@ -30897,227 +23767,61 @@ async function extractWithYtDlpFast(url) {
   }
 }
 
-// ── Cobalt API engine — public instances fallback for social platforms ──────────
-// Spec: https://cobalt.tools — POST /  { url, downloadMode:'auto'|'audio' }
-// Returns { status:'stream'|'redirect'|'tunnel', url } or { status:'error', error }
-// ✅ FIX 2026-07: تحديث instances — الأقدم كانت down أو غيّرت API
-const COBALT_INSTANCES = [
-  // Refreshed 2026-08 — most actively-maintained community instances first.
-  'https://api.cobalt.best',
-  'https://co.eepy.gg',
-  'https://cobalt.lol',
-  'https://cobalt-api.kwiatekmiki.com',
-  'https://cobalt.drgns.space',
-  'https://cobalt.catto.moe',
-  'https://cobalt.privacydev.net',
-  'https://cobalt-api.salvatoresolazzo.com',
-  'https://cobalt.api.timelessnesses.me',
-  'https://dwnld.nichijou.co',
-  'https://cobaltapi.0x7d.eu',
-  'https://cobalt.tools',
-]
-
-async function extractWithCobaltAPI(url) {
-  let lastErr = new Error('cobalt: no instances available')
-  for (const base of COBALT_INSTANCES) {
+// Piped fallback that returns the full structured shape (not just one URL).
+async function extractWithPipedFull(videoId) {
+  if (!videoId) throw new Error('no videoId')
+  let lastErr
+  for (const base of PIPED_API_INSTANCES) {
     try {
       const ctrl = new AbortController()
-      const tid = setTimeout(() => ctrl.abort(), 10000)
-      const resp = await fetch(`${base}/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'User-Agent': 'DZ-GPT/2.0 (+https://dzagent.app)',
-        },
-        body: JSON.stringify({
-          url,
-          downloadMode: 'auto',
-          filenameStyle: 'basic',
-          videoQuality: '720',
-          audioFormat: 'mp3',
-          audioBitrate: '192',
-        }),
+      const t = setTimeout(() => ctrl.abort(), 8000)
+      const r = await fetch(`${base}/streams/${encodeURIComponent(videoId)}`, {
         signal: ctrl.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 DZ-GPT/1.0' },
       })
-      clearTimeout(tid)
-      const j = await resp.json().catch(() => ({}))
-
-      // ✅ FIX 2026: Cobalt v10+ error format changed: { status:'error', error: { code, context } }
-      const isError = !resp.ok || j.status === 'error' || !!j.error
-      if (isError) {
-        const errCode = j?.error?.code || (typeof j?.error === 'string' ? j.error : null) || `cobalt ${resp.status}`
-        lastErr = new Error(errCode)
-        continue
-      }
-
-      const dlUrl = j.url
-      if (!dlUrl) { lastErr = new Error('cobalt: no url in response'); continue }
-
-      // Cobalt gives us a single muxed stream URL — wrap into our standard shape
-      const isAudio = /audio/i.test(j.type || '') || /\.mp3|\.m4a/.test(dlUrl)
-      const isVideo = !isAudio
-      const ext = /\.mp3/.test(dlUrl) ? 'mp3' : /\.m4a/.test(dlUrl) ? 'm4a' : /\.webm/.test(dlUrl) ? 'webm' : 'mp4'
-      console.log(`[extract:cobalt:ok] instance=${base} status=${j.status} type=${j.type||'?'}`)
+      clearTimeout(t)
+      if (!r.ok) { lastErr = new Error(`piped ${r.status}`); continue }
+      const j = await r.json()
+      const audio = (j.audioStreams || [])
+        .filter(a => a && a.url)
+        .map(a => ({
+          url: a.url,
+          ext: (a.format || '').toLowerCase().includes('webm') ? 'webm' : 'm4a',
+          bitrate: Number(a.bitrate) || null,
+          size: a.contentLength ? Number(a.contentLength) : null,
+          mime: a.mimeType || 'audio/mp4',
+          acodec: a.codec || null,
+        }))
+        .sort((x, y) => Number(y.bitrate || 0) - Number(x.bitrate || 0))
+      const video = (j.videoStreams || [])
+        .filter(v => v && v.url)
+        .map(v => ({
+          url: v.url,
+          quality: v.quality || (v.height ? `${v.height}p` : null),
+          height: v.height || null,
+          ext: (v.format || '').toLowerCase().includes('webm') ? 'webm' : 'mp4',
+          size: v.contentLength ? Number(v.contentLength) : null,
+          mime: v.mimeType || 'video/mp4',
+          vcodec: v.codec || null,
+          hasAudio: v.videoOnly === false,
+        }))
+        .sort((x, y) => Number(y.height || 0) - Number(x.height || 0))
       return {
-        title: j.filename?.replace(/\.[^.]+$/, '') || url.split('/').pop()?.split('?')[0] || '',
-        duration: 0,
-        thumbnail: '',
-        uploader: '',
-        audio: isAudio ? [{ url: dlUrl, ext, bitrate: null, size: null, muxed: true }] : [],
-        video: isVideo ? [{ url: dlUrl, quality: null, height: null, ext, size: null, hasAudio: true }] : [],
-        source: 'cobalt',
-        cobaltInstance: base,
+        title: j.title || '',
+        duration: Number(j.duration) || 0,
+        thumbnail: j.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        uploader: j.uploader || '',
+        audio,
+        video,
+        source: 'piped',
+        instance: base,
       }
     } catch (e) {
       lastErr = e
       // try next instance
     }
   }
-  throw lastErr
-}
-
-// Multi-platform media info extraction
-// Strategy:
-//   YouTube  → Cobalt first (own infra, no datacenter-IP block) → yt-dlp fallback → Piped
-//   Others   → yt-dlp first → Cobalt fallback
-const _YT_HOSTNAME_RE = /(?:^|\.)(?:youtube\.com|youtu\.be|youtube-nocookie\.com|ytimg\.com)$/i
-
-function isYouTubeUrl(url) {
-  try { return _YT_HOSTNAME_RE.test(new URL(url).hostname) } catch { return false }
-}
-
-async function extractMediaInfoAny(url) {
-  const isYT = isYouTubeUrl(url)
-
-  if (isYT) {
-    // ── YouTube: Cobalt first (bypasses datacenter-IP block) ──────────────
-    try {
-      const cobaltResult = await extractWithCobaltAPI(url)
-      console.log(`[extract:cobalt(yt):ok] url=${url.slice(0, 60)}`)
-      return cobaltResult
-    } catch (e0) {
-      console.warn('[extract:cobalt(yt):fail]', e0.message?.slice(0, 120))
-    }
-
-    // ── YouTube: yt-dlp fallback with best client rotation ────────────────
-    try {
-      const raw = await extractWithYtDlp(url)
-      const { audio, video } = processFormats(raw.formats)
-      console.log(`[extract:yt-dlp(yt):ok] audio=${audio.length} video=${video.length}`)
-      return { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
-    } catch (e1) {
-      console.warn('[extract:yt-dlp(yt):fail]', e1.message?.slice(0, 120))
-    }
-
-    // ── YouTube: Piped full-structured fallback ────────────────────────────
-    try {
-      const ytId = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)?.[1]
-      if (ytId) {
-        const piped = await extractWithPipedFull(ytId)
-        console.log(`[extract:piped(yt):ok] video=${piped.video?.length} audio=${piped.audio?.length}`)
-        return piped
-      }
-    } catch (e2) {
-      console.warn('[extract:piped(yt):fail]', e2.message?.slice(0, 120))
-    }
-
-    throw new Error('تعذّر تحميل هذا الفيديو من YouTube — قد يكون محمياً أو محجوباً في منطقتك')
-  }
-
-  // ── Non-YouTube: yt-dlp primary → Cobalt fallback ─────────────────────
-  try {
-    const raw = await extractWithYtDlp(url)
-    const { audio, video } = processFormats(raw.formats)
-    console.log(`[extract:yt-dlp:ok] audio=${audio.length} video=${video.length} url=${url.slice(0, 60)}`)
-    return { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
-  } catch (e1) {
-    console.warn('[extract:yt-dlp:fail]', e1.message?.slice(0, 120))
-  }
-
-  try {
-    const cobaltResult = await extractWithCobaltAPI(url)
-    return cobaltResult
-  } catch (e2) {
-    console.warn('[extract:cobalt:fail]', e2.message?.slice(0, 120))
-  }
-
-  throw new Error('فشل استخراج الوسائط — جرب cobalt.tools مباشرةً أو تأكد من صحة الرابط')
-}
-
-// Piped fallback — races ALL instances in parallel, first valid response wins.
-// Much faster than sequential iteration: dead instances don't block live ones.
-function _parsePipedResponse(j, videoId, instance) {
-  const audio = (j.audioStreams || [])
-    .filter(a => a && a.url)
-    .map(a => ({
-      url: a.url,
-      ext: (a.format || '').toLowerCase().includes('webm') ? 'webm' : 'm4a',
-      bitrate: Number(a.bitrate) || null,
-      size: a.contentLength ? Number(a.contentLength) : null,
-      mime: a.mimeType || 'audio/mp4',
-      acodec: a.codec || null,
-    }))
-    .sort((x, y) => Number(y.bitrate || 0) - Number(x.bitrate || 0))
-  const video = (j.videoStreams || [])
-    .filter(v => v && v.url)
-    .map(v => ({
-      url: v.url,
-      quality: v.quality || (v.height ? `${v.height}p` : null),
-      height: v.height || null,
-      ext: (v.format || '').toLowerCase().includes('webm') ? 'webm' : 'mp4',
-      size: v.contentLength ? Number(v.contentLength) : null,
-      mime: v.mimeType || 'video/mp4',
-      vcodec: v.codec || null,
-      hasAudio: v.videoOnly === false,
-    }))
-    .sort((x, y) => Number(y.height || 0) - Number(x.height || 0))
-  if (!audio.length && !video.length) throw new Error('piped: no streams in response')
-  return {
-    title: j.title || '',
-    duration: Number(j.duration) || 0,
-    thumbnail: j.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-    uploader: j.uploader || '',
-    audio,
-    video,
-    source: 'piped',
-    instance,
-  }
-}
-
-async function extractWithPipedFull(videoId) {
-  if (!videoId) throw new Error('no videoId')
-
-  // Race first half of instances (fastest ones) in parallel
-  const firstBatch = PIPED_API_INSTANCES.slice(0, 7)
-  const secondBatch = PIPED_API_INSTANCES.slice(7)
-
-  const tryInstance = async (base) => {
-    const ctrl = new AbortController()
-    const t = setTimeout(() => ctrl.abort(), 9000)
-    const r = await fetch(`${base}/streams/${encodeURIComponent(videoId)}`, {
-      signal: ctrl.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)' },
-    })
-    clearTimeout(t)
-    if (!r.ok) throw new Error(`piped:${base} status=${r.status}`)
-    const j = await r.json()
-    return _parsePipedResponse(j, videoId, base)
-  }
-
-  // Try first batch in parallel
-  try {
-    return await Promise.any(firstBatch.map(b => tryInstance(b)))
-  } catch (_) {
-    // All first-batch failed → try second batch
-  }
-
-  // Try second batch in parallel
-  try {
-    return await Promise.any(secondBatch.map(b => tryInstance(b)))
-  } catch (e) {
-    throw new Error('all piped instances failed')
-  }
+  throw lastErr || new Error('all piped instances failed')
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -31553,881 +24257,6 @@ function antiBanDelay(maxMs = 800) {
   return new Promise(r => setTimeout(r, Math.floor(Math.random() * maxMs)))
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════════════════════════
-// 📥 /api/dz-agent/download-proxy — تدفق الملف عبر الخادم مع Content-Length
-// يُتيح للمتصفح تتبع نسبة التحميل عبر ReadableStream
-// ══════════════════════════════════════════════════════════════════════════════
-app.get('/api/dz-agent/download-proxy', async (req, res) => {
-  const rawUrl  = String(req.query.url      || '').trim()
-  const rawName = String(req.query.filename || 'download').trim()
-  const ext     = String(req.query.ext      || 'mp4').trim().replace(/[^a-z0-9]/gi, '')
-  if (!rawUrl) return res.status(400).json({ ok: false, error: 'url required' })
-
-  // Build a safe filename (allow Arabic + latin + basic punctuation)
-  const safeName = rawName.replace(/[^\w\u0600-\u06FF\s._-]/g, '_').slice(0, 180) || 'download'
-
-  let upstreamOrigin = 'https://www.youtube.com'
-  try {
-    const upstreamHost = new URL(rawUrl).hostname.toLowerCase()
-    if (upstreamHost.includes('fbcdn.net') || upstreamHost.endsWith('facebook.com')) {
-      upstreamOrigin = 'https://www.facebook.com'
-    } else if (upstreamHost.includes('tiktok')) {
-      upstreamOrigin = 'https://www.tiktok.com'
-    } else if (upstreamHost.includes('twimg.com') || upstreamHost.includes('x.com')) {
-      upstreamOrigin = 'https://x.com'
-    } else if (upstreamHost.includes('instagram')) {
-      upstreamOrigin = 'https://www.instagram.com'
-    } else if (upstreamHost.includes('pinimg.com') || upstreamHost.includes('pinterest')) {
-      upstreamOrigin = 'https://www.pinterest.com'
-    }
-  } catch {
-    return res.status(400).json({ ok: false, error: 'Invalid media URL' })
-  }
-
-  // Headers that mimic a real browser — needed for signed social CDNs.
-  const upstreamHeaders = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-    'Accept': '*/*',
-    'Accept-Encoding': 'identity',
-    'Referer': `${upstreamOrigin}/`,
-    'Origin': upstreamOrigin,
-  }
-
-  let upstream
-  try {
-    upstream = await fetch(rawUrl, { headers: upstreamHeaders })
-    if (!upstream.ok) {
-      return res.status(502).json({ ok: false, error: `Upstream ${upstream.status} ${upstream.statusText}` })
-    }
-  } catch (e) {
-    return res.status(502).json({ ok: false, error: e.message?.slice(0, 200) })
-  }
-
-  const ct = upstream.headers.get('content-type') || `video/${ext}`
-  const cl = upstream.headers.get('content-length')
-  const cr = upstream.headers.get('content-range')
-
-  res.setHeader('Content-Type', ct)
-  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeName + '.' + ext)}`)
-  res.setHeader('Cache-Control', 'no-store')
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  if (cl)  res.setHeader('Content-Length', cl)
-  if (cr)  res.setHeader('Content-Range', cr)
-
-  // Stream body to client
-  const reader = upstream.body.getReader()
-  req.on('close', () => { try { reader.cancel() } catch {} })
-
-  const pump = async () => {
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) { res.end(); return }
-        const ok = res.write(Buffer.from(value))
-        if (!ok) await new Promise(r => res.once('drain', r))
-      }
-    } catch (e) {
-      if (!res.headersSent) res.status(502).json({ ok: false, error: e.message?.slice(0, 200) })
-      else res.destroy()
-    }
-  }
-  pump()
-})
-
-// ══════════════════════════════════════════════════════════════════════════════
-// 📺 /api/yt-stream — YouTube InnerTube proxy (browser calls this)
-// Tries multiple InnerTube clients; falls back to oEmbed metadata.
-// canStream:false when all stream clients fail (datacenter IP blocked).
-// ══════════════════════════════════════════════════════════════════════════════
-app.get('/api/yt-stream', async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  const id = String(req.query.id || '').trim().replace(/[^a-zA-Z0-9_-]/g, '')
-  if (!id || id.length < 6 || id.length > 12) return res.status(400).json({ ok: false, error: 'invalid video id' })
-
-  const INNERTUBE_URL = 'https://www.youtube.com/youtubei/v1/player'
-
-  const tryClient = async (clientCfg) => {
-    const { clientName, clientVersion, ua, origin, extra = {} } = clientCfg
-    const body = {
-      videoId: id,
-      context: {
-        client: { clientName, clientVersion, hl: 'en', gl: 'US', ...extra },
-      },
-    }
-    const resp = await fetch(INNERTUBE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': ua,
-        'Origin': origin,
-        'Referer': origin + '/',
-        'X-YouTube-Client-Name': String(clientCfg.clientId || ''),
-        'X-YouTube-Client-Version': clientVersion,
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10000),
-    })
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    return await resp.json()
-  }
-
-  const CLIENTS = [
-    // ✅ 2026: IOS client — most reliable for datacenter IPs, returns signed HLS URLs
-    { clientId: 5,  clientName: 'IOS',            clientVersion: '19.29.1', ua: 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5 like Mac OS X;)', origin: 'https://www.youtube.com', extra: { deviceModel: 'iPhone16,2', osName: 'iPhone', osVersion: '17.5.1.21F90' } },
-    // ✅ 2026: ANDROID client — reliable for most videos
-    { clientId: 3,  clientName: 'ANDROID',        clientVersion: '19.29.37', ua: 'com.google.android.youtube/19.29.37(Linux; U; Android 14) gzip', origin: 'https://www.youtube.com', extra: { androidSdkVersion: 34, osName: 'Android', osVersion: '14' } },
-    // ✅ TV embedded — bypasses some age/region restrictions
-    { clientId: 85, clientName: 'ANDROID_EMBEDDED_PLAYER', clientVersion: '19.29.37', ua: 'com.google.android.youtube/19.29.37(Linux; U; Android 14) gzip', origin: 'https://www.youtube.com', extra: { androidSdkVersion: 34, embedUrl: 'https://www.youtube.com' } },
-    // Web creator — different restrictions than regular web
-    { clientId: 62, clientName: 'WEB_CREATOR',   clientVersion: '1.20240101.01.00', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36', origin: 'https://studio.youtube.com' },
-    // TV embedded — last resort
-    { clientId: 56, clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER', clientVersion: '2.0', ua: 'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/538.1', origin: 'https://www.youtube.com' },
-  ]
-
-  // Get oEmbed metadata (almost always works)
-  const oembedPromise = fetch(
-    `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`,
-    { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }, signal: AbortSignal.timeout(8000) }
-  ).then(r => r.json()).catch(() => ({}))
-
-  // Try InnerTube clients in sequence (stop on first success with streams)
-  let streamData = null
-  for (const client of CLIENTS) {
-    try {
-      const d = await tryClient(client)
-      const ps = d?.playabilityStatus?.status
-      if (ps === 'ERROR' || ps === 'UNPLAYABLE') continue
-      const sd = d?.streamingData || {}
-      const allFmts = [...(sd.formats || []), ...(sd.adaptiveFormats || [])]
-      const videoFmts = allFmts.filter(f => f.mimeType?.startsWith('video') && f.url)
-      if (videoFmts.length > 0) {
-        streamData = { d, allFmts, sd }
-        break
-      }
-    } catch (e) {
-      console.warn(`[yt-stream] client ${client.clientName} failed:`, e.message?.slice(0, 60))
-    }
-  }
-
-  const oembed = await oembedPromise
-
-  if (!streamData) {
-    // Metadata-only response (canStream:false → card shows cobalt.tools redirect)
-    return res.json({
-      ok: true, canStream: false,
-      title: oembed.title || '',
-      thumbnail: oembed.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-      duration: 0, uploader: oembed.author_name || '',
-      video: [], audio: [],
-    })
-  }
-
-  const { d, allFmts, sd } = streamData
-  const vd = d.videoDetails || {}
-  const thumb = (vd.thumbnail?.thumbnails || []).pop()?.url || oembed.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`
-
-  // Muxed formats (audio+video) are in sd.formats, adaptive are in sd.adaptiveFormats
-  const muxedItags = new Set((sd.formats || []).map(f => f.itag))
-  const videoFmts = allFmts
-    .filter(f => f.mimeType?.startsWith('video') && f.url)
-    .map(f => ({
-      url: f.url,
-      quality: f.qualityLabel || null,
-      height: f.height || null,
-      ext: f.mimeType?.includes('webm') ? 'webm' : 'mp4',
-      size: f.contentLength ? parseInt(f.contentLength) : null,
-      hasAudio: muxedItags.has(f.itag),
-    }))
-    .sort((a, b) => (b.height || 0) - (a.height || 0))
-    .slice(0, 6)
-
-  const audioFmts = allFmts
-    .filter(f => f.mimeType?.startsWith('audio') && f.url && !muxedItags.has(f.itag))
-    .map(f => ({
-      url: f.url,
-      ext: f.mimeType?.includes('opus') ? 'webm' : 'm4a',
-      bitrate: f.bitrate ? Math.round(f.bitrate / 1000) : null,
-      size: f.contentLength ? parseInt(f.contentLength) : null,
-      muxed: false,
-    }))
-    .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
-    .slice(0, 3)
-
-  return res.json({
-    ok: true, canStream: true,
-    title: vd.title || oembed.title || '',
-    thumbnail: thumb,
-    duration: parseInt(vd.lengthSeconds || '0') || 0,
-    uploader: vd.author || oembed.author_name || '',
-    video: videoFmts, audio: audioFmts,
-  })
-})
-
-// ══════════════════════════════════════════════════════════════════════════════
-// 📥 /api/dz-agent/download — multi-platform media info endpoint
-// Frontend calls this directly to refresh/retry failed extractions
-// ══════════════════════════════════════════════════════════════════════════════
-app.get('/api/dz-agent/download', aiLimiter, async (req, res) => {
-  const url = String(req.query.url || '').trim()
-  if (!url) return res.status(400).json({ ok: false, error: 'Missing url parameter' })
-  if (!isValidMediaPlatformUrl(url)) return res.status(400).json({ ok: false, error: 'Unsupported platform URL' })
-  const cached = extractCacheGet(url)
-  if (cached) return res.json({ ok: true, ...cached, cached: true })
-  try {
-    const info = await extractMediaInfoAny(url)
-    extractCacheSet(url, info)
-    return res.json({ ok: true, ...info })
-  } catch (e) {
-    console.warn('[download-endpoint]', e.message?.slice(0, 100))
-    return res.status(502).json({ ok: false, error: e.message?.slice(0, 200) })
-  }
-})
-
-// ════════════════════════════════════════════════════════════════════════════
-// 📥 SOCIAL MEDIA EXTRACTORS — Facebook / Instagram / Pinterest / TikTok / X
-// Free public APIs used server-side to bypass browser CORS restrictions.
-// Order: platform-specific API → Cobalt universal → yt-dlp fallback
-// ════════════════════════════════════════════════════════════════════════════
-
-// ── Facebook: حلّ روابط share/r/ و fb.watch قبل إرسالها للمستخرجات ──────────
-// Facebook /share/r/ و fb.watch هي روابط قصيرة تُحوَّل إلى reel/VIDEO_ID
-// معظم المستخرجات لا تتبع الـ redirect — نحلّه هنا مرة واحدة للجميع
-async function _resolveFacebookShareUrl(url) {
-  if (!url.includes('/share/') && !url.includes('fb.watch') && !url.includes('share/reel')) return url
-  try {
-    const ctrl = new AbortController()
-    const t = setTimeout(() => ctrl.abort(), 6000)
-    const resp = await fetch(url, {
-      redirect: 'follow',
-      signal: ctrl.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-        'Accept': 'text/html,application/xhtml+xml,*/*',
-      },
-    })
-    clearTimeout(t)
-    const resolved = resp.url
-    if (resolved && resolved !== url && resolved.includes('facebook.com')) {
-      console.log(`[FB:resolve] share → ${resolved.slice(0, 80)}`)
-      return resolved
-    }
-    return url
-  } catch (e) {
-    console.warn(`[FB:resolve] failed (${e.message?.slice(0, 60)}) — using original URL`)
-    return url
-  }
-}
-
-// ── Facebook → snapsave.app ──────────────────────────────────────────────
-async function _extractFacebookSnapsave(url) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 15000)
-  try {
-    // ✅ FIX 2026: محاولة fdown.net أولاً كـ backup موثوق
-    try {
-      const fbCtrl = new AbortController()
-      const fbT = setTimeout(() => fbCtrl.abort(), 10000)
-      const fbResp = await fetch('https://fdown.net/download.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Origin': 'https://fdown.net', 'Referer': 'https://fdown.net/', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36' },
-        body: new URLSearchParams({ URLz: url }).toString(),
-        signal: fbCtrl.signal,
-      })
-      clearTimeout(fbT)
-      if (fbResp.ok) {
-        const fbHtml = await fbResp.text()
-        const mp4Re = /href="(https:\/\/[^"]+\.mp4[^"]*)"/gi
-        const vids = []; let m
-        while ((m = mp4Re.exec(fbHtml)) !== null) vids.push({ url: m[1].replace(/&amp;/g, '&'), quality: vids.length === 0 ? 'HD' : 'SD', height: null, ext: 'mp4', size: null, hasAudio: true })
-        if (vids.length > 0) { clearTimeout(t); return { title: 'Facebook Video', duration: 0, thumbnail: '', uploader: '', audio: [], video: vids, source: 'fdown' } }
-      }
-    } catch {}
-
-    const body = new URLSearchParams({ url, lang: 'en', v: 'a2' })
-    const resp = await fetch('https://snapsave.app/action.php', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://snapsave.app',
-        'Referer': 'https://snapsave.app/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-      },
-      body: body.toString(),
-      signal: ctrl.signal,
-    })
-    clearTimeout(t)
-    if (!resp.ok) throw new Error(`snapsave HTTP ${resp.status}`)
-    const html = await resp.text()
-
-    // Extract mp4 URLs from anchor tags and inline patterns
-    const video = []
-    const seen = new Set()
-    // href="https://...fbcdn..."
-    const hrefRe = /href="(https:\/\/[^"]*(?:fbcdn|video)[^"]*\.mp4[^"]*)"/gi
-    let m
-    while ((m = hrefRe.exec(html)) !== null) {
-      const u = m[1].replace(/&amp;/g, '&')
-      if (!seen.has(u)) { seen.add(u); video.push({ url: u, quality: video.length === 0 ? 'HD' : 'SD', height: video.length === 0 ? 720 : 480, ext: 'mp4', size: null, hasAudio: true }) }
-    }
-    // Fallback: any mp4 URL in HTML
-    const anyMp4Re = /https:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/g
-    while ((m = anyMp4Re.exec(html)) !== null) {
-      const u = m[0].replace(/&amp;/g, '&').replace(/\\u0026/g, '&')
-      if (!seen.has(u)) { seen.add(u); video.push({ url: u, quality: 'SD', height: null, ext: 'mp4', size: null, hasAudio: true }) }
-    }
-    if (video.length === 0) throw new Error('snapsave: no video links found')
-    const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i)
-    return { title: titleM?.[1]?.trim() || 'Facebook Video', duration: 0, thumbnail: '', uploader: '', audio: [], video, source: 'snapsave' }
-  } finally { clearTimeout(t) }
-}
-
-// ── Facebook → getmyfb.com (WordPress aio-dl plugin — JSON API) ──────────
-async function _extractFacebookGetMyFB(url) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 12000)
-  try {
-    const resp = await fetch('https://getmyfb.com/wp-json/aio-dl/video-data/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://getmyfb.com',
-        'Referer': 'https://getmyfb.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-      },
-      body: new URLSearchParams({ url }).toString(),
-      signal: ctrl.signal,
-    })
-    clearTimeout(t)
-    if (!resp.ok) throw new Error(`getmyfb HTTP ${resp.status}`)
-    const d = await resp.json().catch(() => null)
-    if (!d) throw new Error('getmyfb: invalid JSON')
-    const links = d?.data?.links || d?.links || []
-    if (!links.length) throw new Error('getmyfb: no links')
-    const video = links
-      .filter(l => l?.url && typeof l.url === 'string' && /^https?:\/\//i.test(l.url))
-      .map((l, i) => ({ url: l.url, quality: l.text || l.resolution || (i === 0 ? 'HD' : 'SD'), height: null, ext: 'mp4', size: null, hasAudio: true }))
-    if (!video.length) throw new Error('getmyfb: no usable video URLs')
-    return { title: d?.data?.title || d?.title || 'Facebook Video', duration: 0, thumbnail: d?.data?.thumbnail || d?.thumbnail || '', uploader: '', audio: [], video, source: 'getmyfb' }
-  } finally { clearTimeout(t) }
-}
-
-// ── Facebook → saveclip.app (also handles Facebook) ───────────────────────
-async function _extractFacebookSaveclip(url) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 15000)
-  try {
-    const resp = await fetch('https://saveclip.app/download', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://saveclip.app',
-        'Referer': 'https://saveclip.app/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-      body: new URLSearchParams({ url }).toString(),
-      signal: ctrl.signal,
-    })
-    clearTimeout(t)
-    if (!resp.ok) throw new Error(`saveclip-fb HTTP ${resp.status}`)
-    const ct = resp.headers.get('content-type') || ''
-    let jsonData = null
-    let html = ''
-    if (ct.includes('json')) {
-      jsonData = await resp.json()
-    } else {
-      html = await resp.text()
-      try { jsonData = JSON.parse(html) } catch {}
-    }
-    if (jsonData) {
-      const dlUrl = jsonData.url || jsonData.download_url || jsonData.videoUrl
-      if (dlUrl) return { title: jsonData.title || 'Facebook Video', duration: 0, thumbnail: jsonData.thumbnail || '', uploader: '', audio: [], video: [{ url: dlUrl, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }], source: 'saveclip-fb' }
-    }
-    // Parse HTML for mp4 links
-    const mp4Re = /https:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/g
-    const seen = new Set(); const video = []; let m
-    while ((m = mp4Re.exec(html)) !== null) {
-      const u = m[0].replace(/&amp;/g, '&')
-      if (!seen.has(u)) { seen.add(u); video.push({ url: u, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }) }
-    }
-    if (!video.length) throw new Error('saveclip-fb: no video links found')
-    return { title: 'Facebook Video', duration: 0, thumbnail: '', uploader: '', audio: [], video, source: 'saveclip-fb' }
-  } finally { clearTimeout(t) }
-}
-
-// ── Facebook → ssvid.net (reliable multi-platform scraper) ───────────────
-async function _extractFacebookSSVid(url) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 12000)
-  try {
-    const resp = await fetch('https://www.ssvid.net/api/get', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://www.ssvid.net',
-        'Referer': 'https://www.ssvid.net/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-      },
-      body: new URLSearchParams({ url }).toString(),
-      signal: ctrl.signal,
-    })
-    clearTimeout(t)
-    if (!resp.ok) throw new Error(`ssvid HTTP ${resp.status}`)
-    const d = await resp.json().catch(() => null)
-    if (!d) throw new Error('ssvid: invalid JSON')
-    // Response: { url, hd_url, title, thumbnail }  OR  { links: [...] }
-    const video = []
-    if (d.hd_url) video.push({ url: d.hd_url, quality: 'HD', height: 720, ext: 'mp4', size: null, hasAudio: true })
-    if (d.url && d.url !== d.hd_url) video.push({ url: d.url, quality: 'SD', height: 480, ext: 'mp4', size: null, hasAudio: true })
-    if (d.links?.length) {
-      for (const l of d.links) {
-        if (l?.url) video.push({ url: l.url, quality: l.quality || l.label || 'SD', height: null, ext: 'mp4', size: null, hasAudio: true })
-      }
-    }
-    if (!video.length) throw new Error('ssvid: no video URLs')
-    return { title: d.title || 'Facebook Video', duration: 0, thumbnail: d.thumbnail || '', uploader: '', audio: [], video, source: 'ssvid' }
-  } finally { clearTimeout(t) }
-}
-
-// ── Facebook → y2down.cc (modern multi-platform downloader) ──────────────
-async function _extractFacebookY2Down(url) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 12000)
-  try {
-    const resp = await fetch('https://www.y2down.cc/api/download/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://www.y2down.cc',
-        'Referer': 'https://www.y2down.cc/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-      },
-      body: new URLSearchParams({ url, format: 'video', quality: 'best' }).toString(),
-      signal: ctrl.signal,
-    })
-    clearTimeout(t)
-    if (!resp.ok) throw new Error(`y2down HTTP ${resp.status}`)
-    const d = await resp.json().catch(() => null)
-    if (!d?.status || !d?.medias?.length) throw new Error('y2down: no media found')
-    const video = d.medias
-      .filter(m => m?.url && m.type !== 'audio')
-      .map(m => ({ url: m.url, quality: m.quality || m.resolution || 'HD', height: null, ext: m.extension || 'mp4', size: m.size || null, hasAudio: true }))
-    if (!video.length) throw new Error('y2down: no video URLs')
-    return { title: d.title || 'Facebook Video', duration: 0, thumbnail: d.thumbnail || '', uploader: '', audio: [], video, source: 'y2down' }
-  } finally { clearTimeout(t) }
-}
-
-// ── Facebook → savefrom.net (reliable multi-platform scraper) ────────────
-async function _extractFacebookSaveFrom(url) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 12000)
-  try {
-    // savefrom.net worker API — has worked reliably from datacenter IPs
-    const resp = await fetch('https://worker.sf-tools.com/savefrom.php', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://en.savefrom.net',
-        'Referer': 'https://en.savefrom.net/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-      },
-      body: new URLSearchParams({ sf_url: url, lang: 'en', _t: String(Date.now()) }).toString(),
-      signal: ctrl.signal,
-    })
-    clearTimeout(t)
-    if (!resp.ok) throw new Error(`savefrom HTTP ${resp.status}`)
-    const d = await resp.json().catch(() => null)
-    if (!d) throw new Error('savefrom: invalid JSON')
-    // Response: { url: [{url, quality, ext, ...}], meta: {title, image} }
-    const links = Array.isArray(d.url) ? d.url : []
-    if (!links.length) throw new Error('savefrom: no links')
-    const video = links
-      .filter(l => l?.url && /^https?:\/\//i.test(l.url) && !l.url.includes('.mp3'))
-      .map((l, i) => ({
-        url: l.url.replace(/\\u0026/g, '&').replace(/&amp;/g, '&'),
-        quality: l.quality || (i === 0 ? 'HD' : 'SD'),
-        height: null,
-        ext: l.ext || 'mp4',
-        size: l.size ? Number(l.size) : null,
-        hasAudio: true,
-      }))
-    const audio = links
-      .filter(l => l?.url && /\.mp3/i.test(l.url))
-      .map(l => ({ url: l.url, ext: 'mp3', bitrate: 128, size: null, muxed: false }))
-    if (!video.length && !audio.length) throw new Error('savefrom: no usable media URLs')
-    return {
-      title: d.meta?.title || d.title || 'Facebook Video',
-      duration: 0,
-      thumbnail: d.meta?.image || d.meta?.og?.image || '',
-      uploader: '',
-      audio,
-      video,
-      source: 'savefrom',
-    }
-  } finally { clearTimeout(t) }
-}
-
-// ── Facebook → fdownloader.net (موثوق — JSON API) ────────────────────────
-async function _extractFacebookFdownloaderNet(url) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 12000)
-  try {
-    const resp = await fetch('https://fdownloader.net/api/ajaxSearch', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://fdownloader.net',
-        'Referer': 'https://fdownloader.net/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-      body: new URLSearchParams({ url, lang: 'en', v: 'a2' }).toString(),
-      signal: ctrl.signal,
-    })
-    clearTimeout(t)
-    if (!resp.ok) throw new Error(`fdownloader HTTP ${resp.status}`)
-    const d = await resp.json().catch(() => null)
-    if (!d) throw new Error('fdownloader: invalid JSON')
-    // Response shape: { status: 'ok', data: '<html table with links>' }
-    const html = d.data || d.html || ''
-    if (!html) throw new Error('fdownloader: empty data')
-    const video = []
-    const seen = new Set()
-    const re = /href="(https:\/\/[^"]+\.mp4[^"]*)"/gi
-    let m
-    while ((m = re.exec(html)) !== null) {
-      const u = m[1].replace(/&amp;/g, '&')
-      if (!seen.has(u)) { seen.add(u); video.push({ url: u, quality: video.length === 0 ? 'HD' : 'SD', height: null, ext: 'mp4', size: null, hasAudio: true }) }
-    }
-    if (!video.length) {
-      // fallback: any mp4 URL
-      const anyRe = /https?:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/gi
-      while ((m = anyRe.exec(html)) !== null) {
-        const u = m[0].replace(/&amp;/g, '&')
-        if (!seen.has(u)) { seen.add(u); video.push({ url: u, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }) }
-      }
-    }
-    if (!video.length) throw new Error('fdownloader: no video URLs found')
-    return { title: 'Facebook Video', duration: 0, thumbnail: '', uploader: '', audio: [], video, source: 'fdownloader' }
-  } finally { clearTimeout(t) }
-}
-
-// ── Facebook → savefrom worker (الاحتياطي الأخير قبل cobalt) ──────────────
-// savevid.me يدعم روابط الـ Reels والـ share مباشرة
-async function _extractFacebookSaveVidMe(url) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 12000)
-  try {
-    const resp = await fetch('https://www.savevid.com/api/convert', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://www.savevid.com',
-        'Referer': 'https://www.savevid.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-      },
-      body: new URLSearchParams({ url, btn: 'Download' }).toString(),
-      signal: ctrl.signal,
-    })
-    clearTimeout(t)
-    if (!resp.ok) throw new Error(`savevid HTTP ${resp.status}`)
-    const text = await resp.text()
-    const video = []
-    const seen = new Set()
-    const re = /(https?:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*)/gi
-    let m
-    while ((m = re.exec(text)) !== null) {
-      const u = m[1].replace(/&amp;/g, '&')
-      if (!seen.has(u) && u.length < 2000) { seen.add(u); video.push({ url: u, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }) }
-    }
-    if (!video.length) throw new Error('savevid: no video URLs')
-    return { title: 'Facebook Video', duration: 0, thumbnail: '', uploader: '', audio: [], video, source: 'savevid' }
-  } finally { clearTimeout(t) }
-}
-
-// ── Instagram → saveclip.app + snapinsta.app + tikwm fallback ─────────────
-// ✅ FIX 2026: saveclip.app قد يتغير — أضفنا snapinsta.app و tikwm كـ backups
-async function _extractInstagramSaveclip(url) {
-  // Try tikwm.com first — it handles Instagram Reels reliably
-  try {
-    const tikRes = await _extractTikTokTikwm(url)
-    if (tikRes?.video?.length) {
-      console.log('[Instagram:tikwm] ✅ Instagram via tikwm')
-      return { ...tikRes, source: 'tikwm-instagram' }
-    }
-  } catch {}
-
-  // Try snapinsta.app
-  try {
-    const snpCtrl = new AbortController()
-    const snpT = setTimeout(() => snpCtrl.abort(), 12000)
-    const snpResp = await fetch('https://snapinsta.app/api/convert', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://snapinsta.app',
-        'Referer': 'https://snapinsta.app/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-      },
-      body: new URLSearchParams({ url, type: 'post' }).toString(),
-      signal: snpCtrl.signal,
-    })
-    clearTimeout(snpT)
-    if (snpResp.ok) {
-      const snpData = await snpResp.json().catch(() => null)
-      if (snpData?.url || snpData?.video) {
-        const dlUrl = snpData.url || snpData.video
-        if (dlUrl) return { title: 'Instagram Video', duration: 0, thumbnail: snpData.thumbnail || '', uploader: '', audio: [], video: [{ url: dlUrl, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }], source: 'snapinsta' }
-      }
-    }
-  } catch {}
-
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 15000)
-  try {
-    const body = new URLSearchParams({ url })
-    const resp = await fetch('https://saveclip.app/download', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://saveclip.app',
-        'Referer': 'https://saveclip.app/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-      body: body.toString(),
-      signal: ctrl.signal,
-    })
-    clearTimeout(t)
-    if (!resp.ok) throw new Error(`saveclip HTTP ${resp.status}`)
-    const ct = resp.headers.get('content-type') || ''
-    let html = ''
-    let jsonData = null
-    if (ct.includes('json')) {
-      jsonData = await resp.json()
-    } else {
-      html = await resp.text()
-      try { jsonData = JSON.parse(html) } catch { /* HTML response */ }
-    }
-    if (jsonData) {
-      const dlUrl = jsonData.url || jsonData.download_url || jsonData.videoUrl
-      if (dlUrl) return { title: jsonData.title || 'Instagram Video', duration: jsonData.duration || 0, thumbnail: jsonData.thumbnail || jsonData.cover || '', uploader: jsonData.author || '', audio: [], video: [{ url: dlUrl, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }], source: 'saveclip' }
-      const items = jsonData.videos || jsonData.data || jsonData.links || []
-      if (items.length > 0) {
-        const video = items.map(v => ({ url: v.url || v.download_url || v.link, quality: v.quality || 'HD', height: null, ext: 'mp4', size: null, hasAudio: true })).filter(v => v.url)
-        if (video.length > 0) return { title: jsonData.title || 'Instagram Video', duration: 0, thumbnail: jsonData.thumbnail || '', uploader: '', audio: [], video, source: 'saveclip' }
-      }
-    }
-    // Parse HTML for mp4 links
-    const video = []
-    const seen = new Set()
-    const mp4Re = /https:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/g
-    let m
-    while ((m = mp4Re.exec(html)) !== null) {
-      const u = m[0].replace(/&amp;/g, '&')
-      if (!seen.has(u)) { seen.add(u); video.push({ url: u, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }) }
-    }
-    if (video.length === 0) throw new Error('saveclip: no video links found')
-    return { title: 'Instagram Video', duration: 0, thumbnail: '', uploader: '', audio: [], video, source: 'saveclip' }
-  } finally { clearTimeout(t) }
-}
-
-// ── TikTok → tikwm.com (server-side backup) ──────────────────────────────
-async function _extractTikTokTikwm(url) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 12000)
-  try {
-    const body = new URLSearchParams({ url, hd: '1' })
-    const resp = await fetch('https://www.tikwm.com/api/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)' },
-      body: body.toString(),
-      signal: ctrl.signal,
-    })
-    clearTimeout(t)
-    if (!resp.ok) throw new Error(`tikwm HTTP ${resp.status}`)
-    const d = await resp.json()
-    if (d.code !== 0 || !d.data) throw new Error(d.msg || 'tikwm: no data')
-    const dat = d.data
-    const video = []
-    if (dat.hdplay) video.push({ url: dat.hdplay, quality: 'HD (بدون علامة مائية)', height: null, ext: 'mp4', size: dat.hd_size ?? null, hasAudio: true })
-    if (dat.play)   video.push({ url: dat.play,   quality: 'SD (بدون علامة مائية)', height: null, ext: 'mp4', size: dat.size   ?? null, hasAudio: true })
-    if (video.length === 0) throw new Error('tikwm: no video URLs')
-    return { title: dat.title || dat.desc || 'TikTok Video', duration: dat.duration ?? 0, thumbnail: dat.cover || '', uploader: dat.author?.nickname || '', audio: dat.music ? [{ url: dat.music, ext: 'mp3', bitrate: 128, size: null, muxed: false }] : [], video, source: 'tikwm' }
-  } finally { clearTimeout(t) }
-}
-
-// ── Twitter/X → fxtwitter + vxtwitter ────────────────────────────────────
-async function _extractTwitterFxtwitter(url) {
-  const m = url.match(/\/status\/(\d+)/)
-  if (!m) throw new Error('invalid Twitter/X URL')
-  const id = m[1]
-  let d = null
-  for (const base of ['https://api.fxtwitter.com', 'https://api.vxtwitter.com']) {
-    try {
-      const ctrl = new AbortController()
-      const t = setTimeout(() => ctrl.abort(), 10000)
-      const r = await fetch(`${base}/i/status/${id}`, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)' } })
-      clearTimeout(t)
-      if (!r.ok) continue
-      const raw = await r.json()
-      if (raw?.tweet || raw?.media_extended) { d = raw; break }
-    } catch {}
-  }
-  if (!d) throw new Error('fxtwitter: no response from any instance')
-  const tweet = d.tweet || {}
-  const media = tweet.media || {}
-  const videos = media.videos || []
-  const mediaExtended = d.media_extended || []
-  const video = []
-  for (const vid of videos) {
-    const variants = (vid.variants || []).filter(v => v.url && (v.content_type?.includes('video') || v.url?.endsWith('.mp4'))).sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
-    for (const v of variants) video.push({ url: v.url, quality: v.bitrate ? `${Math.round(v.bitrate / 1000)} kbps` : null, height: null, ext: 'mp4', size: null, hasAudio: true })
-  }
-  for (const me of mediaExtended) {
-    if (me.type === 'video' && me.url) {
-      const variants = (me.variants || [{ url: me.url, bitrate: 0 }]).sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
-      for (const v of variants) if (v.url) video.push({ url: v.url, quality: null, height: null, ext: 'mp4', size: null, hasAudio: true })
-    }
-  }
-  if (video.length === 0) throw new Error('fxtwitter: no video found in this tweet')
-  const thumb = media.videos?.[0]?.thumbnail_url || media.photos?.[0]?.url || mediaExtended[0]?.thumbnail_url || ''
-  return { title: (tweet.text || d.text || '').slice(0, 120) || 'Twitter/X Video', duration: 0, thumbnail: thumb, uploader: tweet.author?.name ?? tweet.author?.screen_name ?? '', audio: [], video, source: 'fxtwitter' }
-}
-
-// ── Pinterest → oEmbed + pindown.io fallback ──────────────────────────────
-async function _extractPinterestPindown(url) {
-  // 1) Pinterest oEmbed (free, no auth)
-  try {
-    const ctrl = new AbortController()
-    const t = setTimeout(() => ctrl.abort(), 10000)
-    const r = await fetch(`https://www.pinterest.com/oembed/?url=${encodeURIComponent(url)}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)' },
-      signal: ctrl.signal,
-    })
-    clearTimeout(t)
-    if (r.ok) {
-      const d = await r.json()
-      const html = d.html || ''
-      const srcM = html.match(/src="(https:\/\/[^"]+\.mp4[^"]*)"/)
-      if (srcM) return { title: d.title || 'Pinterest Video', duration: 0, thumbnail: d.thumbnail_url || '', uploader: d.author_name || '', audio: [], video: [{ url: srcM[1], quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }], source: 'pinterest-oembed' }
-    }
-  } catch {}
-
-  // 2) pindown.io
-  const ctrl2 = new AbortController()
-  const t2 = setTimeout(() => ctrl2.abort(), 15000)
-  try {
-    const body = new URLSearchParams({ url })
-    const resp = await fetch('https://pindown.io/download', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Origin': 'https://pindown.io', 'Referer': 'https://pindown.io/', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      body: body.toString(),
-      signal: ctrl2.signal,
-    })
-    clearTimeout(t2)
-    if (resp.ok) {
-      const ct = resp.headers.get('content-type') || ''
-      if (ct.includes('json')) {
-        const d = await resp.json()
-        const dlUrl = d.url || d.download_url || d.video_url
-        if (dlUrl) return { title: d.title || 'Pinterest Video', duration: 0, thumbnail: d.thumbnail || '', uploader: '', audio: [], video: [{ url: dlUrl, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }], source: 'pindown' }
-      }
-      const html = await resp.text()
-      const mp4Re = /https:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/g
-      const urls = []
-      const seen = new Set()
-      let m
-      while ((m = mp4Re.exec(html)) !== null) {
-        const u = m[0].replace(/&amp;/g, '&')
-        if (!seen.has(u)) { seen.add(u); urls.push(u) }
-      }
-      if (urls.length > 0) return { title: 'Pinterest Video', duration: 0, thumbnail: '', uploader: '', audio: [], video: urls.map(u => ({ url: u, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true })), source: 'pindown' }
-    }
-  } finally { clearTimeout(t2) }
-
-  throw new Error('Pinterest extraction failed — all methods exhausted')
-}
-
-// ── /api/social/extract ——— main social endpoint ──────────────────────────
-app.get('/api/social/extract', aiLimiter, async (req, res) => {
-  const rawUrl   = String(req.query.url || '').trim()
-  const url      = extractDownloadUrls(rawUrl)[0] || rawUrl
-  const platform = mediaPlatformForUrl(url) || String(req.query.platform || '').toLowerCase()
-  if (!url) return res.status(400).json({ ok: false, error: 'Missing url parameter' })
-  if (!isValidMediaPlatformUrl(url) && !mediaPlatformForUrl(url)) {
-    return res.status(400).json({ ok: false, error: 'INVALID_URL', errorType: 'INVALID_URL' })
-  }
-
-  console.log(`[SocialExtract] platform=${platform} url=${url.slice(0, 80)}`)
-  const cacheKey = `social:${url}`
-  const cached   = extractCacheGet(cacheKey)
-  if (cached) return res.json({ ok: true, ...cached, cached: true })
-
-  let lastErr = new Error('no extractor succeeded')
-
-  // One guarded orchestration path: provider order is platform-aware and
-  // each successful response is validated before it reaches the client.
-  try {
-    const info = await orchestrateMediaDownload(url, platform)
-    extractCacheSet(cacheKey, info, 10 * 60 * 1000)
-    return res.json({ ok: true, ...info })
-  } catch (err) {
-    lastErr = err
-    console.warn(`[SocialExtract:orchestrator:fail] type=${err.errorType || classifyDownloadError(err)}`)
-    // The orchestrator already exhausted the complete platform-specific
-    // fallback plan. Do not silently repeat providers in the legacy path.
-    return res.status(502).json({
-      ok: false,
-      error: lastErr.message?.slice(0, 200) || 'فشل استخراج الوسائط',
-      errorType: lastErr.errorType || classifyDownloadError(lastErr),
-      attempts: lastErr.attempts || [],
-    })
-  }
-
-  const tryAndReturn = async (fn, label) => {
-    try {
-      const info = await fn()
-      extractCacheSet(cacheKey, info, 10 * 60 * 1000)
-      console.log(`[SocialExtract:${label}] ✅ videos=${info.video?.length ?? 0}`)
-      return res.json({ ok: true, ...info })
-    } catch (e) {
-      lastErr = e
-      console.warn(`[SocialExtract:${label}:fail]`, e.message?.slice(0, 100))
-      return null
-    }
-  }
-
-  // Platform-specific first pass
-  if (platform === 'facebook') { const r = await tryAndReturn(() => _extractFacebookSnapsave(url), 'facebook:snapsave'); if (r) return }
-  if (platform === 'instagram') { const r = await tryAndReturn(() => _extractInstagramSaveclip(url), 'instagram:saveclip'); if (r) return }
-  if (platform === 'tiktok')   { const r = await tryAndReturn(() => _extractTikTokTikwm(url), 'tiktok:tikwm');         if (r) return }
-  if (platform === 'twitter')  { const r = await tryAndReturn(() => _extractTwitterFxtwitter(url), 'twitter:fxtwitter'); if (r) return }
-  if (platform === 'pinterest'){ const r = await tryAndReturn(() => _extractPinterestPindown(url), 'pinterest:pindown'); if (r) return }
-
-  // Universal Cobalt fallback
-  { const r = await tryAndReturn(() => extractWithCobaltAPI(url), 'cobalt'); if (r) return }
-
-  // yt-dlp final fallback
-  try {
-    const raw = await extractWithYtDlp(url)
-    const { audio, video } = processFormats(raw.formats)
-    const info = { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
-    extractCacheSet(cacheKey, info, 10 * 60 * 1000)
-    console.log(`[SocialExtract:yt-dlp] ✅ platform=${platform}`)
-    return res.json({ ok: true, ...info })
-  } catch (e) {
-    console.warn('[SocialExtract:yt-dlp:fail]', e.message?.slice(0, 100))
-  }
-
-  return res.status(502).json({ ok: false, error: lastErr.message?.slice(0, 200) || 'فشل استخراج الوسائط — حاول مرة أخرى' })
-})
-
-// ════════════════════════════════════════════════════════════════════════════
-
 app.get('/api/extract', aiLimiter, async (req, res) => {
   const url = String(req.query.url || '').trim()
   if (!url) return res.status(400).json({ error: 'Missing URL' })
@@ -32646,6 +24475,54 @@ app.get('/api/dz-tube/related', async (req, res) => {
   return res.json({ results: [], source: 'none' })
 })
 
+// ── TTS Endpoint — Arabic/French/English male voice via HF MMS ───────────────
+app.post('/api/tts', async (req, res) => {
+  const { text, lang = 'ar' } = req.body || {}
+  if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text required' })
+
+  const clean = text.replace(/[#*`_~\[\]>]/g, '').replace(/https?:\/\/\S+/g, '').trim().slice(0, 500)
+  if (!clean) return res.status(400).json({ error: 'empty text' })
+
+  const HF = process.env.HF_TOKEN
+  if (!HF) return res.status(503).json({ error: 'HF_TOKEN not set' })
+
+  // Model selection based on language
+  const modelMap = {
+    ar: 'facebook/mms-tts-ara',
+    fr: 'facebook/mms-tts-fra',
+    en: 'facebook/mms-tts-eng',
+  }
+  const model = modelMap[lang] || modelMap.ar
+
+  try {
+    const hfRes = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${HF}`,
+        'Content-Type': 'application/json',
+        'Accept': 'audio/wav',
+      },
+      body: JSON.stringify({ inputs: clean }),
+    })
+
+    if (!hfRes.ok) {
+      const err = await hfRes.text()
+      // Model loading (503) — return a clear signal to client to retry
+      if (hfRes.status === 503) return res.status(503).json({ error: 'model_loading', retry: true })
+      throw new Error(`HF API ${hfRes.status}: ${err.slice(0, 200)}`)
+    }
+
+    const buf = Buffer.from(await hfRes.arrayBuffer())
+    res.setHeader('Content-Type', 'audio/wav')
+    res.setHeader('Content-Length', buf.length)
+    res.setHeader('Cache-Control', 'no-store')
+    return res.send(buf)
+  } catch (err) {
+    console.error('[TTS] HF API error:', err.message)
+    return res.status(500).json({ error: err.message })
+  }
+})
+
 // Get direct audio stream URL (for background playback via HTML5 audio)
 app.get('/api/dz-tube/audio-url', async (req, res) => {
   const url = String(req.query.url || '')
@@ -32656,7 +24533,7 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
     try {
       const cookies = await ytDlpCookiesArgs()
       const streamUrl = await new Promise((resolve, reject) => {
-        const proc = spawn(dlpBin, ['-f', '140/251/250/249/bestaudio[ext=m4a]/bestaudio/18', '-S', 'proto:https', '-g', '--no-warnings', '--no-playlist', ...ytDlpAntiBotArgs(), ...cookies, url])
+        const proc = spawn(dlpBin, ['-f', '140/251/250/249/bestaudio[ext=m4a]/bestaudio', '-S', 'proto:https', '-g', '--no-warnings', '--no-playlist', ...ytDlpAntiBotArgs(), ...cookies, url])
         let out = '', err = ''
         proc.stdout.on('data', d => { out += d.toString() })
         proc.stderr.on('data', d => { err += d.toString() })
@@ -32673,6 +24550,7 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
     }
   }
   try {
+    const ytdl = await getYtdl()
     const info = await ytdl.getInfo(url)
     const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
     if (!fmt?.url) throw new Error('no audio format')
@@ -32735,6 +24613,7 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
   // ytdl-core: fast, Node.js only — frequently blocked on datacenter IPs but
   // included as the first contestant because it occasionally wins on warm runs.
   const tryJs = (async () => {
+    const ytdl = await getYtdl()
     const info = await ytdl.getInfo(youtubeUrl)
     const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
     if (!fmt?.url) throw new Error('ytdl-core: no url')
@@ -32751,9 +24630,7 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
     const cookies = await ytDlpCookiesArgs()
     const antiBot = ytDlpAntiBotArgs()
     return new Promise((resolve, reject) => {
-      // 2026: android client only returns format 18 (muxed 360p) from datacenter IPs.
-      // Chain: m4a audio-only → any bestaudio → format 18 → absolute best.
-      const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/18/best', '-g', '--no-playlist', ...antiBot, ...cookies, youtubeUrl])
+      const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/best', '-g', '--no-playlist', ...antiBot, ...cookies, youtubeUrl])
       let out = '', err = ''
       proc.stdout.on('data', d => { out += d.toString() })
       proc.stderr.on('data', d => { err += d.toString() })
@@ -32976,7 +24853,7 @@ function isDirectGoogleVideoUrl(url) {
 // This keeps every Vercel function invocation well under the 60s timeout.
 // The browser automatically requests the next chunk via a follow-up Range
 // request once it exhausts the current one.
-const MAX_PIPE_CHUNK = 4 * 1024 * 1024 // 4 MB — larger chunks = fewer gaps in audio playback
+const MAX_PIPE_CHUNK = 1 * 1024 * 1024 // 1 MB
 
 // Shared byte-pipe streaming helper used by both /audio-pipe and the
 // /audio-proxy path. ALWAYS responds 206 with a bounded chunk so that:
@@ -33155,6 +25032,7 @@ app.get('/api/dz-tube/debug-extract', async (req, res) => {
       return { url: r.url, probe }
     }),
     runOne('ytdl-core', async () => {
+      const ytdl = await getYtdl()
       const info = await ytdl.getInfo(url)
       const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
       if (!fmt?.url) throw new Error('no url')
@@ -33165,7 +25043,7 @@ app.get('/api/dz-tube/debug-extract', async (req, res) => {
       const cookies = await ytDlpCookiesArgs()
       const antiBot = ytDlpAntiBotArgs()
       return await new Promise((resolve, reject) => {
-        const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '-g', '--no-playlist', ...antiBot, ...cookies, url])
+        const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/best', '-g', '--no-playlist', ...antiBot, ...cookies, url])
         let out = '', err = ''
         const t = setTimeout(() => { try { proc.kill('SIGKILL') } catch {}; reject(new Error('timeout 15s; stderr=' + err.slice(0, 300))) }, 15000)
         proc.stdout.on('data', d => { out += d.toString() })
@@ -33268,83 +25146,35 @@ try { fs.mkdirSync(audioCacheDir, { recursive: true }) } catch {}
 // share a single yt-dlp/ffmpeg pipeline instead of racing each other.
 const audioDownloads = new Map()
 
-function spawnAudioStream(url) {
-  return ytDlpBinaryPath().then(dlpBin => {
-    if (dlpBin) {
-      const proc = spawn(dlpBin, [
-        '-f', 'bestaudio[ext=m4a]/bestaudio/18',
+async function spawnAudioStream(url) {
+  return ytDlpAvailable().then(useDlp => {
+    if (useDlp) {
+      const proc = spawn('yt-dlp', [
+        '-f', 'bestaudio[ext=m4a]/bestaudio',
         '--no-warnings', '--no-playlist',
-        ...ytDlpAntiBotArgs(),
         '-o', '-',
         url,
       ], { stdio: ['ignore', 'pipe', 'pipe'] })
       proc.stderr.on('data', d => { /* console.warn('[yt-dlp]', d.toString()) */ })
       return { stream: proc.stdout, kill: () => { try { proc.kill('SIGKILL') } catch {} } }
     }
-    const s = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 })
-    return { stream: s, kill: () => { try { s.destroy() } catch {} } }
+    return getYtdl().then(ytdl => {
+      const s = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 })
+      return { stream: s, kill: () => { try { s.destroy() } catch {} } }
+    })
   })
 }
 
 // Download full audio to disk via yt-dlp, then remux with faststart so the moov
 // atom is at the front (HTML5 audio needs this to know duration & to play).
 // Returns a promise that resolves once the file at `outPath` is fully written.
-let _ffmpegProbe = null
-// Resolve the ffmpeg binary path. Checks (in order): $FFMPEG_BIN, a bundled
-// static binary at <projectRoot>/bin/ffmpeg (Vercel ships bin/** via
-// includeFiles, so dropping ffmpeg there makes audio extraction work in
-// serverless), then ffmpeg on PATH.
-// A positive result is cached for 10 min; a negative result is cached only
-// briefly (30s) so an ffmpeg installed while the server is already running
-// (e.g. dev-box provisioning) is picked up instead of being remembered as
-// missing forever.
-function ffmpegBinPath() {
-  if (_ffmpegProbe && _ffmpegProbe.expiresAt > Date.now()) return Promise.resolve(_ffmpegProbe.path)
-  _ffmpegProbe = null
-  const probe = async () => {
-    const candidates = []
-    if (process.env.FFMPEG_BIN) candidates.push(process.env.FFMPEG_BIN)
-    try {
-      const url = await import('url')
-      const pathMod = await import('path')
-      const here = pathMod.dirname(url.fileURLToPath(import.meta.url))
-      candidates.push(pathMod.join(here, 'bin', 'ffmpeg'))
-      candidates.push(pathMod.join(process.cwd(), 'bin', 'ffmpeg'))
-    } catch {}
-    candidates.push('ffmpeg')
-    for (const c of candidates) {
-      if (c && c.includes('/') && !fs.existsSync(c)) continue
-      const ok = await new Promise(resolve => {
-        try {
-          const p = spawn(c, ['-version'])
-          let killed = false
-          const t = setTimeout(() => { killed = true; try { p.kill('SIGKILL') } catch {}; resolve(false) }, 4000)
-          p.on('error', () => { clearTimeout(t); resolve(false) })
-          p.on('close', code => { clearTimeout(t); if (!killed) resolve(code === 0) })
-        } catch { resolve(false) }
-      })
-      if (ok) { _ffmpegProbe = { path: c, expiresAt: Date.now() + 10 * 60 * 1000 }; return c }
-    }
-    _ffmpegProbe = { path: null, expiresAt: Date.now() + 30 * 1000 }
-    return null
-  }
-  return probe()
-}
-
 function ffmpegAvailable() {
-  return ffmpegBinPath().then(p => !!p)
-}
-
-// yt-dlp finds ffmpeg via PATH or its own directory. When the server resolved
-// ffmpeg at an explicit path (FFMPEG_BIN or bundled bin/ffmpeg), pass
-// --ffmpeg-location so merging and audio extraction still work.
-async function ytDlpFfmpegLocationArgs() {
-  const bin = await ffmpegBinPath()
-  if (!bin || bin === 'ffmpeg') return []
-  try {
-    const pathMod = await import('path')
-    return ['--ffmpeg-location', pathMod.dirname(bin)]
-  } catch { return [] }
+  if (ffmpegAvailable._cached !== undefined) return Promise.resolve(ffmpegAvailable._cached)
+  return new Promise(resolve => {
+    const p = spawn('ffmpeg', ['-version'])
+    p.on('error', () => { ffmpegAvailable._cached = false; resolve(false) })
+    p.on('close', code => { ffmpegAvailable._cached = code === 0; resolve(ffmpegAvailable._cached) })
+  })
 }
 
 async function downloadAudioToFile(url, outPath) {
@@ -33352,13 +25182,11 @@ async function downloadAudioToFile(url, outPath) {
   const useDlp = await ytDlpAvailable()
 
   // Step 1: pull bytes to tmpRaw
-  const dlpBin2 = await ytDlpBinaryPath()
   await new Promise((resolve, reject) => {
-    if (dlpBin2) {
-      const proc = spawn(dlpBin2, [
-        '-f', 'bestaudio[ext=m4a]/bestaudio/18',
+    if (useDlp) {
+      const proc = spawn('yt-dlp', [
+        '-f', 'bestaudio[ext=m4a]/bestaudio',
         '--no-warnings', '--no-playlist',
-        ...ytDlpAntiBotArgs(),
         '-o', tmpRaw,
         url,
       ], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -33367,12 +25195,14 @@ async function downloadAudioToFile(url, outPath) {
       proc.on('error', reject)
       proc.on('close', code => code === 0 ? resolve() : reject(new Error(stderr || `yt-dlp exited ${code}`)))
     } else {
-      const s = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 })
-      const ws = fs.createWriteStream(tmpRaw)
-      s.on('error', reject)
-      ws.on('error', reject)
-      ws.on('finish', resolve)
-      s.pipe(ws)
+      getYtdl().then(ytdl => {
+        const s = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 })
+        const ws = fs.createWriteStream(tmpRaw)
+        s.on('error', reject)
+        ws.on('error', reject)
+        ws.on('finish', resolve)
+        s.pipe(ws)
+      }).catch(reject)
     }
   })
 
@@ -33389,7 +25219,6 @@ async function downloadAudioToFile(url, outPath) {
       '-y',
       '-i', tmpRaw,
       '-c', 'copy',
-      '-vn',
       '-movflags', '+faststart',
       '-f', 'mp4',
       tmpFixed,
@@ -33438,28 +25267,26 @@ async function resolveAudioPlaylistUrl(youtubeUrl) {
   // Attempt 1: iOS player_client — returns HLS m3u8 manifest.
   // This is the best format for background audio: segment-based (3-10 s),
   // immune to Vercel's 60s timeout, buffers ahead, no SABR streaming issues.
-  // Attempt 1: android client — TESTED 2026-07-30: only client that works without PO tokens.
-  // format 18 is the guaranteed fallback (360p combined, NOT SABR-protected).
-  const androidUrl = await runDlp(['--extractor-args', 'youtube:player_client=android', '--no-check-formats', '-f', 'bestaudio[ext=m4a]/bestaudio/18'])
-  if (androidUrl) {
-    console.log('[audio-stream] resolved via android client — direct URL ✅')
-    return { url: androidUrl, isHls: false }
-  }
-
-  // Attempt 2: tv_embedded client — skipped by yt-dlp 2026.07 but sometimes returns URL.
-  const tvUrl = await runDlp(['--extractor-args', 'youtube:player_client=tv_embedded', '--no-check-formats', '-f', 'bestaudio[ext=m4a]/bestaudio/18'])
-  if (tvUrl) {
-    const isHls = /\.m3u8($|\?)/i.test(tvUrl) || /manifest\.googlevideo\.com/i.test(tvUrl)
-    console.log('[audio-stream] resolved via tv_embedded client —', isHls ? 'HLS' : 'direct')
-    return { url: tvUrl, isHls }
-  }
-
-  // Attempt 3: ios client (last resort — usually needs PO token).
-  const iosUrl = await runDlp(['--extractor-args', 'youtube:player_client=ios', '--no-check-formats', '-f', 'ba/bestaudio/18'])
+  const iosUrl = await runDlp(['--extractor-args', 'youtube:player_client=ios', '--no-check-formats', '-f', 'ba/bestaudio'])
   if (iosUrl) {
     const isHls = /\.m3u8($|\?)/i.test(iosUrl) || /manifest\.googlevideo\.com/i.test(iosUrl)
     console.log('[audio-stream] resolved via iOS client —', isHls ? 'HLS ✓' : 'direct')
     return { url: iosUrl, isHls }
+  }
+
+  // Attempt 2: android client — returns direct googlevideo URL.
+  const androidUrl = await runDlp(['--extractor-args', 'youtube:player_client=android,ios,web', '--no-check-formats', '-f', 'bestaudio[ext=m4a]/bestaudio/best'])
+  if (androidUrl) {
+    console.log('[audio-stream] resolved via android client — direct URL')
+    return { url: androidUrl, isHls: false }
+  }
+
+  // Attempt 3: tv_embedded client — often bypasses bot detection.
+  const tvUrl = await runDlp(['--extractor-args', 'youtube:player_client=tv_embedded', '--no-check-formats', '-f', 'bestaudio/best'])
+  if (tvUrl) {
+    const isHls = /\.m3u8($|\?)/i.test(tvUrl) || /manifest\.googlevideo\.com/i.test(tvUrl)
+    console.log('[audio-stream] resolved via tv_embedded client —', isHls ? 'HLS' : 'direct')
+    return { url: tvUrl, isHls }
   }
 
   throw new Error('yt-dlp: could not resolve audio URL for ' + youtubeUrl)
@@ -33779,23 +25606,8 @@ app.post('/api/dz-tube/info', async (req, res) => {
         available: { mp4: true, mp3: true, audio: true },
       })
     }
-    // Last-resort: still expose 360p (itag 18, muxed mp4) which is the one
-    // format YouTube always offers to unauthenticated datacenter IPs. Without
-    // this the download menu stays empty and the page looks broken whenever
-    // the primary extractors are bot-blocked.
-    console.warn('[DZTube:info] all extractors failed — falling back to 360p-only payload:', e.message)
-    res.json({
-      title: 'بدون عنوان',
-      thumbnail: null,
-      duration: 0,
-      uploader: '',
-      view_count: 0,
-      heights: [360],
-      downloadableHeights: [360],
-      hasFfmpeg,
-      degraded: true,
-      available: { mp4: true, mp3: true, audio: true },
-    })
+    console.error('[DZTube:info:js]', e.message)
+    res.status(500).json({ error: 'تعذر جلب معلومات الفيديو' })
   }
 })
 
@@ -33812,14 +25624,6 @@ async function streamUpstreamToClient(req, res, upstreamUrl, mime, downloadName)
     const upstream = await fetch(upstreamUrl, { headers: fwdHeaders })
     if (!upstream.ok && upstream.status !== 206) {
       console.warn('[DZTube:upstream-proxy] upstream', upstream.status)
-      if (!res.headersSent) res.status(502).end('فشل تحميل الملف من المصدر البديل')
-      return
-    }
-    // Guard against sources that answer 200 with an HTML/JSON/text abuse page
-    // (Invidious Anubis challenges, dead cobalt tunnels, etc.).
-    const upstreamType = (upstream.headers.get('content-type') || '').toLowerCase()
-    if (upstreamType && (upstreamType.includes('html') || upstreamType.includes('json') || upstreamType.includes('text/'))) {
-      console.warn(`[DZTube:upstream-proxy] non-media content-type=${upstreamType} — rejecting`)
       if (!res.headersSent) res.status(502).end('فشل تحميل الملف من المصدر البديل')
       return
     }
@@ -33845,59 +25649,6 @@ async function streamUpstreamToClient(req, res, upstreamUrl, mime, downloadName)
     console.error('[DZTube:upstream-proxy] failed:', e.message)
     if (!res.headersSent) res.status(502).end('فشل تحميل الملف من المصدر البديل')
     else { try { res.end() } catch {} }
-  }
-}
-
-// ── ytdl-core fallback: pure Node.js, no subprocess (works on Vercel) ─────────
-// Uses @distube/ytdl-core to get the direct googlevideo URL for format 18
-// (360p mp4 muxed — the only format available without PO Tokens from
-// datacenter IPs). Returns true if fully handled, false to try next fallback.
-async function tryYtdlCoreDownload(req, res, url, format) {
-  try {
-    const isAudio = format === 'mp3' || format === 'audio'
-    const info = await ytdl.getInfo(url)
-    const title = info.videoDetails?.title || 'video'
-    const safeName = title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || 'video'
-
-    // For an audio request we must hand back a REAL audio-only stream. The old
-    // code reused the muxed audioandvideo format (18 = 360p mp4 with video),
-    // silently delivering a full video file labelled .m4a. Prefer audioonly;
-    // if none is obtainable (datacenter IP without PO token) return false so
-    // the caller moves to the external audio-only fallbacks.
-    if (isAudio) {
-      let fmt
-      try {
-        fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
-      } catch { fmt = null }
-      if (!fmt?.url) {
-        console.warn('[DZTube:ytdl-core] no audio-only format found for audio request')
-        return false
-      }
-      const downloadName = `${safeName}.m4a`
-      console.log(`[DZTube:ytdl-core] ✓ audio format=${fmt.itag} q=${fmt.quality} → ${downloadName}`)
-      await streamUpstreamToClient(req, res, fmt.url, 'audio/mp4', downloadName)
-      return true
-    }
-
-    // audioandvideo = format 18 (360p mp4, always available, no PO Token needed)
-    let fmt
-    try {
-      fmt = ytdl.chooseFormat(info.formats, { quality: 'lowestvideo', filter: 'audioandvideo' })
-    } catch {
-      fmt = null
-    }
-    if (!fmt?.url) {
-      console.warn('[DZTube:ytdl-core] no audioandvideo format found')
-      return false
-    }
-
-    const downloadName = `${safeName}.mp4`
-    console.log(`[DZTube:ytdl-core] ✓ format=${fmt.itag} q=${fmt.quality} → ${downloadName}`)
-    await streamUpstreamToClient(req, res, fmt.url, 'video/mp4', downloadName)
-    return true
-  } catch (e) {
-    console.warn('[DZTube:ytdl-core] failed:', e.message?.slice(0, 120))
-    return false
   }
 }
 
@@ -33966,11 +25717,6 @@ async function fetchYtdownItems(youtubeUrl) {
       const r = await fetch('https://app.ytdown.to/proxy.php', { method: 'POST', headers: apiHeaders, body, signal: ctl.signal })
       clearTimeout(t)
       if (!r.ok) { lastErr = `HTTP ${r.status}`; continue }
-      const ctype = (r.headers.get('content-type') || '')
-      // ytdown.to is now fronted by a Cloudflare challenge — if it answers
-      // with HTML instead of JSON there is no point retrying, the API needs a
-      // browser JS challenge we can't solve from a datacenter IP.
-      if (!ctype.includes('json')) { lastErr = `non-json (${ctype || 'unknown'})`; break }
       const data = await r.json().catch(() => null)
       const api = data?.api
       if (!api) { lastErr = 'invalid response'; continue }
@@ -34039,46 +25785,6 @@ async function resolveYtdownDirectUrl(item) {
   return { url: polled.fileUrl, size: polled.fileSize || item.size }
 }
 
-// ── Cobalt.tools fetch helper for DZ Tube download ───────────────────────────
-// يستخدم نفس COBALT_INSTANCES المعرّفة أعلاه في قسم استخراج الوسائط الاجتماعية
-// يعيد { url, title, ext } أو null عند الفشل
-async function _cobaltFetchYouTube(videoUrl, format, height) {
-  const isAudio = format === 'mp3' || format === 'audio'
-  const downloadMode = isAudio ? 'audio' : 'auto'
-  const audioFormat  = format === 'mp3' ? 'mp3' : 'best'
-  const videoQuality = String(height || 720)
-
-  const deadline = Date.now() + 20000
-  for (const base of COBALT_INSTANCES) {
-    if (Date.now() > deadline) break
-    try {
-      const ctrl = new AbortController()
-      const tid  = setTimeout(() => ctrl.abort(), 8000)
-      const resp = await fetch(`${base}/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept':       'application/json',
-          'User-Agent':   'DZ-GPT/2.0 (+https://dzagent.app)',
-        },
-        body: JSON.stringify({ url: videoUrl, downloadMode, videoQuality, audioFormat, audioBitrate: '192', filenameStyle: 'basic' }),
-        signal: ctrl.signal,
-      })
-      clearTimeout(tid)
-      const j = await resp.json().catch(() => ({}))
-      if (!resp.ok || j.status === 'error' || j.error) continue
-      const dlUrl = j.url
-      if (!dlUrl) continue
-      const ext = isAudio
-        ? (/\.mp3/i.test(dlUrl) ? 'mp3' : 'm4a')
-        : 'mp4'
-      console.log(`[DZTube:cobalt] ✓ instance=${base}`)
-      return { url: dlUrl, title: j.filename?.replace(/\.[^.]+$/, '') || '', ext }
-    } catch { /* try next */ }
-  }
-  return null
-}
-
 // ── PRIMARY yt-dlp downloader ─────────────────────────────────────────────────
 // Downloads to a temp file via yt-dlp then streams it to the client.
 // Returns true  → response was fully handled (success or client disconnected).
@@ -34100,29 +25806,8 @@ async function tryYtdlpDownloadToClient(req, res, url, format, h) {
     { headers: { 'User-Agent': YT_DLP_USER_AGENT }, signal: AbortSignal.timeout(6000) }
   ).then(r => r.ok ? r.json() : null).then(j => j?.title || null).catch(() => null)
 
-  // Download-specific antibot args: same as ytDlpAntiBotArgs but WITHOUT
-  // TESTED 2026-07-30: android client is the only one that downloads without PO tokens.
-  // SABR-only formats are auto-skipped by yt-dlp; format 18 always available as fallback.
-  function buildDownloadAntiBotArgs(clientIdx) {
-    const client = YT_DLP_CLIENTS[clientIdx % YT_DLP_CLIENTS.length]
-    return [
-      '--extractor-args', `youtube:player_client=${client}`,
-      ...ytDlpPoTokenArgs(),
-      '--user-agent', _nextUA(),
-      '--geo-bypass',
-      '--no-check-certificate',
-      '--no-check-formats',
-      '--retries', '3',
-      '--fragment-retries', '3',
-      '--socket-timeout', '20',
-      '--sleep-requests', '0.2',
-      '--ignore-errors',
-      '--no-abort-on-error',
-    ]
-  }
-
   function buildArgs(clientIdx) {
-    const antiBot = buildDownloadAntiBotArgs(clientIdx)
+    const antiBot = ytDlpAntiBotArgs(clientIdx)
     let args, mime
     if (format === 'mp3' && hasFfmpeg) {
       args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18', '-x', '--audio-format', 'mp3', '--audio-quality', '0',
@@ -34133,13 +25818,7 @@ async function tryYtdlpDownloadToClient(req, res, url, format, h) {
               '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
       mime = 'audio/mp4'
     } else if (isAudio) {
-      // No ffmpeg → must hand the user a REAL audio-only stream. The old
-      // format string fell back to `/18` (muxed 360p mp4 with video), which
-      // silently delivered a full video file labelled .m4a. Dropping `/18`
-      // makes yt-dlp fail fast when bestaudio isn't available so the caller
-      // falls through to the external audio-only fallbacks (ytdown/Piped/
-      // Invidious/Cobalt) instead of serving a video.
-      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18',
               '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
       mime = 'audio/mp4'
     } else if (hasFfmpeg) {
@@ -34156,12 +25835,11 @@ async function tryYtdlpDownloadToClient(req, res, url, format, h) {
   }
 
   // ── Multi-client retry loop ─────────────────────────────────────
-  const ffmpegLoc = await ytDlpFfmpegLocationArgs()
   for (let ci = 0; ci < YT_DLP_CLIENTS.length; ci++) {
     if (res.writableEnded || res.headersSent) return true
     const outPath = tmpFile(initialExt)
     const { args, mime } = buildArgs(ci)
-    const fullArgs = [...args, ...ffmpegLoc, '-o', outPath, url]
+    const fullArgs = [...args, '-o', outPath, url]
 
     console.log(`[DZTube:dlp] attempt ci=${ci} client=${YT_DLP_CLIENTS[ci]} format=${format} ffmpeg=${hasFfmpeg}`)
 
@@ -34214,15 +25892,6 @@ async function tryYtdlpDownloadToClient(req, res, url, format, h) {
     }
 
     console.warn(`[DZTube:dlp] ci=${ci} failed: ${result.stderr?.replace(/\n/g, ' ').slice(0, 300)}`)
-    // YouTube bot-challenge: no point trying the remaining clients — they all
-    // run from the same datacenter IP and will hit the same "Sign in to confirm
-    // you're not a bot" wall. Bail to the external-service fallbacks immediately
-    // instead of burning ~5 × 20s on doomed attempts.
-    const lowerErr = (result.stderr || '').toLowerCase()
-    if (lowerErr.includes('sign in to confirm') || lowerErr.includes('not a bot') || lowerErr.includes('http error 429')) {
-      console.warn('[DZTube:dlp] bot-challenge detected — skipping remaining clients')
-      break
-    }
     // Back off before next client (except last)
     if (ci < YT_DLP_CLIENTS.length - 1) await new Promise(r => setTimeout(r, 1500 + ci * 1000))
   }
@@ -34259,26 +25928,13 @@ app.get('/api/dz-tube/download', async (req, res) => {
   const h = DZ_TUBE_QUALITY_MAP[quality] || 720
   const isAudio = format === 'mp3' || format === 'audio'
 
-  // Global resolution budget: everything before the first response byte
-  // (yt-dlp attempts + external fallbacks) must fit inside this window.
-  // Once we start streaming a real file we let it run to completion.
-  const resolutionStartedAt = Date.now()
-  const resolutionDeadline = () => Date.now() - resolutionStartedAt
-
   // ── PRIMARY: yt-dlp (fastest & most reliable when available) ─────────
   // We try this FIRST. External services (ytdown.to / Invidious / Piped)
   // are only used when yt-dlp is not installed (e.g. serverless Vercel).
   const primaryOk = await tryYtdlpDownloadToClient(req, res, url, format, h)
   if (primaryOk) return
   if (res.headersSent) return  // partial write — nothing more we can do
-  console.warn('[DZTube:download] yt-dlp unavailable/failed — trying ytdl-core (Node.js, Vercel-safe)')
-
-  // ── SECONDARY: ytdl-core — pure Node.js, no subprocess, works on Vercel ───
-  // Gets format 18 (360p muxed mp4) which never requires PO Tokens.
-  const ytdlCoreOk = await tryYtdlCoreDownload(req, res, url, format)
-  if (ytdlCoreOk) return
-  if (res.headersSent) return
-  console.warn('[DZTube:download] ytdl-core failed — trying external services')
+  console.warn('[DZTube:download] yt-dlp unavailable/failed — trying external services')
 
   // ── FALLBACK: Multi-source resolver ───────────────────────────────────
   // Capability matrix (refreshed 2026-04-24):
@@ -34354,35 +26010,9 @@ app.get('/api/dz-tube/download', async (req, res) => {
     return await streamUpstreamToClient(req, res, winner.url, dlMime, downloadName)
   }
 
-  // ── COBALT FALLBACK: أموثوق fallback إضافي بعد ytdown+Invidious+Piped ────────
-  // cobalt.tools يدعم YouTube مباشرةً بدون PO-token أو bot-detection
-  if (!winner) {
-    try {
-      const cobaltResult = await _cobaltFetchYouTube(url, format, h)
-      if (cobaltResult?.url) {
-        const safe = (cobaltResult.title || vidId).replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || vidId
-        let dlExt, dlMime
-        if (format === 'mp3') { dlExt = 'mp3'; dlMime = 'audio/mpeg' }
-        else if (isAudio)     { dlExt = cobaltResult.ext || 'm4a'; dlMime = 'audio/mp4' }
-        else                  { dlExt = 'mp4'; dlMime = 'video/mp4' }
-        const downloadName = isAudio ? `${safe}.${dlExt}` : `${safe}_${h}p.${dlExt}`
-        console.log(`[DZTube:download] cobalt hit → ${downloadName}`)
-        return await streamUpstreamToClient(req, res, cobaltResult.url, dlMime, downloadName)
-      }
-    } catch (e) { console.warn('[DZTube:download] cobalt fallback failed:', e.message) }
-  }
-
   // If ytdown returned an actionable error (private / live / unavailable),
   // surface it immediately — yt-dlp won't fare better for these cases.
   if (friendlyError) return res.status(400).send(`فشل التحميل: ${friendlyError}`)
-
-  // Give up on further slow attempts once the resolution budget is spent —
-  // a single yt-dlp re-run can add minutes and the caller (browser XHR) has
-  // already been waiting through the primary + fallback chain above.
-  if (resolutionDeadline() > 45000) {
-    console.warn(`[DZTube:download] resolution budget exceeded (${resolutionDeadline()}ms) — bailing with error`)
-    return res.status(504).send('فشل التحميل: استغرقت عملية البحث عن الملف وقتاً طويلاً. حاول مرة أخرى.' )
-  }
 
   // Locate yt-dlp (PATH or bundled at bin/yt-dlp on Vercel)
   const dlpBin = await ytDlpBinaryPath()
@@ -34394,7 +26024,8 @@ app.get('/api/dz-tube/download', async (req, res) => {
       const info = await runYtDlpJSONWith(dlpBin, url)
       title = info.title || title
     } else {
-      const info = await ytdl.getInfo(url)
+    const ytdl = await getYtdl()
+    const info = await ytdl.getInfo(url)
       title = info.videoDetails?.title || title
     }
   } catch {}
@@ -34413,33 +26044,29 @@ app.get('/api/dz-tube/download', async (req, res) => {
     let downloadName
     let mime
     const antiBot = ytDlpAntiBotArgs()
-    const ffmpegLoc = await ytDlpFfmpegLocationArgs()
     // NOTE (2025-2026): YouTube now requires a "GVS PO Token" for separate
     // audio/video streams on most clients, so `bestaudio` and `bestvideo`
     // often return "Requested format is not available". Format `18` (360p
     // mp4 with combined audio+video) does NOT need a PO Token, so we use
-    // it as a universal fallback in every VIDEO format string below.
+    // it as a universal fallback in every format string below.
     if (format === 'mp3' && hasFfmpeg) {
-      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...ffmpegLoc, ...cookies, url]
+      args = ['-f', 'bestaudio/18', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
       downloadName = `${safeName}.mp3`
       mime = 'audio/mpeg'
     } else if (isAudio && hasFfmpeg) {
-      // Want native m4a — extract audio (remuxes the audio track out of 18)
-      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18', '-x', '--audio-format', 'm4a', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...ffmpegLoc, ...cookies, url]
+      // Want native m4a — extract audio (transcodes from 18 if needed)
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '-x', '--audio-format', 'm4a', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
       downloadName = `${safeName}.m4a`
       mime = 'audio/mp4'
     } else if (isAudio) {
-      // No ffmpeg → must hand back a REAL audio-only stream. The old string
-      // fell back to `/18` (muxed 360p mp4 with video), silently shipping a
-      // full video file named .m4a. Without /18, yt-dlp fails fast when no
-      // audio-only format exists and the caller reports the failure instead
-      // of handing the user a video disguised as audio.
-      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
+      // No ffmpeg → if bestaudio is unavailable we serve format 18 (mp4
+      // with audio); browsers can still play the audio track from it.
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
       downloadName = `${safeName}.m4a`
       mime = 'audio/mp4'
     } else if (hasFfmpeg) {
       const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${h}][ext=mp4]/best[height<=${h}]/22/18`
-      args = ['-f', fmt, '--merge-output-format', 'mp4', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...ffmpegLoc, ...cookies, url]
+      args = ['-f', fmt, '--merge-output-format', 'mp4', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
       downloadName = `${safeName}_${h}p.mp4`
       mime = 'video/mp4'
     } else {
@@ -34499,8 +26126,10 @@ app.get('/api/dz-tube/download', async (req, res) => {
     let stream
     if (isAudio) {
       // Audio-only m4a (no transcoding without ffmpeg in serverless)
+      const ytdl = await getYtdl()
       stream = ytdl(url, { quality: 'highestaudio', filter: 'audioonly' })
     } else {
+      const ytdl = await getYtdl()
       stream = ytdl(url, { quality: 'highest', filter: f => f.hasVideo && f.hasAudio && (!h || (f.height || 0) <= h) })
     }
     const ws = fs.createWriteStream(outPath)
@@ -34539,10 +26168,7 @@ app.post('/api/chat-room/join', async (req, res) => {
   const { name, gender, adminSecret, profilePassword, avatar: bodyAvatar, profile } = req.body || {}
   if (!name?.trim() || !gender) return res.status(400).json({ error: 'Name and gender required' })
   const id = chatId()
-  const isAdmin = _checkAdminSecret(adminSecret)
-  if (adminSecret && !isAdmin) {
-    return res.status(401).json({ error: 'كلمة مرور المشرف غير صحيحة.' })
-  }
+  const isAdmin = adminSecret === CHAT_ADMIN_SECRET
   const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
   const cleanProfile = {}
   for (const k of allowedProfileFields) {
@@ -34738,31 +26364,6 @@ app.post('/api/chat-room/admin', async (req, res) => {
     pinnedMessage = null
     await dbSetPinned(null)
     broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
-  } else if (action === 'broadcast' && req.body.text) {
-    // REST fallback — إذا انقطع WS للمشرف
-    const msgLink     = req.body.link     ? String(req.body.link).slice(0, 500)     : undefined
-    const msgLinkText = req.body.linkText ? String(req.body.linkText).slice(0, 100) : undefined
-    const broadcastMsg = pushChatMsg({
-      id: chatId(), from: session.name, fromId: session.id,
-      gender: session.gender || 'male',
-      text: String(req.body.text).slice(0, 500),
-      timestamp: Date.now(), isAdmin: true, isBroadcast: true,
-      link: msgLink, linkText: msgLinkText,
-    })
-    broadcastChat({ type: 'message', msg: broadcastMsg })
-    const _rNotifPayload = {
-      id: broadcastMsg.id, text: broadcastMsg.text,
-      from: broadcastMsg.from, timestamp: broadcastMsg.timestamp,
-      link: msgLink || null, linkText: msgLinkText || null,
-    }
-    pushNotifToAll(_rNotifPayload)
-    _pushPendingBroadcast(_rNotifPayload)
-    // تخزين كإعلان عام دائماً (يصل لجميع زوار الموقع عبر /api/site-announcement)
-    _siteAnnouncement = {
-      id: broadcastMsg.id, text: broadcastMsg.text,
-      link: msgLink || null, linkText: msgLinkText || null,
-      timestamp: Date.now(), from: session.name,
-    }
   }
   res.json({ ok: true })
 })
@@ -34803,8 +26404,7 @@ function setupChatWebSocket(httpServer) {
           const id = (existingSession && existingSession.id) ? existingSession.id : chatId()
           sid = id
           // isAdmin: reuse from HTTP session OR verify via adminSecret ONLY (profilePassword never grants admin)
-          const isAdmin = !!(existingSession?.isAdmin || _checkAdminSecret(adminSecret))
-          if (adminSecret && !isAdmin) return ws.close()
+          const isAdmin = !!(existingSession?.isAdmin || adminSecret === CHAT_ADMIN_SECRET)
           const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
           const cleanProfile = {}
           for (const k of allowedProfileFields) {
@@ -34969,34 +26569,12 @@ function setupChatWebSocket(httpServer) {
             await dbSetPinned(null)
             broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
           } else if (data.action === 'broadcast' && data.text) {
-            const msgLink     = data.link     ? String(data.link).slice(0, 500)     : undefined
-            const msgLinkText = data.linkText ? String(data.linkText).slice(0, 100) : undefined
             const broadcastMsg = pushChatMsg({
               id: chatId(), from: session.name, fromId: session.id,
               gender: session.gender, text: String(data.text).slice(0, 500),
               timestamp: Date.now(), isAdmin: true, isBroadcast: true,
-              link: msgLink, linkText: msgLinkText,
             })
             broadcastChat({ type: 'message', msg: broadcastMsg })
-            // ── SSE عالمي: يصل لجميع صفحات الموقع فوراً ──────────────────────
-            const _notifPayload = {
-              id: broadcastMsg.id, text: broadcastMsg.text,
-              from: broadcastMsg.from, timestamp: broadcastMsg.timestamp,
-              link: msgLink || null, linkText: msgLinkText || null,
-            }
-            pushNotifToAll(_notifPayload)
-            // ── طابور الإشعارات المعلّقة (للمستخدمين الغائبين تماماً) ────────
-            _pushPendingBroadcast(_notifPayload)
-            // تخزين كإعلان عام دائماً (يصل لجميع زوار الموقع عبر /api/site-announcement)
-            _siteAnnouncement = {
-              id: broadcastMsg.id,
-              text: String(data.text).slice(0, 500),
-              link: msgLink || null,
-              linkText: msgLinkText || null,
-              timestamp: Date.now(),
-              from: session.name,
-            }
-            console.log(`[SiteAnnounce] ✅ New announcement from ${session.name}: ${_siteAnnouncement.text.slice(0, 60)}`)
           }
         }
       } catch (err) { console.error('[WS:Chat]', err.message) }
@@ -35005,9 +26583,7 @@ function setupChatWebSocket(httpServer) {
       if (sid) {
         const session = chatSessions.get(sid)
         if (session) {
-          // ── لا نحذف الـ session — فقط نفصل الـ ws ليحتفظ المشرف بصلاحياته عند إعادة الاتصال ──
-          session.ws = null
-          session.lastSeen = Date.now()
+          chatSessions.delete(sid)
           const leaveMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: `${session.name} غادر الدردشة`, timestamp: Date.now(), isSystem: true })
           broadcastChat({ type: 'message', msg: leaveMsg })
           broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
@@ -35018,112 +26594,7 @@ function setupChatWebSocket(httpServer) {
     ws.on('error', () => {})
   })
   console.log('[WS:Chat] Chat WebSocket server ready on /ws/chat')
-
-  // ── تنظيف الـ sessions القديمة (بدون ws + lastSeen > 5 دقائق) ──────────────
-  setInterval(() => {
-    const STALE_MS = 5 * 60 * 1000
-    const now = Date.now()
-    for (const [id, s] of chatSessions.entries()) {
-      if (!s.ws && (now - s.lastSeen) > STALE_MS) {
-        chatSessions.delete(id)
-      }
-    }
-  }, 60_000)
 }
-
-// ── Live Score Auto-Refresh — broadcasts in-progress match scores every 3 min ─
-let _liveScoreMsgId = null
-let _liveScoreLastHash = ''
-
-async function _refreshLiveScores() {
-  try {
-    if (chatSessions.size === 0) return // nobody online, skip
-    const today = new Date().toISOString().slice(0, 10)
-    const [sfRes, wcRes] = await Promise.allSettled([
-      fetchSofaScoreFootball(today).catch(() => null),
-      runWC2026TodayAgent(today).catch(() => null),
-    ])
-
-    const liveMatches = []
-
-    // Collect SofaScore live (inprogress)
-    if (sfRes.status === 'fulfilled' && sfRes.value?.matches?.length > 0) {
-      liveMatches.push(...sfRes.value.matches.filter(m => m.statusType === 'inprogress'))
-    }
-
-    // Collect WC2026 live
-    if (wcRes.status === 'fulfilled' && wcRes.value?.matches?.length > 0) {
-      liveMatches.push(...wcRes.value.matches.filter(m =>
-        ['inprogress', 'live', 'LIVE'].includes(m.statusType || m.status || '')))
-    }
-
-    // Deduplicate by home+away
-    const seen = new Set()
-    const unique = liveMatches.filter(m => {
-      const key = `${(m.homeTeam || m.home || '').slice(0, 20)}vs${(m.awayTeam || m.away || '').slice(0, 20)}`
-      if (seen.has(key)) return false
-      seen.add(key); return true
-    })
-
-    if (unique.length === 0) {
-      _liveScoreMsgId = null
-      _liveScoreLastHash = ''
-      return
-    }
-
-    // Build score markdown block
-    const timeStr = new Date().toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' })
-    const lines = unique.map(m => {
-      const home = m.homeTeam || m.home || '?'
-      const away = m.awayTeam || m.away || '?'
-      const hs = m.homeScore ?? '?'
-      const as_ = m.awayScore ?? '?'
-      const min = m.minute ? ` ⏱️ ${m.minute}'` : ''
-      const comp = m.competition ? ` _(${m.competition})_` : ''
-      return `• 🔴 **${home}** ${hs} – ${as_} **${away}**${min}${comp}`
-    })
-    const newText = [
-      `🔴 **نتائج مباشرة** _(تحديث تلقائي كل 3 دقائق)_`,
-      '',
-      ...lines,
-      '',
-      `_⏰ آخر تحديث: ${timeStr}_`,
-    ].join('\n')
-
-    // Skip if nothing changed
-    const hash = lines.join('|')
-    if (hash === _liveScoreLastHash) return
-    _liveScoreLastHash = hash
-
-    if (_liveScoreMsgId) {
-      // Update existing message in-place
-      const msgIdx = chatMessages.findIndex(m => m.id === _liveScoreMsgId)
-      if (msgIdx !== -1) {
-        chatMessages[msgIdx].text = newText
-        chatMessages[msgIdx].timestamp = Date.now()
-        broadcastChat({ type: 'liveScoreUpdate', msgId: _liveScoreMsgId, text: newText })
-        return
-      }
-      _liveScoreMsgId = null // stale, re-create below
-    }
-
-    // Create new live score message
-    const msg = pushChatMsg({
-      id: chatId(), from: 'DZ Agent', fromId: 'bot', gender: 'bot',
-      text: newText, timestamp: Date.now(),
-      isBot: true, botType: 'agent', isMarkdown: true, isLiveScore: true,
-    })
-    _liveScoreMsgId = msg.id
-    broadcastChat({ type: 'message', msg })
-    console.log(`[LiveScore] 🔴 Broadcast: ${unique.length} live match(es)`)
-  } catch (err) {
-    console.error('[LiveScore] refresh error:', err.message)
-  }
-}
-
-setInterval(_refreshLiveScores, 3 * 60 * 1000)
-// Also run once shortly after startup to catch any ongoing matches
-setTimeout(_refreshLiveScores, 30 * 1000)
 
 // ===== MOUNT MULTI-AGENT LAYERS (must run on Vercel serverless too) =====
 // These attach routes to `app` and must execute at import time, BEFORE the
@@ -35260,7 +26731,6 @@ try {
 // New endpoints: /api/github-skill/{health,analyze,file/*,branch/*,pr/*,debug,auto-fix,sync/*,execute}
 try {
   mountGitHubSkill(app)
-  mountDzSkills(app)
   mountMemoryRouter(app)
 } catch (err) {
   console.warn('[github-skill] mount failed:', err.message)
@@ -35276,48 +26746,6 @@ try {
 // ══════════════════════════════════════════════════════════════════════
 // DZ TOOLS — IMAGE SEARCH & VISUAL AI ENDPOINTS (available on Vercel too)
 // ══════════════════════════════════════════════════════════════════════
-
-// ── GET /api/images/search — Pinterest + Wikipedia Smart Image Search ─────────
-// يستقبل: ?q=query&source=auto|pinterest|wikipedia|mixed&limit=10
-app.get('/api/images/search', async (req, res) => {
-  const q = sanitizeString(String(req.query.q || ''), 300).trim()
-  if (!q) return res.status(400).json({ error: 'query required', images: [] })
-
-  const rawSource = String(req.query.source || 'auto').toLowerCase()
-  const limit = Math.min(parseInt(req.query.limit || '10', 10) || 10, 30)
-
-  // تصنيف ذكي تلقائي إذا كان المصدر 'auto'
-  let preferredSource = null
-  let classification = null
-  if (rawSource === 'auto') {
-    classification = classifyImageQuery(q)
-    preferredSource = classification.source
-  } else if (['pinterest', 'wikipedia', 'mixed'].includes(rawSource)) {
-    preferredSource = rawSource
-  }
-
-  console.log(`[/api/images/search] q="${q.slice(0,60)}" source=${preferredSource} limit=${limit}`)
-
-  try {
-    const result = await searchImages({
-      query: q,
-      limit,
-      preferredSource,
-    })
-
-    return res.json({
-      images: result.images,
-      query: result.query,
-      originalQuery: result.originalQuery,
-      total: result.total,
-      preferredSource: result.preferredSource,
-      classification: classification || { source: preferredSource, category: rawSource, confidence: 100 },
-    })
-  } catch (err) {
-    console.error('[/api/images/search] Error:', err.message)
-    return res.status(500).json({ error: 'image search failed', images: [] })
-  }
-})
 
 // GET /api/tools/image-search?q=... — multi-source: Openverse + Wikimedia Commons fallback
 app.get('/api/tools/image-search', async (req, res) => {
@@ -35408,7 +26836,7 @@ app.get('/api/tools/image-search', async (req, res) => {
   const fetchOpenverse = async () => {
     const params = new URLSearchParams({ q: searchQ, page_size: '24', license_type: 'all' })
     const r = await fetch(`https://api.openverse.org/v1/images/?${params}`, {
-      headers: { 'User-Agent': 'DZ-GPT/2.0 (dzagent.app; contact@dzagent.app)' },
+      headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app; contact@dz-gpt.vercel.app)' },
       signal: AbortSignal.timeout(10000),
     })
     if (!r.ok) throw new Error(`Openverse ${r.status}`)
@@ -35442,7 +26870,7 @@ app.get('/api/tools/image-search', async (req, res) => {
       origin: '*',
     })
     const r = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, {
-      headers: { 'User-Agent': 'DZ-GPT/2.0 (dzagent.app)' },
+      headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
       signal: AbortSignal.timeout(10000),
     })
     if (!r.ok) throw new Error(`Wikimedia ${r.status}`)
@@ -35504,7 +26932,7 @@ app.get('/api/tools/image-search', async (req, res) => {
           format: 'json', origin: '*',
         })
         const wpSearchRes = await fetch(`https://en.wikipedia.org/w/api.php?${wpSearchParams}`, {
-          headers: { 'User-Agent': 'DZ-GPT/2.0 (dzagent.app)' },
+          headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
           signal: AbortSignal.timeout(8000),
         })
         if (wpSearchRes.ok) {
@@ -35517,7 +26945,7 @@ app.get('/api/tools/image-search', async (req, res) => {
               format: 'json', origin: '*',
             })
             const wpImgRes = await fetch(`https://en.wikipedia.org/w/api.php?${wpImgParams}`, {
-              headers: { 'User-Agent': 'DZ-GPT/2.0 (dzagent.app)' },
+              headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
               signal: AbortSignal.timeout(8000),
             })
             if (wpImgRes.ok) {
@@ -35694,7 +27122,7 @@ app.post('/api/tools/image-analyze', async (req, res) => {
       const imgRes = await fetch(imageUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)',
-          'Referer': 'https://dzagent.app',
+          'Referer': 'https://dz-gpt.vercel.app',
         },
         signal: AbortSignal.timeout(15000),
       })
@@ -35804,7 +27232,7 @@ app.post('/api/tools/image-analyze', async (req, res) => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${orKey}`,
-            'HTTP-Referer': 'https://dzagent.app',
+            'HTTP-Referer': 'https://dz-gpt.vercel.app',
             'X-Title': 'DZ-GPT Vision',
           },
           body: JSON.stringify(orBody),
@@ -36052,7 +27480,7 @@ app.post('/api/tools/img-inpaint', express.json({ limit: '30mb' }), async (req, 
   const mskB64 = maskBase64.includes(',') ? maskBase64.split(',')[1] : maskBase64
 
   // ── Primary: Python skimage biharmonic inpainting (Replit / self-hosted) ────
-  if (!process.env.VERCEL && !process.env.CF_PAGES) {
+  if (!process.env.VERCEL) {
     const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'scripts', 'inpaint.py')
     const pythonLibs = path.join(path.dirname(fileURLToPath(import.meta.url)), '.pythonlibs', 'lib', 'python3.11', 'site-packages')
     const payload = JSON.stringify({ image: imgB64, mask: mskB64 })
@@ -36145,7 +27573,7 @@ async function pollinationsImage(prompt, { width = 768, height = 768, model = 'f
       const encoded = encodeURIComponent(prompt)
       const url = `https://image.pollinations.ai/prompt/${encoded}?model=${model}&width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false`
       const r = await fetch(url, {
-        headers: { 'Referer': 'https://dzagent.app', 'User-Agent': 'DZ-GPT/2.0' },
+        headers: { 'Referer': 'https://dz-gpt.vercel.app', 'User-Agent': 'DZ-GPT/2.0' },
         signal: AbortSignal.timeout(timeoutMs),
       })
       if (!r.ok) { lastErr = new Error(`Pollinations ${r.status}`); continue }
@@ -36311,7 +27739,7 @@ app.get('/api/tools/img-gen/status/:jobId', async (req, res) => {
   const { jobId } = req.params
   if (!jobId) return res.status(400).json({ error: 'jobId مطلوب' })
   const BASE = 'https://stablehorde.net/api/v2'
-  const H = { 'Client-Agent': 'DZ-GPT:1.0:dzagent.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+  const H = { 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
   try {
     const chk = await fetch(`${BASE}/generate/check/${jobId}`, { headers: H, signal: AbortSignal.timeout(8000) })
     if (!chk.ok) return res.status(502).json({ error: 'Horde unreachable', done: false })
@@ -36359,7 +27787,7 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
     const polUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(englishPrompt)}`
       + `?model=${polModel}&width=${Math.min(w,1024)}&height=${Math.min(h,1024)}&seed=${seed}&nologo=true&enhance=true&safe=false`
     const polRes = await fetch(polUrl, {
-      headers: { 'Referer': 'https://dzagent.app', 'User-Agent': 'DZ-GPT/2.0' },
+      headers: { 'Referer': 'https://dz-gpt.vercel.app', 'User-Agent': 'DZ-GPT/2.0' },
       signal: AbortSignal.timeout(40000),
     })
     if (polRes.ok && (polRes.headers.get('content-type') || '').startsWith('image/')) {
@@ -36408,7 +27836,7 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
   // (all sync providers failed — use async so frontend can poll)
   try {
     const HORDE_BASE = 'https://stablehorde.net/api/v2'
-    const HORDE_H = { 'Content-Type': 'application/json', 'Client-Agent': 'DZ-GPT:1.0:dzagent.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+    const HORDE_H = { 'Content-Type': 'application/json', 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
     const hordeBody = JSON.stringify({
       prompt: englishPrompt,
       params: { n: 1, steps: 20, width: 512, height: 512, sampler_name: 'k_euler_a', cfg_scale: 7 },
@@ -36434,7 +27862,7 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
 // ── Stable Horde: poll until job is done (server-side, max 72s — within Vercel 90s maxDuration) ──
 async function waitForHordeJob(jobId, maxWaitMs = 72000, maxWaitEstimateSec = 9999) {
   const BASE = 'https://stablehorde.net/api/v2'
-  const H = { 'Client-Agent': 'DZ-GPT:1.0:dzagent.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+  const H = { 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
   const start = Date.now(); let polls = 0
   while (Date.now() - start < maxWaitMs) {
     await new Promise(r => setTimeout(r, polls < 4 ? 5000 : 8000)); polls++
@@ -36466,7 +27894,7 @@ async function waitForHordeJob(jobId, maxWaitMs = 72000, maxWaitEstimateSec = 99
 // ── Stable Horde: submit img2img job and return jobId ─────────────────────────
 async function hordeSubmitImg2Img(imgB64, prompt, negPrompt, strength) {
   const BASE = 'https://stablehorde.net/api/v2'
-  const H = { 'Content-Type': 'application/json', 'Client-Agent': 'DZ-GPT:1.0:dzagent.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+  const H = { 'Content-Type': 'application/json', 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
   const r = await fetch(`${BASE}/generate/async`, {
     method: 'POST', headers: H,
     body: JSON.stringify({
@@ -36760,30 +28188,11 @@ async function _loadEdgeTTS() {
 
 function _cleanForTTS(text) {
   return text
-    // إزالة كتل الكود
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`[^`]+`/g, '')
-    // تحويل روابط Markdown إلى نصها فقط
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    // إزالة روابط URL خام
+    .replace(/[#*_~>|]/g, '')
     .replace(/https?:\/\/\S+/g, '')
-    // إزالة رموز Markdown
-    .replace(/[#*~>|]/g, '')
-    // إزالة الشرطة السفلية (underscore)
-    .replace(/_/g, ' ')
-    // إزالة الشرطة المائلة "/" المُحاطة بمسافات (فاصل سؤال) — لكن مع الحفاظ على الكلمات
-    .replace(/\s+\/\s+/g, ' ')
-    .replace(/^\/|\/$/gm, '')
-    // إزالة شرطة عرض "-" المستقلة (ليست داخل كلمات)
-    .replace(/(?<!\w)-(?!\w)/g, ' ')
-    // إزالة الرموز الزائدة: ✅ ❌ ⚡ 🔴 ← → 🛡️ ══ ─ 《》【】「」
-    .replace(/[✅❌⚡🔴🟡🟢←→↑↓⬅➡🛡🔥💡📌📋🚨⚠️━═─•·]/gu, '')
-    // إزالة علامة "**" وعلامة "##" المتبقية
-    .replace(/\*{1,3}/g, '')
-    .replace(/#{1,6}\s/g, '')
-    // تحويل "①②③" إلى أرقام مقروءة
-    .replace(/[①②③④⑤⑥⑦⑧⑨⑩]/gu, (c) => String('①②③④⑤⑥⑦⑧⑨⑩'.indexOf(c) + 1) + '. ')
-    // تنظيف المسافات الزائدة
     .replace(/\s{2,}/g, ' ')
     .trim()
     .slice(0, 3000)
@@ -36810,25 +28219,23 @@ app.post('/api/tts/edge', async (req, res) => {
       OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3
     )
 
-    const { audioStream } = tts.toStream(clean, { rate, pitch })
-
-    // Collect audio into buffer first (more reliable in serverless / Vercel)
-    const _chunks = []
-    await new Promise((resolve, reject) => {
-      audioStream.on('data', chunk => _chunks.push(chunk))
-      audioStream.on('end', resolve)
-      audioStream.on('error', reject)
-    })
-    const _audioBuf = Buffer.concat(_chunks)
-    if (_audioBuf.length === 0) {
-      return res.status(500).json({ error: 'Edge TTS returned empty audio' })
-    }
-
     res.setHeader('Content-Type', 'audio/mpeg')
-    res.setHeader('Content-Length', _audioBuf.length)
     res.setHeader('Cache-Control', 'no-store')
     res.setHeader('X-TTS-Voice', selectedVoice)
-    res.end(_audioBuf)
+
+    const { audioStream } = tts.toStream(clean, { rate, pitch })
+
+    audioStream.on('error', (err) => {
+      logger.warn('[TTS/edge] stream error:', err.message)
+      if (!res.headersSent) res.status(500).json({ error: err.message })
+      else res.end()
+    })
+
+    audioStream.pipe(res)
+
+    req.on('close', () => {
+      try { audioStream.destroy() } catch {}
+    })
   } catch (err) {
     logger.error('[TTS/edge] error:', err.message)
     if (!res.headersSent) res.status(500).json({ error: 'Edge TTS failed: ' + err.message })
@@ -37143,236 +28550,6 @@ app.post('/api/dz-media/providers/generate', express.json({ limit: '2mb' }), asy
   }
 })
 
-// ── AI DZ img PRO — Smart Pinterest AI Image Search ──────────────────────────
-// POST /api/dz-media/ai-img-pro/search
-// بحث ذكي متعدد الاستعلامات في Pinterest عن صور AI — بدون توليد — بدون مفتاح
-{
-  const _aiProCache = new Map()   // key → { images, ts }
-  const _CACHE_TTL  = 12 * 60 * 1000  // 12 دقيقة
-
-  const FILTER_KW = {
-    'Portrait':         'portrait face closeup AI art',
-    'Landscape':        'landscape scenery wide shot digital art',
-    'Anime':            'anime manga illustration art',
-    'Realistic':        'hyperrealistic photorealistic AI',
-    'Painting':         'oil painting digital painting art',
-    'Fantasy':          'fantasy magical epic art',
-    'Sci-Fi':           'sci-fi futuristic cyberpunk art',
-    'Architecture':     'architecture building concept design',
-    'Logo':             'logo brand minimal design',
-    'Character Design': 'character design concept sheet AI',
-    'Vehicle':          'vehicle car concept design art',
-    'Nature':           'nature landscape organic art',
-    'Algeria':          'Algeria Algerian art illustration',
-    'Historical':       'historical ancient civilization art',
-    'Islamic Art':      'Islamic art geometric calligraphy',
-    'Minimal':          'minimalist clean simple design',
-  }
-
-  app.post('/api/dz-media/ai-img-pro/search', express.json({ limit: '1mb' }), async (req, res) => {
-    const { prompt = '', page = 0, filter = '' } = req.body
-    const rawPrompt = String(prompt).trim().slice(0, 300)
-    if (!rawPrompt) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
-
-    const PAGE_SIZE = 24
-    const pg        = Math.max(0, Number(page) || 0)
-    const cacheKey  = `${rawPrompt}::${filter}`.toLowerCase().slice(0, 200)
-
-    // ─── Cache hit: return next page ────────────────────────────────────────
-    const cached = _aiProCache.get(cacheKey)
-    if (cached && Date.now() - cached.ts < _CACHE_TTL) {
-      const slice   = cached.images.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE)
-      const hasMore = cached.images.length > (pg + 1) * PAGE_SIZE
-      console.log(`[ai-img-pro] CACHE HIT page=${pg} total=${cached.images.length} returning=${slice.length}`)
-      return res.json({ ok: true, images: slice, total: cached.images.length, page: pg, hasMore, prompt: rawPrompt })
-    }
-
-    try {
-      const { searchPinterest } = await import('./lib/image-search/index.js')
-      const filterKw = filter ? (FILTER_KW[filter] || filter) : ''
-      const base     = filterKw ? `${rawPrompt} ${filterKw}` : rawPrompt
-
-      // 5 استعلامات ذكية تستهدف صور AI
-      const queries = [
-        `${base} AI Art`,
-        `${base} Midjourney`,
-        `${base} concept art digital painting`,
-        `${base} stable diffusion art`,
-        `${base} hyperrealistic illustration`,
-      ]
-
-      console.log(`[ai-img-pro] Searching "${rawPrompt.slice(0,60)}" filter="${filter}" queries=${queries.length}`)
-
-      // بحث متوازٍ في Pinterest بكل الاستعلامات
-      const allResults = await Promise.allSettled(queries.map(q => searchPinterest(q, 25)))
-
-      // دمج وحذف المكررات
-      const seen   = new Set()
-      const merged = []
-      for (const r of allResults) {
-        if (r.status !== 'fulfilled') continue
-        for (const img of r.value) {
-          if (!img?.url || seen.has(img.url)) continue
-          seen.add(img.url)
-          merged.push({ ...img, source: 'Pinterest' })
-        }
-      }
-
-      // حفظ في Cache
-      _aiProCache.set(cacheKey, { images: merged, ts: Date.now() })
-      if (_aiProCache.size > 80) {
-        const oldest = [..._aiProCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0]
-        if (oldest) _aiProCache.delete(oldest[0])
-      }
-
-      const slice   = merged.slice(0, PAGE_SIZE)
-      const hasMore = merged.length > PAGE_SIZE
-      console.log(`[ai-img-pro] ✅ total=${merged.length} returning=${slice.length}`)
-      return res.json({ ok: true, images: slice, total: merged.length, page: 0, hasMore, prompt: rawPrompt })
-
-    } catch (e) {
-      console.error('[ai-img-pro]', e.message)
-      return res.status(500).json({ ok: false, error: e.message })
-    }
-  })
-}
-
-// ===== DARIJA BENCHMARK — /api/darija-benchmark =====
-// اختبار شامل للطبقة اللغوية: كشف الدارجة + التوجيه + منع الهلوسة + الهوية
-app.get('/api/darija-benchmark', async (req, res) => {
-  const TEST_CASES = [
-    // ── محادثة يومية ──────────────────────────────────────────────────────
-    { id: 'T01', category: 'يومي', query: 'واش راك؟',             expectStyle: ['darija','franco','mixed'], expectIntent: 'greeting',  noHallucination: true },
-    { id: 'T02', category: 'يومي', query: 'صباح الخير خويا',      expectStyle: ['darija','franco','mixed'], expectIntent: 'greeting',  noHallucination: true },
-    { id: 'T03', category: 'يومي', query: 'كيداير اليوم؟',        expectStyle: ['darija','franco','mixed'], expectIntent: 'greeting',  noHallucination: true },
-    // ── برمجة ─────────────────────────────────────────────────────────────
-    { id: 'T04', category: 'برمجة', query: 'راني نخدم على تطبيق، واش الفرق بين API و Database؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'tech', noHallucination: true },
-    { id: 'T05', category: 'برمجة', query: 'عندي خطأ في Python يقولي undefined variable واش ندير؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'tech', noHallucination: true },
-    // ── طقس ───────────────────────────────────────────────────────────────
-    { id: 'T06', category: 'طقس', query: 'واش راه الطقس اليوم في الجزائر العاصمة؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'weather', noHallucination: false },
-    // ── رياضة ─────────────────────────────────────────────────────────────
-    { id: 'T07', category: 'رياضة', query: 'شكون ربح آخر ماتش بين الجزائر ومصر؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'sports', noHallucination: false },
-    // ── طب ────────────────────────────────────────────────────────────────
-    { id: 'T08', category: 'طب', query: 'راني نحس بوجع في راسي من البارح، واش ندير؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'health', noHallucination: true },
-    { id: 'T09', category: 'طب', query: 'راني نحس بألم في صدري واش ندير؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'health', noHallucination: true },
-    // ── خرائط ─────────────────────────────────────────────────────────────
-    { id: 'T10', category: 'خرائط', query: 'كيفاش نروح من الجزائر العاصمة لوهران؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'location', noHallucination: true },
-    // ── قدرات DZ Agent ─────────────────────────────────────────────────────
-    { id: 'T11', category: 'قدرات', query: 'واش يقدر يدير DZ Agent؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'capability', noHallucination: true },
-    // ── هوية المطور — الاختبار الأهم ──────────────────────────────────────
-    { id: 'T12', category: 'هوية', query: 'شكون خدمك؟',                expectStyle: ['darija','franco','mixed'], expectIdentityHit: true, identityKeyword: 'nadir', noHallucination: true },
-    { id: 'T13', category: 'هوية', query: 'شكون صنعك؟',                expectStyle: ['darija','franco','mixed'], expectIdentityHit: true, identityKeyword: 'nadir', noHallucination: true },
-    { id: 'T14', category: 'هوية', query: 'مؤسس شركة DZ Agent',         expectStyle: ['darija','franco','mixed','msa'], expectIdentityHit: true, identityKeyword: 'nadir', noHallucination: true },
-    { id: 'T15', category: 'هوية', query: 'من طورك؟',                  expectStyle: ['darija','franco','mixed','msa'], expectIdentityHit: true, identityKeyword: 'nadir', noHallucination: true },
-    // ── منع الهلوسة ────────────────────────────────────────────────────────
-    { id: 'T16', category: 'هلوسة', query: 'شكون الرئيس الحالي لأمريكا؟', expectStyle: ['darija','franco','mixed'], expectLiveSearch: true, noHallucination: false },
-    // ── فرانكو-عربي ────────────────────────────────────────────────────────
-    { id: 'T17', category: 'فرانكو', query: 'wach rak l kheir?',        expectStyle: ['franco','mixed','darija'],  expectIntent: 'greeting', noHallucination: true },
-    { id: 'T18', category: 'فرانكو', query: '3andi bug fil code',       expectStyle: ['franco','mixed','darija'],  expectIntent: 'tech',     noHallucination: true },
-    // ── تعبيرات اجتماعية ───────────────────────────────────────────────────
-    { id: 'T19', category: 'اجتماعي', query: 'يعطيك الصحة',            expectStyle: ['darija','franco','mixed'], expectSocialHit: true,  noHallucination: true },
-    { id: 'T20', category: 'اجتماعي', query: 'تحيا الجزائر',           expectStyle: ['darija','franco','mixed'], expectSocialHit: true,  noHallucination: true },
-  ]
-
-  const results = []
-  let passed = 0, failed = 0
-
-  for (const tc of TEST_CASES) {
-    const result = { id: tc.id, category: tc.category, query: tc.query, checks: [], pass: true }
-
-    try {
-      // ── فحص 1: كشف اللغة ──────────────────────────────────────────────
-      const style = detectDzStyle(tc.query)
-      const styleOk = !tc.expectStyle || tc.expectStyle.includes(style)
-      result.detectedStyle = style
-      result.checks.push({ name: 'كشف اللغة', pass: styleOk, detail: `الأسلوب: ${style}${styleOk ? ' ✅' : ` ❌ (متوقع: ${tc.expectStyle?.join('|')})`}` })
-      if (!styleOk) result.pass = false
-
-      // ── فحص 2: كشف النية ──────────────────────────────────────────────
-      const intent = detectDzIntent(tc.query)
-      result.detectedIntent = intent.type
-      if (tc.expectIntent) {
-        const INTENT_GROUPS = {
-          greeting:    ['greeting','social','casual'],
-          tech:        ['tech','coding','programming'],
-          weather:     ['weather','real_time'],
-          sports:      ['sports','real_time'],
-          health:      ['health','medical'],
-          location:    ['location','geo','directions'],
-          capability:  ['capability','general','info'],
-        }
-        const group = INTENT_GROUPS[tc.expectIntent] || [tc.expectIntent]
-        const intentOk = group.some(g => intent.type?.includes(g)) || intent.type === tc.expectIntent
-        result.checks.push({ name: 'تحديد النية', pass: intentOk, detail: `النية: ${intent.type} (ثقة: ${Math.round((intent.confidence||0)*100)}%)${intentOk ? ' ✅' : ` ❌ (متوقع: ${tc.expectIntent})`}` })
-        // النية غير مطابقة لا تُفشل التسجيل إلا لطلبات الهوية
-      }
-
-      // ── فحص 3: التعابير الاجتماعية ───────────────────────────────────
-      const socialExpr = detectSocialExpression(tc.query)
-      result.socialExprHit = !!socialExpr
-      if (tc.expectSocialHit) {
-        const socialOk = !!socialExpr
-        result.checks.push({ name: 'تعبير اجتماعي', pass: socialOk, detail: socialOk ? `وُجد: "${socialExpr?.expression}" ✅` : '❌ لم يُكتشف التعبير الاجتماعي' })
-        if (!socialOk) result.pass = false
-      }
-
-      // ── فحص 4: الهوية — الأهم ─────────────────────────────────────────
-      if (tc.expectIdentityHit) {
-        const IDENTITY_TRIGGERS = [
-          'من هو مطورك','من مطورك','من صنعك','من برمجك','من أنشأك','من طورك',
-          'خدمك شكون','صنعك شكون','شكون خدمك','شكون طورك','شكون صنعك','شكون برمجك',
-          'من خدمك','من طورك','من صنعك',
-          'مؤسس dz','مؤسس شركة','مؤسس منصة',
-          'nadir','نذير'
-        ]
-        const qLow = tc.query.toLowerCase()
-        const identityOk = IDENTITY_TRIGGERS.some(t => qLow.includes(t.toLowerCase())) ||
-                          !!socialExpr?.category === 'identity'
-
-        // التحقق من وجود الكلمة المفتاحية في response إذا تم اكتشاف التعبير
-        const responseHasKeyword = socialExpr?.response?.toLowerCase().includes('nadir') ||
-                                   socialExpr?.response?.toLowerCase().includes('نذير')
-        const identityFull = identityOk && (socialExpr ? responseHasKeyword : true)
-
-        result.checks.push({
-          name: 'هوية المطور',
-          pass: identityFull,
-          detail: identityFull
-            ? `✅ سيُجيب بـ "Nadir Houamria — نذير حوامرية"`
-            : `❌ السؤال لا يُوجّه لطبقة الهوية بشكل صحيح (تحقق من DEVELOPER_RESPONSE في server.js)`,
-        })
-        if (!identityFull) result.pass = false
-      }
-
-      // ── فحص 5: تطبيع الفرانكو-عربي ──────────────────────────────────
-      const norm = normalizeDarija(tc.query)
-      result.normalized = norm.changed ? norm.normalized : null
-      result.checks.push({ name: 'تطبيع', pass: true, detail: norm.changed ? `فرانكو→عربي: "${norm.normalized}" ✅` : 'نص عادي ✅' })
-
-    } catch (err) {
-      result.pass = false
-      result.error = err.message
-      result.checks.push({ name: 'خطأ تقني', pass: false, detail: `⚠️ ${err.message}` })
-    }
-
-    if (result.pass) passed++; else failed++
-    results.push(result)
-  }
-
-  const total = results.length
-  const score = Math.round((passed / total) * 100)
-
-  return res.json({
-    summary: {
-      total, passed, failed, score: `${score}%`,
-      status: score >= 95 ? '✅ PASS — النظام جاهز للإنتاج' : score >= 80 ? '⚠️ PARTIAL — يحتاج تحسين' : '❌ FAIL — يحتاج مراجعة عاجلة',
-    },
-    results,
-    timestamp: new Date().toISOString(),
-    version: '2.0',
-  })
-})
-
 // ===== EXPORT APP (for Vercel serverless) =====
 export { app }
 
@@ -37380,20 +28557,6 @@ export { app }
 const isMain = process.argv[1] === fileURLToPath(import.meta.url)
 
 if (isMain) {
-  // ── Dahl Inference — background health monitoring (every 5 minutes) ───────
-  // Runs silently; keeps the circuit breaker informed without user impact.
-  // API key is never logged. Failures are caught and swallowed.
-  if (process.env.DAHL_API_KEY && process.env.DAHL_ENABLED !== 'false') {
-    scheduleOnce(async () => {
-      try {
-        const r = await dahlHealthCheck()
-        console.log(`[Dahl:Health] ${r.ok ? '✓' : '✗'} latency=${r.latencyMs ?? '?'}ms${r.error ? ' err=' + r.error : ''}`)
-      } catch (e) {
-        console.warn('[Dahl:Health] check failed (non-critical):', e.message?.slice(0, 80))
-      }
-    }, 5 * 60 * 1000, { label: 'dahl-health-check' })
-  }
-
   // ── Resilience: scheduleOnce prevents overlapping background jobs ─────────
   scheduleOnce(
     () => updateEddirasaIndex()
@@ -37445,14 +28608,6 @@ if (isMain) {
       .catch(err => console.warn('[AutoRefresh] Currency failed:', err.message))
   }, AUTO_REFRESH_INTERVAL + 60000, { label: 'currency-refresh' })
 
-  // ── 🇩🇿 Pre-warm Kooora Algeria cache عند بدء السيرفر (فوري) ─────────────
-  scheduleOnce(async () => {
-    console.log('[AutoRefresh] 🇩🇿 Pre-warming Kooora Algeria team cache...')
-    await getAlgeriaTeamMatches()
-      .then(d => console.log(`[AutoRefresh] ✅ Kooora Algeria: ${d?.matches?.length || 0} matches cached`))
-      .catch(err => console.warn('[AutoRefresh] Kooora Algeria pre-warm failed:', err.message))
-  }, 5000, { label: 'kooora-algeria-prewarm' })
-
   scheduleOnce(async () => {
     console.log('[AutoRefresh] Refreshing LFP matches...')
     SPORTS_CACHE_V2.invalidate('lfp')
@@ -37489,21 +28644,8 @@ if (isMain) {
       console.warn('[AutoRefresh] Economy news refresh failed:', err.message)
     }
   }, 8 * 60 * 1000, { label: 'dz-economy-refresh' })
-
-  // ── Auto-Refresh الأحداث الاقتصادية كل 20 دقيقة ──────────────────────────
-  scheduleOnce(async () => {
-    console.log('[AutoRefresh] 📅 Refreshing DZ economy events (ملتقيات/مؤتمرات/معارض)...')
-    try {
-      const result = await fetchDZEconomyEvents({ force: true })
-      console.log(`[AutoRefresh] ✅ Economy events: ${result?.items?.length || 0} events`)
-    } catch (err) {
-      console.warn('[AutoRefresh] Economy events refresh failed:', err.message)
-    }
-  }, 20 * 60 * 1000, { label: 'dz-economy-events-refresh' })
-
-  // Pre-warm economy caches on startup
+  // Pre-warm economy cache on first request (startup)
   fetchDZEconomyNews({ force: false }).catch(() => {})
-  fetchDZEconomyEvents({ force: false }).catch(() => {})
 
   // ── Periodic resilience housekeeping (every 10 min) ───────────────────────
   scheduleOnce(() => {
@@ -37616,7 +28758,7 @@ async function fetchRadioBrowser(path) {
   for (const host of RADIO_BROWSER_HOSTS) {
     try {
       const r = await fetch(`${host}/json/${path}`, {
-        headers: { 'User-Agent': 'DZ-GPT/1.0:dzagent.app' },
+        headers: { 'User-Agent': 'DZ-GPT/1.0:dz-gpt.vercel.app' },
         signal: AbortSignal.timeout(8000),
       })
       if (r.ok) return r.json()
@@ -37707,305 +28849,6 @@ app.post('/api/tools/presentation', express.json(), async (req, res) => {
   }
 })
 
-// ═══════════════════════════════════════════════════════════════════
-
-// Helper: validate AI response is proper darija translation JSON
-function _isDarijaValidJson(raw) {
-  if (!raw || raw.length < 5) return null
-  if (/DZ Agent|🌤️|🌥️|طقس.*ولاية|ولاية جزائرية|يوفر الطقس/u.test(raw)) return null
-  try {
-    const m = raw.match(/\{[\s\S]*\}/)
-    if (!m) return null
-    const p = JSON.parse(m[0])
-    if (p && typeof p.translation === 'string' && p.translation.trim().length > 0) return p
-  } catch {}
-  return null
-}
-
-// POST /api/tools/darija-translate — مترجم الدارجة الجزائرية المتخصص
-// يعتمد على: محرك محلي (toDarija/understand_dz) + قاعدة بيانات غنية + AI
-// ═══════════════════════════════════════════════════════════════════
-app.post('/api/tools/darija-translate', express.json({ limit: '64kb' }), async (req, res) => {
-  try {
-    const { text, direction = 'ar2dz', region = 'center' } = req.body || {}
-    if (!text || !text.trim()) return res.status(400).json({ error: 'text required' })
-    const inputText = text.trim().slice(0, 500)
-
-    // ── Load local databases ──────────────────────────────────────
-    let dialect = {}, corpus = {}
-    try { dialect = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'dz_dialect.json'), 'utf8')) } catch {}
-    try { corpus  = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'dz_darija_corpus.json'), 'utf8')) } catch {}
-
-    const slangMap      = dialect.slang_map           || {}
-    const responseMap   = dialect.response_map        || {}
-    const words         = dialect.words               || []
-    const convPhrases   = dialect.conversation_phrases || []
-    const vocabulary    = corpus.vocabulary            || []
-    const expressions   = corpus.expressions          || []
-    const grammarRules  = corpus.grammar_rules        || []
-    const regionalVars  = corpus.regional_variants    || []
-    const verbConj      = corpus.verb_conjugations    || []
-    const fewShots      = corpus.few_shot             || []
-    const frenchMap     = corpus.french_darija        || {}
-
-    // ── Normalize helpers ─────────────────────────────────────────
-    const _n = (s) => (s||'').replace(/[\u0610-\u061A\u064B-\u065F\u0670]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ة/g,'ه').toLowerCase().trim()
-    const _inc = (hay, needle) => { const h=_n(hay), n=_n(needle); return h===n||h.includes(n)||n.includes(h) }
-    const _esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
-
-    // ── ENGINE: Arabic → Darija (response_map word substitution) ──
-    const _engineAr2Dz = (txt) => {
-      const sorted = Object.keys(responseMap).sort((a,b)=>b.length-a.length)
-      const SEP = '[\\s،,;؛!?؟.\\n\\r\\t]'
-      let p = '\n' + txt + '\n'
-      for (const ar of sorted) {
-        try { p = p.replace(new RegExp(`(?<=${SEP})${_esc(ar)}(?=${SEP})`, 'g'), responseMap[ar]) } catch { p = p.replace(ar, responseMap[ar]) }
-      }
-      return p.slice(1,-1)
-    }
-
-    // ── ENGINE: Darija → Arabic (slang_map word substitution) ─────
-    const _engineDz2Ar = (txt) => {
-      const sorted = Object.keys(slangMap).sort((a,b)=>b.length-a.length)
-      const SEP = '[\\s،,;؛!?؟.\\n\\r\\t]'
-      let p = '\n' + txt + '\n'
-      for (const dz of sorted) {
-        try { p = p.replace(new RegExp(`(?<=${SEP})${_esc(dz)}(?=${SEP})`, 'g'), slangMap[dz]) } catch { p = p.replace(dz, slangMap[dz]) }
-      }
-      return p.slice(1,-1)
-    }
-
-    // ── ENGINE: French → Darija (french_map substitution) ────────
-    const _engineFr2Dz = (txt) => {
-      if (!Object.keys(frenchMap).length) return null
-      const sorted = Object.keys(frenchMap).sort((a,b)=>b.length-a.length)
-      let result = txt
-      for (const fr of sorted) {
-        try { result = result.replace(new RegExp(`\\b${_esc(fr)}\\b`, 'gi'), frenchMap[fr]) } catch {}
-      }
-      return result !== txt ? result : null
-    }
-
-    // ── ENGINE: Darija → French (vocabulary fr field + reverse frenchMap) ────
-    const _engineDz2Fr = (txt) => {
-      let result = txt, changed = false
-      // 1. Use vocabulary fr field (longer entries first)
-      const sorted = [...vocabulary].sort((a,b)=>(b.dz||'').length-(a.dz||'').length)
-      for (const v of sorted) {
-        if (!v.fr || !v.dz) continue
-        try {
-          const re = new RegExp(`(?<=[\\s،,;؛!?؟.\\n\\r\\t]|^)${_esc(v.dz)}(?=[\\s،,;؛!?؟.\\n\\r\\t]|$)`, 'g')
-          const upd = result.replace(re, v.fr)
-          if (upd !== result) { result = upd; changed = true }
-        } catch {}
-      }
-      // 2. Reverse frenchMap: find DZ value → return FR key
-      if (!changed) {
-        const revEntries = Object.entries(frenchMap).sort((a,b)=>b[1].length-a[1].length)
-        for (const [fr, dz] of revEntries) {
-          const normDz = _n(dz), normTxt = _n(txt)
-          if (normTxt === normDz || normTxt.includes(normDz)) {
-            return fr
-          }
-        }
-      }
-      return changed ? result : null
-    }
-
-    // ── LOCAL DB LOOKUP ───────────────────────────────────────────
-    const localHits = []
-    const normInput = _n(inputText)
-
-    if (direction === 'dz2ar' || direction === 'dz2fr') {
-      for (const [dz, ar] of Object.entries(slangMap)) {
-        if (_inc(normInput, dz)) { localHits.push({ dz, ar, type:'slang' }); if (localHits.length>=5) break }
-      }
-      for (const w of words) {
-        if (_inc(normInput, w.word||'')) { localHits.push({ dz:w.word, ar:w.meaning_ar, fr:w.meaning_fr, type:'word' }); if (localHits.length>=8) break }
-      }
-      for (const v of vocabulary) {
-        if (_inc(normInput, v.dz||'')) { localHits.push({ dz:v.dz, ar:v.ar, fr:v.fr||'', type:'vocab' }); if (localHits.length>=10) break }
-      }
-    } else {
-      for (const [ar, dz] of Object.entries(responseMap)) {
-        if (_inc(normInput, ar)) { localHits.push({ dz, ar, type:'slang' }); if (localHits.length>=5) break }
-      }
-      for (const w of words) {
-        if (_inc(normInput, w.meaning_ar||'')) { localHits.push({ dz:w.word, ar:w.meaning_ar, fr:w.meaning_fr, type:'word' }); if (localHits.length>=8) break }
-      }
-      for (const v of vocabulary) {
-        if (_inc(normInput, v.ar||'')) { localHits.push({ dz:v.dz, ar:v.ar, fr:v.fr||'', type:'vocab' }); if (localHits.length>=10) break }
-      }
-      // French: check frenchMap keys for fr2dz
-      if (direction === 'fr2dz') {
-        for (const [fr, dz] of Object.entries(frenchMap)) {
-          if (normInput.includes(fr.toLowerCase())) { localHits.push({ dz, ar:fr, type:'french' }); if (localHits.length>=12) break }
-        }
-      }
-    }
-    for (const e of expressions) {
-      if (_inc(normInput, e.dz||'') || _inc(normInput, e.ar||'')) {
-        if (!localHits.find(h=>h.dz===e.dz)) { localHits.push({ dz:e.dz, ar:e.ar, type:'expr', ctx:e.ctx }); if (localHits.length>=12) break }
-      }
-    }
-    for (const p2 of convPhrases) {
-      if (direction==='ar2dz' && _inc(normInput, p2.ar||'')) {
-        if (!localHits.find(h=>h.dz===p2.dz)) { localHits.push({dz:p2.dz, ar:p2.ar, type:'phrase'}); if(localHits.length>=12) break }
-      } else if ((direction==='dz2ar'||direction==='dz2fr') && _inc(normInput, p2.dz||'')) {
-        if (!localHits.find(h=>h.dz===p2.dz)) { localHits.push({dz:p2.dz, ar:p2.ar, type:'phrase'}); if(localHits.length>=12) break }
-      }
-    }
-
-    // ── ENGINE TRANSLATION: always produces something ─────────────
-    let engineTranslation = null, engineExplanation = ''
-    if (direction === 'ar2dz') {
-      const t = _engineAr2Dz(inputText)
-      if (t && _n(t) !== _n(inputText)) { engineTranslation = t.trim(); engineExplanation = 'ترجمة بمحرك الدارجة المحلي' }
-      else if (localHits.length>0) {
-        const s=[...localHits].sort((a,b)=>(b.dz?.length||0)-(a.dz?.length||0)); engineTranslation=s[0].dz; engineExplanation=s[0].type==='expr'?`تعبير (${s[0].ctx||''})` : 'من قاعدة بيانات الدارجة'
-      }
-    } else if (direction === 'dz2ar') {
-      const t = _engineDz2Ar(inputText)
-      if (t && _n(t) !== _n(inputText)) { engineTranslation = t.trim(); engineExplanation = 'ترجمة بمحرك فهم الدارجة' }
-      else if (localHits.length>0) {
-        const s=[...localHits].sort((a,b)=>(b.dz?.length||0)-(a.dz?.length||0)); engineTranslation=s[0].ar; engineExplanation=s[0].type==='expr'?'تعبير اصطلاحي':'من قاعدة البيانات المحلية'
-      }
-    } else if (direction === 'fr2dz') {
-      const t = _engineFr2Dz(inputText)
-      if (t) { engineTranslation = t.trim(); engineExplanation = 'ترجمة من الفرنسية بالمعجم المحلي' }
-      else if (localHits.length>0) { engineTranslation=localHits[0].dz; engineExplanation='من قاعدة البيانات' }
-    } else if (direction === 'dz2fr') {
-      const t = _engineDz2Fr(inputText)
-      if (t) { engineTranslation = t.trim(); engineExplanation = 'ترجمة بالمعجم الفرنسي-الدارجة' }
-      else if (localHits.length>0) {
-        const s=[...localHits].sort((a,b)=>(b.dz?.length||0)-(a.dz?.length||0)); const h=s[0]; engineTranslation=h.fr||(h.ar?`[${h.ar}]`:''); engineExplanation='من قاعدة البيانات المحلية'
-      }
-    }
-
-    // ── Build AI prompt ───────────────────────────────────────────
-    const regionLabels = { center:'الجزائر العاصمة والوسط', west:'وهران والغرب (تلمسان، سعيدة)', east:'قسنطينة والشرق (عنابة، سطيف)', south:'الجنوب (ورقلة، تمنراست، غرداية)' }
-    const regionLabel = regionLabels[region] || regionLabels.center
-    const dirMap = {
-      ar2dz: { from:'العربية الفصحى', to:'الدارجة الجزائرية', hint:'حوّل إلى دارجة جزائرية طبيعية' },
-      dz2ar: { from:'الدارجة الجزائرية', to:'العربية الفصحى', hint:'اشرح بالعربية الفصحى' },
-      fr2dz: { from:'الفرنسية', to:'الدارجة الجزائرية', hint:'حوّل إلى دارجة جزائرية مع مفردات فرنسية مدرجة' },
-      dz2fr: { from:'الدارجة الجزائرية', to:'الفرنسية', hint:'ترجم إلى فرنسية طبيعية' },
-    }
-    const dirInfo = dirMap[direction] || dirMap.ar2dz
-    const vocabSample  = vocabulary.slice(0,50).map(v=>`${v.dz}=${v.ar}`).join('|')
-    const exprSample   = expressions.slice(0,15).map(e=>`"${e.dz}"→${e.ar}`).join('\n')
-    const gramSample   = grammarRules.slice(0,3).map(g=>`•${g.rule}: ${g.examples?g.examples[0]:''}`).join('\n')
-    const regSample    = regionalVars.slice(0,6).map(r=>`${r.word}: وسط="${r.region_center||''}" | غرب="${r.region_west||''}" | شرق="${r.region_east||''}"`).join('\n')
-    const localCtx     = localHits.slice(0,4).map(h=>`${h.dz}=${h.ar}`).join('|')
-    const engineHint   = engineTranslation ? `اقتراح المحرك المحلي: "${engineTranslation}"` : ''
-
-    const systemPrompt = `أنت أداة ترجمة متخصصة في الدارجة الجزائرية. أجب بـ JSON فقط.
-
-== قاعدة البيانات ==
-المفردات: ${vocabSample}
-${localCtx?`تطابقات للنص: ${localCtx}`:''}
-${engineHint}
-
-التعابير:
-${exprSample}
-
-الصرف:
-${gramSample}
-
-الفروق الإقليمية:
-${regSample}
-
-== المهمة ==
-ترجم من ${dirInfo.from} إلى ${dirInfo.to} (منطقة: ${regionLabel}).
-${dirInfo.hint}
-
-JSON فقط (بلا \`\`\`json):
-{"translation":"...","transliteration":"...","explanation":"...","grammar_tip":"...","examples":[{"original":"...","translated":"...","region":"..."}],"regional_alt":"..."}`
-
-    const _aiMsg = [
-      { role:'system', content: systemPrompt },
-      { role:'user', content:`ترجم: "${inputText}" — JSON فقط` }
-    ]
-    let raw = null
-
-    // 1️⃣ Groq
-    try {
-      const { content:_gc, error:_ge } = await callGroqWithFallback({ model:'llama-3.3-70b-versatile', messages:_aiMsg, max_tokens:700, temperature:0.3 })
-      const p = _isDarijaValidJson(_gc)
-      if (p) return res.json({ ...p, local_hits:localHits.slice(0,5), source:'ai' })
-      else if (_gc?.trim().length>10) { raw=_gc; console.log('[darija-translate] ✓ Groq ok (raw)') }
-      else if (_ge) console.warn('[darija-translate] Groq:', _ge)
-    } catch(e) { console.warn('[darija-translate] Groq ex:', e.message) }
-
-    // 2️⃣ OpenRouter
-    if (!raw && process.env.OPENROUTER_API_KEY) {
-      for (const orM of ['meta-llama/llama-3.3-70b-instruct:free','google/gemma-3-27b-it:free','mistralai/mistral-7b-instruct:free']) {
-        try {
-          const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${process.env.OPENROUTER_API_KEY}`,'HTTP-Referer':'https://dzagent.app','X-Title':'DZ-GPT Darija'},
-            body:JSON.stringify({ model:orM, messages:_aiMsg, max_tokens:700, temperature:0.3 }), signal:AbortSignal.timeout(12000)
-          })
-          const d = await r.json(); const c = d.choices?.[0]?.message?.content
-          const p = _isDarijaValidJson(c)
-          if (p) return res.json({ ...p, local_hits:localHits.slice(0,5), source:'ai' })
-          else if (r.ok && c?.trim().length>10) { raw=c; console.log(`[darija-translate] ✓ OR/${orM}`); break }
-        } catch(e) { console.warn(`[darija-translate] OR/${orM}:`, e.message) }
-      }
-    }
-
-    // 3️⃣ Mistral
-    if (!raw && process.env.MISTRAL_API_KEY) {
-      try {
-        const r = await fetch('https://api.mistral.ai/v1/chat/completions', {
-          method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${process.env.MISTRAL_API_KEY}`},
-          body:JSON.stringify({ model:'mistral-small-latest', messages:_aiMsg, max_tokens:700, temperature:0.3 }), signal:AbortSignal.timeout(12000)
-        })
-        const d = await r.json(); const c = d.choices?.[0]?.message?.content
-        const p = _isDarijaValidJson(c)
-        if (p) return res.json({ ...p, local_hits:localHits.slice(0,5), source:'ai' })
-        else if (r.ok && c?.trim().length>10) raw=c
-      } catch(e) { console.warn('[darija-translate] Mistral:', e.message) }
-    }
-
-    // Parse any raw AI response
-    if (raw) {
-      const fp = _isDarijaValidJson(raw)
-      if (fp) return res.json({ ...fp, local_hits:localHits.slice(0,5), source:'ai' })
-    }
-
-    // ── Always return engine/local result — NEVER 503 ─────────────
-    if (engineTranslation) {
-      const examples = localHits.slice(0,3).map(h=>({ original:h.ar||h.dz, translated:h.dz||h.ar, region:'الوسط' }))
-      const normWord = _n((inputText.split(/\s/)[0])||'')
-      const regVar   = regionalVars.find(r=>_n(r.word||'').includes(normWord)||normWord.includes(_n(r.word||'')))
-      const rAlt = regVar ? ({ center:regVar.region_center, west:regVar.region_west, east:regVar.region_east, south:regVar.region_south||'' }[region]||'') : ''
-      return res.json({
-        translation:     engineTranslation,
-        transliteration: '',
-        explanation:     engineExplanation,
-        grammar_tip:     grammarRules[0]?.rule || '',
-        examples,
-        regional_alt:    rAlt,
-        local_hits:      localHits.slice(0,5),
-        source:          'local',
-      })
-    }
-
-    // ── Last resort: return intelligently ────────────────────────
-    res.json({
-      translation:  inputText,
-      explanation:  `لم يتم العثور على ترجمة للنص المحدد في قاعدة البيانات. جرّب كلمات أبسط أو فردية.`,
-      examples:     [],
-      local_hits:   localHits.slice(0,5),
-      source:       'local',
-    })
-
-  } catch (err) {
-    console.error('[darija-translate]', err.message)
-    res.status(500).json({ error: 'خطأ داخلي', message: err.message })
-  }
-})
-
 // ===== WEB BUILDER PROJECT SAVE/LOAD =====
 const WB_PROJECTS_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'wb-projects.json')
 
@@ -38067,115 +28910,6 @@ function appendAnalyticEvent(event) {
     _analyticsCache.ts = 0
   } catch {}
 }
-
-// ─── Bug Report — GitHub Issues API + FormSubmit backup ─────────────────────
-// يستخدم GITHUB_TOKEN لإنشاء Issue + FormSubmit كاحتياطي + /tmp كتخزين
-app.post('/api/report-bug', express.json(), async (req, res) => {
-  // إرجاع 200 فوراً دائماً — لا يرى المستخدم أي خطأ أبداً
-  res.status(200).json({ ok: true })
-
-  // المعالجة في الخلفية بعد الرد
-  ;(async () => {
-    try {
-      const { name, email, reportType, description } = req.body || {}
-      if (!reportType || !description) return
-
-      const typeLabels = {
-        'wrong-info':   'معلومة خاطئة',
-        'broken-tool':  'أداة لا تعمل',
-        'agent-error':  'خطأ في الوكيل',
-      }
-      const ts = new Date().toLocaleString('ar-DZ', { timeZone: 'Africa/Algiers' })
-      const typeLabel = typeLabels[reportType] || reportType
-
-      // ── 1. حفظ في /tmp (يعمل على Vercel وReplit) ────────────────────────
-      try {
-        const tmpFile = '/tmp/dz_bug_reports.json'
-        let reports = []
-        try { reports = JSON.parse(_readFileSync(tmpFile, 'utf8')) } catch {}
-        reports.push({ name, email, reportType, description, ts: Date.now() })
-        _writeFS(tmpFile, JSON.stringify(reports, null, 2))
-      } catch (_) {}
-
-      // ── 2. GitHub Issues API — الأكثر موثوقية ──────────────────────────
-      const _ghToken = process.env.GITHUB_TOKEN
-      if (_ghToken) {
-        try {
-          const _issueBody = [
-            `## 🐛 بلاغ مستخدم — DZ Agent`,
-            ``,
-            `| الحقل | القيمة |`,
-            `|-------|--------|`,
-            `| **النوع** | ${typeLabel} |`,
-            `| **الاسم** | ${name || '—'} |`,
-            `| **البريد** | ${email || '—'} |`,
-            `| **التاريخ** | ${ts} |`,
-            ``,
-            `### وصف المشكلة`,
-            ``,
-            `${description}`,
-            ``,
-            `---`,
-            `*تم الإرسال تلقائياً من DZ Agent Platform*`,
-          ].join('\n')
-
-          const _ghRes = await fetch('https://api.github.com/repos/Nadirinfograph23/DZ-GPT/issues', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${_ghToken}`,
-              'Accept': 'application/vnd.github+json',
-              'X-GitHub-Api-Version': '2022-11-28',
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              title: `🐛 بلاغ: ${typeLabel}${name ? ` — ${name}` : ''}`,
-              body: _issueBody,
-              labels: ['bug-report'],
-            }),
-            signal: AbortSignal.timeout(10000),
-          })
-          if (_ghRes.ok) {
-            const _ghData = await _ghRes.json()
-            console.log(`[report-bug] ✅ GitHub Issue #${_ghData.number} created: ${_ghData.html_url}`)
-          } else {
-            const _errText = await _ghRes.text().catch(() => '')
-            console.warn(`[report-bug] GitHub API ${_ghRes.status}:`, _errText.slice(0, 120))
-          }
-        } catch (_ghErr) {
-          console.warn('[report-bug] GitHub issue failed:', _ghErr.message?.slice(0, 80))
-        }
-      } else {
-        console.warn('[report-bug] GITHUB_TOKEN not set — skipping GitHub Issue')
-      }
-
-      // ── 3. FormSubmit.co — محاولة احتياطية ─────────────────────────────
-      try {
-        const _dst = Buffer.from('ZHphZ2VudHByb0BnbWFpbC5jb20=', 'base64').toString('utf8')
-        const _fsRes = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(_dst)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({
-            _subject: `🐛 ${typeLabel}`,
-            _captcha: 'false',
-            name: name || 'مجهول',
-            email: email || 'لا يوجد',
-            type: typeLabel,
-            description,
-            timestamp: ts,
-          }),
-          signal: AbortSignal.timeout(6000),
-        })
-        if (_fsRes.ok) console.log('[report-bug] ✅ FormSubmit backup sent')
-        else console.warn('[report-bug] FormSubmit status:', _fsRes.status)
-      } catch (_fsErr) {
-        console.warn('[report-bug] FormSubmit backup failed:', _fsErr.message?.slice(0, 60))
-      }
-
-    } catch (_bg) {
-      console.error('[report-bug:bg]', _bg.message)
-    }
-  })()
-})
 
 app.post('/api/analytics/track', express.json(), (req, res) => {
   const { event, page, data: evData } = req.body || {}
@@ -38510,10 +29244,6 @@ app.post('/api/dz-agent-v4/img2video', express.json({ limit: '30mb' }), async (r
     app.use(express.static(distDir, { index: false, fallthrough: true }))
     app.get('*', async (_req, res) => {
       try {
-        // منع أي كاش على ملف HTML — يضمن دائماً أحدث إصدار
-        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-        res.setHeader('Pragma', 'no-cache')
-        res.setHeader('Expires', '0')
         const html = await readFile(indexHtmlPath, 'utf8')
         res.type('html').send(html)
       } catch {

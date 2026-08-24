@@ -217,13 +217,7 @@ const WORKER_NT_RSS_FEEDS = [
   { name: 'Google محاربو الصحراء', url: 'https://news.google.com/rss/search?q=%22%D9%85%D8%AD%D8%A7%D8%B1%D8%A8%D9%88+%D8%A7%D9%84%D8%B5%D8%AD%D8%B1%D8%A7%D8%A1%22&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
 ]
 
-    const title = get('title')
-    if (!title) continue
-    const link = get('link') || (block.match(/<link[^>]+href=["']([^"']+)["']/i) || [])[1] || ''
-    items.push({ title, link, source, pubDate: get('pubDate') || get('dc:date') || get('updated') || '', description: '' })
-  }
-  return items
-}
+
 
 async function fetchNationalTeamNewsDirect(request) {
   const url = new URL(request.url)

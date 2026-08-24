@@ -39,3 +39,4 @@ CF_PAGES = "1"
 [alias]
 "lightningcss" = "./workers/stubs/lightningcss.js"
 "vite" = "./workers/stubs/vite.js"
+"@distube/ytdl-core" = "./workers/stubs/ytdl-core.js"

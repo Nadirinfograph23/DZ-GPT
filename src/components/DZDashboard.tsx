@@ -182,10 +182,19 @@ const CURRENCY_NAMES: Record<string, string> = {
 
 function getWeatherBg(icon: string | null) {
   if (!icon) return 'weather-default'
-  if (icon.startsWith('01')) return 'weather-sunny'
-  if (icon.startsWith('02') || icon.startsWith('03') || icon.startsWith('04')) return 'weather-cloudy'
-  if (icon.startsWith('09') || icon.startsWith('10')) return 'weather-rainy'
-  if (icon.startsWith('13')) return 'weather-snowy'
+  if (typeof icon === 'string') {
+    if (icon.startsWith('01')) return 'weather-sunny'
+    if (icon.startsWith('02') || icon.startsWith('03') || icon.startsWith('04')) return 'weather-cloudy'
+    if (icon.startsWith('09') || icon.startsWith('10')) return 'weather-rainy'
+    if (icon.startsWith('13')) return 'weather-snowy'
+  }
+  // Open-Meteo numeric weather codes
+  if (icon === '0' || icon === '1') return 'weather-sunny'
+  if (icon === '2' || icon === '3') return 'weather-cloudy'
+  if (['45', '48'].includes(icon)) return 'weather-fog'
+  if (['51', '53', '55', '61', '63', '65', '80', '81', '82'].includes(icon)) return 'weather-rainy'
+  if (['71', '73', '75', '77', '85', '86'].includes(icon)) return 'weather-snowy'
+  if (['95', '96', '99'].includes(icon)) return 'weather-storm'
   return 'weather-default'
 }
 

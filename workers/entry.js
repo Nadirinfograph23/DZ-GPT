@@ -254,7 +254,8 @@ async function fetchNationalTeamNewsDirect(request) {
         })
         if (!response.ok) return []
         const xml = await response.text()
-        return parseWorkerRss(xml, feed.name)
+        const parsed = parseWorkerRss(xml, feed.name)
+        return parsed.map(item => ({ ...item, description: item.description || '' }))
       }),
     )
 

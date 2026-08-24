@@ -861,6 +861,8 @@ export default {
         if (directNews) return directNews
       }
 
+
+
       const app = await getApp(env)
       const response = await handleWithExpress(app, request)
       return response

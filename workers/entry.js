@@ -217,16 +217,6 @@ const WORKER_NT_RSS_FEEDS = [
   { name: 'Google محاربو الصحراء', url: 'https://news.google.com/rss/search?q=%22%D9%85%D8%AD%D8%A7%D8%B1%D8%A8%D9%88+%D8%A7%D9%84%D8%B5%D8%AD%D8%B1%D8%A7%D8%A1%22&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
 ]
 
-function parseWorkerRss(xml, source) {
-  const items = []
-  const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
-  let match
-  while ((match = itemRegex.exec(xml)) !== null && items.length < 12) {
-    const block = match[1]
-    const get = (tag) => {
-      const found = block.match(new RegExp(`<${tag}[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/${tag}>`, 'i'))
-      return found ? decodeXmlText(found[1]) : ''
-    }
     const title = get('title')
     if (!title) continue
     const link = get('link') || (block.match(/<link[^>]+href=["']([^"']+)["']/i) || [])[1] || ''

@@ -204,6 +204,89 @@ async function fetchNewsDirect(request) {
   }
 }
 
+
+// ===== NATIONAL TEAM NEWS DIRECT (Worker-native, no server.js) =====
+const WORKER_NT_NEWS_CACHE = { items: [], ts: 0 }
+const WORKER_NT_NEWS_TTL = 5 * 60 * 1000
+
+const WORKER_NT_RSS_FEEDS = [
+  { name: 'الهداف', url: 'https://www.elheddaf.com/feed' },
+  { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
+  { name: 'Sport DZ', url: 'https://www.sport-dz.com/feed/' },
+  { name: 'Google الخضر', url: 'https://news.google.com/rss/search?q=%22%D8%A7%D9%84%D8%AE%D8%B6%D8%B1%22+%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+  { name: 'Google محاربو الصحراء', url: 'https://news.google.com/rss/search?q=%22%D9%85%D8%AD%D8%A7%D8%B1%D8%A8%D9%88+%D8%A7%D9%84%D8%B5%D8%AD%D8%B1%D8%A7%D8%A1%22&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+]
+
+function parseWorkerRss(xml, source) {
+  const items = []
+  const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
+  let match
+  while ((match = itemRegex.exec(xml)) !== null && items.length < 12) {
+    const block = match[1]
+    const get = (tag) => {
+      const found = block.match(new RegExp(`<${tag}[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/${tag}>`, 'i'))
+      return found ? decodeXmlText(found[1]) : ''
+    }
+    const title = get('title')
+    if (!title) continue
+    const link = get('link') || (block.match(/<link[^>]+href=["']([^"']+)["']/i) || [])[1] || ''
+    items.push({ title, link, source, pubDate: get('pubDate') || get('dc:date') || get('updated') || '', description: '' })
+  }
+  return items
+}
+
+async function fetchNationalTeamNewsDirect(request) {
+  const url = new URL(request.url)
+  const bypassCache = url.searchParams.get('bypassCache') === '1'
+  const now = Date.now()
+  if (!bypassCache && WORKER_NT_NEWS_CACHE.ts && now - WORKER_NT_NEWS_CACHE.ts < WORKER_NT_NEWS_TTL) {
+    return new Response(JSON.stringify({ items: WORKER_NT_NEWS_CACHE.items, fetchedAt: new Date().toISOString() }), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  }
+
+  try {
+    const settled = await Promise.allSettled(
+      WORKER_NT_RSS_FEEDS.map(async (feed) => {
+        const response = await fetch(feed.url, {
+          headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*', 'User-Agent': 'DZ-Agent-Worker/1.0' },
+          signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 10000); return ctrl.signal })()
+        })
+        if (!response.ok) return []
+        const xml = await response.text()
+        return parseWorkerRss(xml, feed.name)
+      }),
+    )
+
+    const seen = new Set()
+    const items = settled
+      .flatMap(result => result.status === 'fulfilled' ? result.value : [])
+      .filter(item => {
+        const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .sort((a, b) => {
+        const aTime = Date.parse(a.pubDate || '') || 0
+        const bTime = Date.parse(b.pubDate || '') || 0
+        return bTime - aTime
+      })
+      .slice(0, 20)
+
+    WORKER_NT_NEWS_CACHE.items = items
+    WORKER_NT_NEWS_CACHE.ts = now
+    return new Response(JSON.stringify({ items, fetchedAt: new Date().toISOString() }), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  } catch (err) {
+    console.error('[Worker:NationalTeamNews] Failed:', err.message)
+    return new Response(JSON.stringify({ items: [], error: 'تعذّر جلب الأخبار', fetchedAt: new Date().toISOString() }), {
+      headers: { 'content-type': 'application/json' }
+    })
+  }
+}
+
 // ===== WEATHER DIRECT (Worker-native, no server.js) =====
 const WORKER_WEATHER_CACHE = { data: null, ts: 0 }
 const WORKER_WEATHER_TTL = 10 * 60 * 1000 // 10 min
@@ -734,6 +817,10 @@ export default {
       }
       if (url.pathname === '/api/dz-agent/news' && request.method === 'GET') {
         return fetchNewsDirect(request)
+      }
+
+      if (url.pathname === '/api/national-team/news' && request.method === 'GET') {
+        return fetchNationalTeamNewsDirect(request)
       }
 
       const app = await getApp(env)

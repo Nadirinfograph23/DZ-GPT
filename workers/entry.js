@@ -798,7 +798,7 @@ async function handleWithExpress(app, cfRequest) {
   const req = Readable.from(bodyBuf ? [bodyBuf] : [])
   Object.assign(req, {
     method:            cfRequest.method,
-    url:               requestUrl.pathname + url.search,  // WRITABLE — no crash
+    url:               url.pathname + url.search,  // WRITABLE — no crash
     headers:           reqHeaders,
     httpVersion:       '1.1',
     httpVersionMajor:  1,
@@ -924,10 +924,10 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
     const isApiOrWebSocketPath =
-      requestUrl.pathname === '/api' ||
-      requestUrl.pathname.startsWith('/api/') ||
-      requestUrl.pathname === '/ws' ||
-      requestUrl.pathname.startsWith('/ws/')
+      url.pathname === '/api' ||
+      url.pathname.startsWith('/api/') ||
+      url.pathname === '/ws' ||
+      url.pathname.startsWith('/ws/')
 
     // ── Static assets → ASSETS binding (dist/) ────────────────────────────
     if (!isApiOrWebSocketPath) {
@@ -939,9 +939,9 @@ export default {
         // unchanged.
         if (
           asset.ok &&
-          (requestUrl.pathname === '/' ||
-            requestUrl.pathname === '/index.html' ||
-            requestUrl.pathname === '/manifest.webmanifest')
+          (url.pathname === '/' ||
+            url.pathname === '/index.html' ||
+            url.pathname === '/manifest.webmanifest')
         ) {
           const headers = new Headers(asset.headers)
           const body = (await asset.text()).replaceAll('DZ GPT', 'DZ AGENT')
@@ -952,7 +952,7 @@ export default {
         // refreshes such as /dz-agent. Only fall back for document-like
         // requests or extensionless paths: a missing .js/.css/image must stay
         // a real 404, and /api/* and /ws/* never enter this branch.
-        const lastPathSegment = requestUrl.pathname.split('/').pop() || ''
+        const lastPathSegment = url.pathname.split('/').pop() || ''
         const acceptsHtml = (request.headers.get('accept') || '')
           .toLowerCase()
           .includes('text/html')
@@ -976,19 +976,19 @@ export default {
     // ── API routes → Express ───────────────────────────────────────────────
     try {
       // Direct Worker-native routes (no server.js needed)
-      if (requestUrl.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
+      if (url.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
         return fetchWeatherDirect(request)
       }
-      if (requestUrl.pathname === '/api/dz-agent/prayer' && request.method === 'GET') {
+      if (url.pathname === '/api/dz-agent/prayer' && request.method === 'GET') {
         return fetchPrayerDirect(request)
       }
-      if (requestUrl.pathname === '/api/dz-agent-chat' && request.method === 'POST') {
+      if (url.pathname === '/api/dz-agent-chat' && request.method === 'POST') {
         return fetchChatDirect(request)
       }
-      if (requestUrl.pathname === '/api/dz-agent/news' && request.method === 'GET') {
+      if (url.pathname === '/api/dz-agent/news' && request.method === 'GET') {
         return fetchNewsDirect(request)
       }
-      if (requestUrl.pathname === '/api/national-team/news' && request.method === 'GET') {
+      if (url.pathname === '/api/national-team/news' && request.method === 'GET') {
         return fetchNationalTeamNewsDirect(request)
       }
 
@@ -996,7 +996,7 @@ export default {
       // consumes the original stream before we can inspect its response.
       const newsRequest = (
         request.method === 'POST' &&
-        requestUrl.pathname === '/api/dz-agent-chat'
+        url.pathname === '/api/dz-agent-chat'
       ) ? request.clone() : null
       // Serve the Algeria-news card before loading the Node compatibility
       // bridge. This makes the keyless news path independent of Express,

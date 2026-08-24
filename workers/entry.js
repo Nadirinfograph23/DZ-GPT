@@ -830,20 +830,6 @@ export default {
 
     // ── API routes → Express ───────────────────────────────────────────────
     try {
-      // Preserve the body for a Worker-native fallback. The Express bridge
-      // consumes the original stream before we can inspect its response.
-      const newsRequest = (
-        request.method === 'POST' &&
-        url.pathname === '/api/dz-agent-chat'
-      ) ? request.clone() : null
-      // Serve the Algeria-news card before loading the Node compatibility
-      // bridge. This makes the keyless news path independent of Express,
-      // whose optional stream modules can fail during a Worker cold start.
-      if (newsRequest) {
-        const directNews = await fetchWorkerNewsFallback(newsRequest)
-        if (directNews) return directNews
-      }
-
       // Direct Worker-native routes (no server.js needed)
       if (url.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
         return fetchWeatherDirect(request)
@@ -857,9 +843,22 @@ export default {
       if (url.pathname === '/api/dz-agent/news' && request.method === 'GET') {
         return fetchNewsDirect(request)
       }
-
       if (url.pathname === '/api/national-team/news' && request.method === 'GET') {
         return fetchNationalTeamNewsDirect(request)
+      }
+
+      // Preserve the body for a Worker-native fallback. The Express bridge
+      // consumes the original stream before we can inspect its response.
+      const newsRequest = (
+        request.method === 'POST' &&
+        url.pathname === '/api/dz-agent-chat'
+      ) ? request.clone() : null
+      // Serve the Algeria-news card before loading the Node compatibility
+      // bridge. This makes the keyless news path independent of Express,
+      // whose optional stream modules can fail during a Worker cold start.
+      if (newsRequest) {
+        const directNews = await fetchWorkerNewsFallback(newsRequest)
+        if (directNews) return directNews
       }
 
       const app = await getApp(env)

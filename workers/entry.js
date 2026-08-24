@@ -101,6 +101,60 @@ async function fetchChatDirect(request) {
       })
     }
 
+    // Weather intent
+    if (/طقس|حرارة|أمطار|جو.*اليوم|تساقط|رياح|weather/i.test(lower)) {
+      const cityMatch = lastUser.match(/(?:في|عند|مدينة|ولاية)?\s*([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,})?)/)
+      const city = cityMatch ? cityMatch[1].trim() : 'الجزائر'
+      try {
+        const weatherResp = await fetch(`https://dzagent.app/api/dz-agent/weather?city=${encodeURIComponent(city)}`)
+        const weatherData = await weatherResp.json()
+        if (weatherData.status === 'ok') {
+          const content = `## 🌤️ طقس ${weatherData.city}\n\n- **درجة الحرارة:** ${weatherData.temp}°C\n- **الشعور:** ${weatherData.feels_like}°C\n- **الحالة:** ${weatherData.condition}\n- **الرطوبة:** ${weatherData.humidity}%\n- **الرياح:** ${weatherData.wind} km/h\n\n> 📅 ${weatherData.fetchedAt ? new Date(weatherData.fetchedAt).toLocaleString('ar-DZ') : ''}`
+          return new Response(JSON.stringify({ content, model: 'weather-api' }), {
+            headers: { 'content-type': 'application/json' }
+          })
+        }
+      } catch (e) {
+        console.warn('[Worker:Chat] Weather fetch failed:', e.message)
+      }
+    }
+
+    // Prayer intent
+    if (/صلاة|مواقيت|فجر|ظهر|عصر|مغرب|عشاء|أذان|prayer/i.test(lower)) {
+      const cityMatch = lastUser.match(/(?:في|عند|مدينة|ولاية)?\s*([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,})?)/)
+      const city = cityMatch ? cityMatch[1].trim() : 'الجزائر'
+      try {
+        const prayerResp = await fetch(`https://dzagent.app/api/dz-agent/prayer?city=${encodeURIComponent(city)}`)
+        const prayerData = await prayerResp.json()
+        if (prayerData.status === 'ok') {
+          const times = Object.entries(prayerData.times).map(([name, time]) => `- **${name}:** ${time}`).join('\n')
+          const content = `## 🕌 مواقيت الصلاة في ${prayerData.city}\n\n${times}\n\n> 📅 ${prayerData.date} | 🌙 ${prayerData.hijri} ${prayerData.hijriMonth}`
+          return new Response(JSON.stringify({ content, model: 'prayer-api' }), {
+            headers: { 'content-type': 'application/json' }
+          })
+        }
+      } catch (e) {
+        console.warn('[Worker:Chat] Prayer fetch failed:', e.message)
+      }
+    }
+
+    // News intent
+    if (/أخبار|خبر|مستجدات|عاجل|اليوم.*الجزائر|الجزائر.*اليوم|news/i.test(lower)) {
+      try {
+        const newsResp = await fetch('https://dzagent.app/api/national-team/news')
+        const newsData = await newsResp.json()
+        if (newsData.items?.length) {
+          const items = newsData.items.slice(0, 10).map(item => `- [${item.title}](${item.link}) — *${item.source}*`).join('\n')
+          const content = `## 📰 آخر الأخبار الجزائرية\n\n${items}\n\n> ℹ️ المصدر: RSS مباشر`
+          return new Response(JSON.stringify({ content, model: 'news-api' }), {
+            headers: { 'content-type': 'application/json' }
+          })
+        }
+      } catch (e) {
+        console.warn('[Worker:Chat] News fetch failed:', e.message)
+      }
+    }
+
     // Try Pollinations.ai (free, no key)
     try {
       const polResp = await fetch('https://text.pollinations.ai/', {

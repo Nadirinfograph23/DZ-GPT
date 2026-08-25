@@ -4,12 +4,11 @@ import {
   Newspaper, Trophy, Wind, Droplets, ExternalLink, RefreshCw,
   MapPin, Thermometer, Cpu, TrendingUp, Navigation, Eye,
   BookOpen, Moon, Sunrise, Sun, CloudSun, Sunset, CloudMoon,
-  Cloud, Globe, DollarSign, ArrowLeftRight, BarChart2,
+  Cloud, CloudRain, CloudSnow, CloudFog, Globe, DollarSign, ArrowLeftRight, BarChart2,
   CalendarDays, CheckCircle2, Radio, Layers, Clock,
 } from 'lucide-react'
 import '../styles/dz-dashboard.css'
 import { withRetry } from '../utils/dzMemory'
-import WC2026MatchCard from './WC2026MatchCard'
 
 interface NewsItem {
   title: string
@@ -32,7 +31,7 @@ interface WeatherData {
   temp_min?: number
   temp_max?: number
   condition: string | null
-  icon: string | null
+  icon: string | number | null
   humidity?: number
   wind?: number
   visibility?: number | null
@@ -180,22 +179,32 @@ const CURRENCY_NAMES: Record<string, string> = {
   JPY: 'ين ياباني',
 }
 
-function getWeatherBg(icon: string | null) {
-  if (!icon) return 'weather-default'
-  if (typeof icon === 'string') {
-    if (icon.startsWith('01')) return 'weather-sunny'
-    if (icon.startsWith('02') || icon.startsWith('03') || icon.startsWith('04')) return 'weather-cloudy'
-    if (icon.startsWith('09') || icon.startsWith('10')) return 'weather-rainy'
-    if (icon.startsWith('13')) return 'weather-snowy'
-  }
-  // Open-Meteo numeric weather codes
-  if (icon === '0' || icon === '1') return 'weather-sunny'
-  if (icon === '2' || icon === '3') return 'weather-cloudy'
-  if (['45', '48'].includes(icon)) return 'weather-fog'
-  if (['51', '53', '55', '61', '63', '65', '80', '81', '82'].includes(icon)) return 'weather-rainy'
-  if (['71', '73', '75', '77', '85', '86'].includes(icon)) return 'weather-snowy'
-  if (['95', '96', '99'].includes(icon)) return 'weather-storm'
-  return 'weather-default'
+type WeatherKind = 'sunny' | 'cloudy' | 'rainy' | 'snowy' | 'foggy' | 'stormy'
+
+function getWeatherKind(icon: string | number | null, condition?: string | null): WeatherKind {
+  const value = String(icon ?? '').toLowerCase()
+  const text = String(condition ?? '').toLowerCase()
+  if (value === '0' || value.startsWith('01') || /صحو|مشمس|sun|clear/.test(text)) return 'sunny'
+  if (/45|48|fog|ضباب/.test(value + text)) return 'foggy'
+  if (/95|96|99|storm|عاصف|رعد/.test(value + text)) return 'stormy'
+  if (/13|71|73|75|77|85|86|snow|ثلج/.test(value + text)) return 'snowy'
+  if (/09|10|51|53|55|56|57|61|63|65|66|67|80|81|82|rain|مطر|ممطر|زخ/.test(value + text)) return 'rainy'
+  return 'cloudy'
+}
+
+function getWeatherBg(icon: string | number | null, condition?: string | null) {
+  return `weather-${getWeatherKind(icon, condition)}`
+}
+
+function WeatherIcon({ icon, condition }: { icon: string | number | null; condition?: string | null }) {
+  const kind = getWeatherKind(icon, condition)
+  const props = { size: 42, strokeWidth: 1.6, 'aria-hidden': true as const }
+  if (kind === 'sunny') return <Sun {...props} />
+  if (kind === 'rainy') return <CloudRain {...props} />
+  if (kind === 'snowy') return <CloudSnow {...props} />
+  if (kind === 'foggy') return <CloudFog {...props} />
+  if (kind === 'stormy') return <CloudRain {...props} />
+  return <CloudSun {...props} />
 }
 
 function formatPubDate(dateStr: string) {
@@ -450,42 +459,11 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const [dollarData, setDollarData] = useState<{ usd: number; eur: number; gbp: number; trend: string; updatedAt: string; source: string } | null>(null)
   const [dollarLoading, setDollarLoading] = useState(false)
 
-  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'quran' | 'dollar' | 'national' | 'wc2026'>('prayer')
-
-  // WC2026 scoreboard — يُخفى تلقائياً بعد 19 يوليو 2026
-  const WC2026_END = new Date('2026-07-20T00:00:00Z')
-  const wc2026Active = new Date() < WC2026_END
-  const [wc2026Matches, setWc2026Matches] = useState<any[]>([])
-  const [wc2026Loading, setWc2026Loading] = useState(false)
-  const [wc2026Date, setWc2026Date] = useState<string>('')
-  const [wc2026IsNext, setWc2026IsNext] = useState(false)
-  // نتائج البارحة
-  const [wc2026Yesterday, setWc2026Yesterday] = useState<any[]>([])
-  const [wc2026YesterdayDate, setWc2026YesterdayDate] = useState<string>('')
-  const [wc2026YesterdayLoading, setWc2026YesterdayLoading] = useState(false)
-  const [wc2026YesterdayOpen, setWc2026YesterdayOpen] = useState(false)
-  const [nationalTeamNews, setNationalTeamNews] = useState<NewsItem[]>([])
-  const [nationalLoading, setNationalLoading]   = useState(false)
-  const [nationalBadge, setNationalBadge]       = useState(false)
+  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'quran' | 'dollar'>('prayer')
 
   const saveCity = useCallback((city: string) => {
     try { localStorage.setItem(STORAGE_KEY, city) } catch {}
     setSelectedCity(city)
-  }, [])
-
-  const loadNationalTeamNews = useCallback(async (opts: { force?: boolean } = {}) => {
-    setNationalLoading(true)
-    try {
-      const url = opts.force ? '/api/national-team/news?bypassCache=1' : '/api/national-team/news'
-      const r = await fetch(url)
-      if (!r.ok) throw new Error(`National team API error: ${r.status}`)
-      const d = await r.json()
-      setNationalTeamNews(d.items || [])
-    } catch (err) {
-      console.error('[DZDashboard] loadNationalTeamNews failed:', err)
-    } finally {
-      setNationalLoading(false)
-    }
   }, [])
 
   const loadDashboard = async (opts: { force?: boolean } = {}) => {
@@ -544,39 +522,6 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
       setPrayerLoading(false)
     }
   }, [])
-
-  const loadWC2026 = useCallback(async () => {
-    if (!wc2026Active) return
-    setWc2026Loading(true)
-    try {
-      const r = await fetch('/api/wc2026/today')
-      if (r.ok) {
-        const d = await r.json()
-        if (d.active) {
-          setWc2026Matches(d.matches || [])
-          setWc2026Date(d.date || '')
-          setWc2026IsNext(!!d.isNextDay)
-        }
-      }
-    } catch { /* ignore */ }
-    finally { setWc2026Loading(false) }
-  }, [wc2026Active])
-
-  const loadWC2026Yesterday = useCallback(async () => {
-    if (!wc2026Active) return
-    setWc2026YesterdayLoading(true)
-    try {
-      const r = await fetch('/api/wc2026/yesterday')
-      if (r.ok) {
-        const d = await r.json()
-        if (d.active) {
-          setWc2026Yesterday(d.matches || [])
-          setWc2026YesterdayDate(d.date || '')
-        }
-      }
-    } catch { /* ignore */ }
-    finally { setWc2026YesterdayLoading(false) }
-  }, [wc2026Active])
 
   const loadDollar = useCallback(async () => {
     setDollarLoading(true)
@@ -711,44 +656,14 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
     loadStandings()
     loadGlobalLeagues()
     loadDollar()
-    loadNationalTeamNews()
-    loadWC2026()
-    loadWC2026Yesterday()
-  }, [])
-
-  // SSE: listen for national_team_news events from the server
-  useEffect(() => {
-    let es: EventSource | null = null
-    function connect() {
-      es = new EventSource('/api/breaking-news/stream')
-      es.onmessage = (e) => {
-        try {
-          const d = JSON.parse(e.data)
-          if (d.type === 'national_team_news' && Array.isArray(d.items) && d.items.length > 0) {
-            setNationalTeamNews(prev => {
-              const existing = new Set(prev.map(x => x.title))
-              const fresh = d.items.filter((x: NewsItem) => !existing.has(x.title))
-              if (fresh.length === 0) return prev
-              return [...fresh, ...prev].slice(0, 15)
-            })
-            setNationalBadge(true)
-          }
-        } catch {}
-      }
-      es.onerror = () => { es?.close(); setTimeout(connect, 30_000) }
-    }
-    connect()
-    return () => { es?.close() }
   }, [])
 
   const tabs: { key: typeof activeSection; label: string; icon: React.ReactNode; isNav?: boolean }[] = [
     { key: 'quran'    as const, label: 'القرآن',         icon: <BookOpen    size={12} />, isNav: true },
     { key: 'prayer'   as const, label: 'الصلاة',         icon: <Moon        size={12} /> },
     { key: 'weather'  as const, label: 'الطقس',          icon: <Cloud       size={12} /> },
-    ...(wc2026Active ? [{ key: 'wc2026' as const, label: '🏆 كأس العالم', icon: <Trophy size={12} /> }] : []),
     { key: 'news'     as const, label: 'الأخبار',        icon: <Newspaper   size={12} /> },
     { key: 'dollar'   as const, label: 'سوق الصرف',     icon: <DollarSign  size={12} /> },
-    { key: 'national' as const, label: 'المنتخب 🇩🇿',     icon: <Radio       size={12} /> },
     { key: 'sports'   as const, label: 'الدوري',         icon: <Trophy      size={12} /> },
     { key: 'standings'as const, label: 'الترتيب',        icon: <BarChart2   size={12} /> },
     { key: 'global'   as const, label: 'عالمي',          icon: <Globe       size={12} /> },
@@ -825,16 +740,10 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                   navigate('/aiquran')
                   return
                 }
-                if (tab.key === 'national') setNationalBadge(false)
                 setActiveSection(tab.key)
               }}
             >
-              <span className="dzd-tab-icon" style={{ position: 'relative' }}>
-                {tab.icon}
-                {tab.key === 'national' && nationalBadge && (
-                  <span style={{ position:'absolute', top:-3, right:-3, width:7, height:7, background:'#22c55e', borderRadius:'50%', border:'1px solid var(--dzd-bg)' }} />
-                )}
-              </span>
+              <span className="dzd-tab-icon">{tab.icon}</span>
               <span className="dzd-tab-label">{tab.label}</span>
             </button>
           ))}
@@ -899,20 +808,16 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
               </div>
             ) : weatherData && weatherData.temp !== null ? (
               <div
-                className={`dzd-weather-main-card ${getWeatherBg(weatherData.icon)}`}
+                className={`dzd-weather-main-card ${getWeatherBg(weatherData.icon, weatherData.condition)}`}
                 onClick={() => onSend(`حالة الطقس في ${getArName(selectedCity)} اليوم`, { priority: 'weather', city: selectedCity, cityAr: getArName(selectedCity) })}
               >
                 <div className="dzd-wmc-header">
                   <div className="dzd-wmc-city">
                     <MapPin size={12} /> {getArName(selectedCity)}
                   </div>
-                  {weatherData.icon && (
-                    <img
-                      src={`https://openweathermap.org/img/wn/${weatherData.icon}@2x.png`}
-                      alt=""
-                      className="dzd-wmc-icon"
-                    />
-                  )}
+                  <span className={`dzd-wmc-icon dzd-wmc-icon--${getWeatherKind(weatherData.icon, weatherData.condition)}`} title={weatherData.condition || 'حالة الطقس'}>
+                    <WeatherIcon icon={weatherData.icon} condition={weatherData.condition} />
+                  </span>
                 </div>
                 <div className="dzd-wmc-temp-row">
                   <span className="dzd-wmc-temp">{weatherData.temp}°</span>
@@ -960,13 +865,8 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
           <div className="dzd-news-panel">
             {loading ? (
               <div className="dzd-news-list">
-                <div className="dzd-loop-wrap">
-                  <div className="dzd-loop">
-                    <div className="dzd-loop-ring" />
-                    <div className="dzd-loop-dot dzd-loop-dot--1" />
-                    <div className="dzd-loop-dot dzd-loop-dot--2" />
-                    <div className="dzd-loop-dot dzd-loop-dot--3" />
-                  </div>
+                <div className="dzd-news-loading-hint">
+                  <span className="dzd-spin-icon">⏳</span> جاري تحميل أبرز عناوين الصحف...
                 </div>
                 {[...Array(5)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
               </div>
@@ -1358,14 +1258,6 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
           <div className="dzd-news-panel">
             {loading ? (
               <div className="dzd-news-list">
-                <div className="dzd-loop-wrap">
-                  <div className="dzd-loop">
-                    <div className="dzd-loop-ring" />
-                    <div className="dzd-loop-dot dzd-loop-dot--1" />
-                    <div className="dzd-loop-dot dzd-loop-dot--2" />
-                    <div className="dzd-loop-dot dzd-loop-dot--3" />
-                  </div>
-                </div>
                 {[...Array(5)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
               </div>
             ) : (!data?.tech || data.tech.length === 0) ? (
@@ -1396,259 +1288,6 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                 ))}
               </div>
             )}
-          </div>
-        )}
-
-        {/* ===== NATIONAL TEAM — المنتخب الجزائري ===== */}
-        {activeSection === 'national' && (
-          <div className="dzd-news-panel">
-
-            {/* ── رأس البطاقة ──────────────────────────────────────── */}
-            <div style={{ direction:'rtl', marginBottom:10 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-                <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-                  <span style={{ fontSize:15, fontWeight:800, color:'#22c55e', display:'flex', alignItems:'center', gap:6 }}>
-                    🇩🇿 المنتخب الجزائري
-                  </span>
-                  <span style={{ fontSize:10, color:'#6b8f71', letterSpacing:'0.04em' }}>
-                    الخضر · محاربو الصحراء · الفريق الوطني
-                  </span>
-                </div>
-                <button
-                  className="dzd-retry-btn"
-                  style={{ fontSize:'10px', padding:'3px 10px', display:'inline-flex', alignItems:'center', gap:'4px' }}
-                  onClick={() => loadNationalTeamNews({ force: true })}
-                  disabled={nationalLoading}
-                  title="تحديث أخبار المنتخب"
-                >
-                  <RefreshCw size={11} className={nationalLoading ? 'dzd-spin' : ''} />
-                  {nationalLoading ? 'جاري…' : 'تحديث'}
-                </button>
-              </div>
-
-              {/* ── أزرار البرومبتات السريعة ─────────────────────── */}
-              <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:4 }}>
-                {[
-                  { label:'⚽ أخبار الخضر',           prompt:'أعطني آخر أخبار الخضر المنتخب الجزائري اليوم' },
-                  { label:'🏜️ محاربو الصحراء',        prompt:'آخر أخبار محاربو الصحراء المنتخب الجزائري' },
-                  { label:'🌍 الفريق الوطني',          prompt:'أخبار الفريق الوطني الجزائري اليوم' },
-                  { label:'📅 المباراة القادمة',        prompt:'ما هي المباراة القادمة للمنتخب الجزائري؟ الموعد والمنافس' },
-                  { label:'📊 تصفيات كأس العالم',       prompt:'ما هو وضع المنتخب الجزائري في تصفيات كأس العالم؟ النتائج والترتيب' },
-                  { label:'🏆 آخر نتائج المنتخب',       prompt:'آخر نتائج مباريات المنتخب الجزائري هذا الشهر' },
-                  { label:'👥 قائمة المنتخب',           prompt:'قائمة المنتخب الجزائري الأخيرة — من تم استدعاؤه؟' },
-                  { label:'⭐ أبرز لاعبي الخضر',        prompt:'من هم أبرز لاعبي المنتخب الجزائري حالياً؟' },
-                ].map(({ label, prompt }) => (
-                  <button
-                    key={label}
-                    onClick={() => onSend(prompt)}
-                    style={{
-                      background:'rgba(34,197,94,0.08)', border:'1px solid rgba(34,197,94,0.22)',
-                      borderRadius:20, padding:'5px 12px', fontSize:11, fontWeight:600,
-                      color:'#4ade80', cursor:'pointer', fontFamily:'inherit', direction:'rtl',
-                      transition:'all .18s', whiteSpace:'nowrap',
-                    }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background='rgba(34,197,94,0.18)'; (e.currentTarget as HTMLButtonElement).style.borderColor='rgba(34,197,94,0.5)' }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background='rgba(34,197,94,0.08)'; (e.currentTarget as HTMLButtonElement).style.borderColor='rgba(34,197,94,0.22)' }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* ── قائمة الأخبار ─────────────────────────────────── */}
-            {nationalLoading ? (
-              <div className="dzd-news-list">
-                {[...Array(6)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
-              </div>
-            ) : nationalTeamNews.length === 0 ? (
-              <div className="dzd-empty-state">
-                <span className="dzd-empty-icon">🇩🇿</span>
-                <p>لا توجد أخبار حالياً</p>
-                <button className="dzd-retry-btn" onClick={() => loadNationalTeamNews({ force: true })}>
-                  <RefreshCw size={12} /> إعادة المحاولة
-                </button>
-                <div style={{ marginTop:10, display:'flex', flexWrap:'wrap', gap:5, justifyContent:'center' }}>
-                  {['أخبار الخضر اليوم','المباراة القادمة للمنتخب','قائمة المنتخب الجزائري'].map(q => (
-                    <button key={q} className="dzd-retry-btn" style={{ fontSize:'10px' }} onClick={() => onSend(q)}>{q}</button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="dzd-news-list">
-                {nationalTeamNews.map((item, i) => (
-                  <div
-                    key={i}
-                    className="dzd-news-card dzd-news-card--national"
-                    onClick={() => onSend(`أعطني ملخصاً وتحليلاً لهذا الخبر الرياضي:\n"${item.title}"\nالمصدر: ${item.feedName || 'أخبار المنتخب'}`)}
-                  >
-                    <div className="dzd-news-card-left">
-                      <span className="dzd-news-source dzd-news-source--national">
-                        <Radio size={9} /> {item.feedName || 'المنتخب 🇩🇿'}
-                      </span>
-                      <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
-                    </div>
-                    <div className="dzd-news-card-body">
-                      <p className="dzd-news-title">{item.title}</p>
-                    </div>
-                    {item.link && (
-                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="dzd-news-link" onClick={e => e.stopPropagation()}>
-                        <ExternalLink size={11} />
-                      </a>
-                    )}
-                  </div>
-                ))}
-                <div style={{ textAlign:'center', paddingTop:8 }}>
-                  <button
-                    className="dzd-retry-btn"
-                    style={{ fontSize:'10px', display:'inline-flex', alignItems:'center', gap:4 }}
-                    onClick={() => onSend('أعطني ملخصاً شاملاً لآخر أخبار المنتخب الجزائري اليوم من جميع المصادر')}
-                  >
-                    📋 ملخص شامل لأخبار المنتخب
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ===== WC2026 SCOREBOARD ===== */}
-        {activeSection === 'wc2026' && wc2026Active && (
-          <div style={{ padding: '8px 4px', direction: 'rtl' }}>
-            {/* Header */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              marginBottom: 12, padding: '10px 14px',
-              background: 'linear-gradient(135deg, rgba(99,102,241,0.18) 0%, rgba(139,92,246,0.12) 100%)',
-              borderRadius: 14, border: '1px solid rgba(99,102,241,0.25)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 22 }}>🏆</span>
-                <div>
-                  <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 13 }}>كأس العالم FIFA 2026</div>
-                  {wc2026Date && (
-                    <div style={{ color: '#64748b', fontSize: 10, marginTop: 2 }}>
-                      {wc2026IsNext ? '📅 مباريات القادمة' : '📅 مباريات اليوم'} — {new Date(wc2026Date + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Algiers' })}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={loadWC2026}
-                disabled={wc2026Loading}
-                style={{
-                  background: 'transparent', border: '1px solid rgba(99,102,241,0.3)',
-                  borderRadius: 8, padding: '4px 8px', color: '#a5b4fc',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11,
-                }}
-              >
-                <RefreshCw size={11} className={wc2026Loading ? 'dzd-spin' : ''} />
-                تحديث
-              </button>
-            </div>
-
-            {/* Matches */}
-            {wc2026Loading ? (
-              <div className="dzd-skeleton-grid">
-                {[...Array(3)].map((_, i) => <div key={i} className="dzd-skeleton" style={{ height: 120, borderRadius: 16, marginBottom: 8 }} />)}
-              </div>
-            ) : wc2026Matches.length > 0 ? (
-              <WC2026MatchCard
-                matches={wc2026Matches}
-                autoRefresh={true}
-                refreshInterval={60000}
-                compact={true}
-              />
-            ) : (
-              <div className="dzd-empty-state">
-                <span className="dzd-empty-icon">⚽</span>
-                <p>لا توجد مباريات متاحة حالياً</p>
-                <button className="dzd-retry-btn" onClick={loadWC2026}>
-                  <RefreshCw size={12} /> إعادة المحاولة
-                </button>
-                <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 5, justifyContent: 'center' }}>
-                  {['مباريات اليوم في كأس العالم 2026', 'جدول مباريات كأس العالم', 'المنتخب الجزائري كأس العالم'].map(q => (
-                    <button key={q} className="dzd-retry-btn" style={{ fontSize: 10 }} onClick={() => onSend(q)}>{q}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── نتائج البارحة — accordion ────────────────────────── */}
-            {wc2026Yesterday.length > 0 && (
-              <div style={{ marginTop: 10, direction: 'rtl' }}>
-                {/* زر فتح/إغلاق */}
-                <button
-                  onClick={() => {
-                    setWc2026YesterdayOpen(o => !o)
-                    if (!wc2026YesterdayOpen && wc2026Yesterday.length === 0) loadWC2026Yesterday()
-                  }}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
-                    borderRadius: wc2026YesterdayOpen ? '10px 10px 0 0' : 10,
-                    padding: '7px 12px', cursor: 'pointer', color: '#94a3b8',
-                    fontSize: 11, fontWeight: 600, transition: 'all 0.15s',
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13 }}>📅</span>
-                    نتائج البارحة
-                    {wc2026YesterdayDate && (
-                      <span style={{ color: '#475569', fontSize: 9.5, marginRight: 4 }}>
-                        — {new Date(wc2026YesterdayDate + 'T12:00:00Z').toLocaleDateString('ar-DZ', {
-                          weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Algiers',
-                        })}
-                      </span>
-                    )}
-                    <span style={{
-                      background: 'rgba(99,102,241,0.18)', border: '1px solid rgba(99,102,241,0.3)',
-                      color: '#a5b4fc', borderRadius: 20, padding: '0 6px', fontSize: 9, fontWeight: 700,
-                    }}>
-                      {wc2026Yesterday.length}
-                    </span>
-                  </span>
-                  <span style={{ fontSize: 12, transition: 'transform 0.2s', transform: wc2026YesterdayOpen ? 'rotate(180deg)' : 'none' }}>
-                    ▾
-                  </span>
-                </button>
-
-                {/* محتوى الأكورديون */}
-                {wc2026YesterdayOpen && (
-                  <div style={{
-                    background: 'rgba(5,5,18,0.6)', border: '1px solid rgba(255,255,255,0.07)',
-                    borderTop: 'none', borderRadius: '0 0 10px 10px',
-                    padding: '7px 8px 8px',
-                  }}>
-                    {wc2026YesterdayLoading ? (
-                      <div style={{ textAlign: 'center', color: '#475569', fontSize: 10, padding: '8px 0' }}>
-                        ⏳ جاري التحميل...
-                      </div>
-                    ) : (
-                      <WC2026MatchCard
-                        matches={wc2026Yesterday}
-                        autoRefresh={false}
-                        compact={true}
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Footer links */}
-            <div style={{ marginTop: 14, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-              {[
-                { label: '🌐 FIFA الرسمي', url: 'https://www.fifa.com/worldcup' },
-                { label: '📊 FotMob', url: 'https://www.fotmob.com/tournaments/77/overview/world-cup' },
-                { label: '📱 kooora', url: 'https://www.kooora.com/?wc2026' },
-              ].map(l => (
-                <a key={l.url} href={l.url} target="_blank" rel="noopener noreferrer"
-                  style={{ color: '#818cf8', fontSize: 11, textDecoration: 'none', padding: '3px 10px', borderRadius: 8, background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
-                  {l.label}
-                </a>
-              ))}
-            </div>
           </div>
         )}
 

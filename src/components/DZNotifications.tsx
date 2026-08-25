@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Bell, X, ExternalLink, TrendingUp, TrendingDown, Newspaper, AlertTriangle, CheckCircle2, BellOff, Trash2 } from 'lucide-react'
+import { Bell, X, ExternalLink, TrendingUp, TrendingDown, Newspaper, AlertTriangle, CheckCircle2, BellOff } from 'lucide-react'
 import '../styles/dz-notifications.css'
 
 export interface DZNotif {
@@ -8,7 +8,6 @@ export interface DZNotif {
   title: string
   body: string
   link?: string
-  linkText?: string
   source?: string
   time: number
   read: boolean
@@ -52,6 +51,10 @@ function genId() { return Math.random().toString(36).slice(2) + Date.now().toStr
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', SAR: '🇸🇦', AED: '🇦🇪'
 }
+
+const GITHUB_BRANCH = 'devin/1774405518-init-dz-gpt'
+const GITHUB_COMMITS_URL = `https://api.github.com/repos/Nadirinfograph23/DZ-GPT/commits?sha=${GITHUB_BRANCH}&per_page=1`
+const GITHUB_SEEN_SHA_KEY = 'dz-agent-github-seen-sha'
 
 export default function DZNotifications({ theme }: Props) {
   const [notifs, setNotifs]       = useState<DZNotif[]>([])
@@ -144,70 +147,6 @@ export default function DZNotifications({ theme }: Props) {
     return () => window.removeEventListener('dz:task-complete', onTaskComplete)
   }, [addNotif, browserPush])
 
-  // ── Offline broadcast queue — إشعارات المشرف الفائتة للمستخدمين الغائبين ───
-  useEffect(() => {
-    const LS_KEY = 'dz_pending_notif_ts'
-    async function checkPending() {
-      try {
-        const res = await fetch('/api/pending-notifications', { cache: 'no-store' })
-        if (!res.ok) return
-        const data = await res.json()
-        const notifs: Array<{ id: string; text: string; from: string; timestamp: number; link?: string | null }> =
-          data.notifications || []
-        if (!notifs.length) return
-        // أظهر فقط الإشعارات التي نُشرت بعد آخر زيارة
-        const lastTs = parseInt(localStorage.getItem(LS_KEY) || '0', 10)
-        const fresh = notifs.filter(n => n.timestamp > lastTs)
-        // حفّظ أحدث timestamp كنقطة مرجعية للزيارة القادمة
-        const newest = notifs.reduce((m, n) => Math.max(m, n.timestamp), 0)
-        if (newest > lastTs) localStorage.setItem(LS_KEY, String(newest))
-        // أظهر كل إشعار جديد بتأخير بسيط لتجنب التكديس الفوري
-        fresh.forEach((n, i) => {
-          setTimeout(() => {
-            addNotif({ type: 'task', title: `📢 إذاعة من ${n.from}`, body: n.text, link: (n as any).link || undefined, linkText: (n as any).linkText || undefined })
-            browserPush(`📢 إذاعة من ${n.from}`, n.text)
-          }, i * 1200)
-        })
-      } catch {}
-    }
-    checkPending()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // مرة واحدة عند التحميل فقط — يكفي لعرض الفائت
-
-  // ── SSE: Admin Broadcast — عالمي، يشمل جميع صفحات الموقع ──────────────────
-  useEffect(() => {
-    let es: EventSource | null = null
-    let retryTimer: ReturnType<typeof setTimeout> | null = null
-    const LS_KEY = 'dz_pending_notif_ts'
-    const seenBroadcasts = new Set<string>()
-
-    function connect() {
-      es = new EventSource('/api/notifications/stream')
-      es.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data)
-          if (data.type === 'admin_broadcast' && data.id && data.text) {
-            if (seenBroadcasts.has(data.id)) return
-            seenBroadcasts.add(data.id)
-            // تحديث نقطة المرجع لمنع التكرار من طابور المعلّقات
-            try {
-              const cur = parseInt(localStorage.getItem(LS_KEY) || '0', 10)
-              if (data.timestamp > cur) localStorage.setItem(LS_KEY, String(data.timestamp))
-            } catch {}
-            addNotif({ type: 'task', title: `📢 إذاعة من ${data.from || 'المشرف'}`, body: String(data.text).slice(0, 120), link: data.link || undefined, linkText: data.linkText || undefined })
-            browserPush(`📢 إذاعة من ${data.from || 'المشرف'}`, String(data.text).slice(0, 120))
-          }
-        } catch {}
-      }
-      es.onerror = () => {
-        es?.close()
-        retryTimer = setTimeout(connect, 15_000)
-      }
-    }
-    connect()
-    return () => { es?.close(); if (retryTimer) clearTimeout(retryTimer) }
-  }, [addNotif, browserPush])
-
   // ── SSE: Breaking News ──────────────────────────────────────────────────────
   useEffect(() => {
     let es: EventSource | null = null
@@ -244,6 +183,37 @@ export default function DZNotifications({ theme }: Props) {
     connect()
     return () => { es?.close(); if (retryTimer) clearTimeout(retryTimer) }
   }, [addNotif])
+
+  // ── Poll the original repository and announce new commits at the top ────────
+  useEffect(() => {
+    let cancelled = false
+    async function checkRepository() {
+      try {
+        const res = await fetch(GITHUB_COMMITS_URL, {
+          headers: { Accept: 'application/vnd.github+json' },
+          cache: 'no-store',
+        })
+        if (!res.ok) return
+        const commits = await res.json()
+        const latest = commits?.[0]
+        const sha = latest?.sha
+        if (!sha || cancelled) return
+        const previous = localStorage.getItem(GITHUB_SEEN_SHA_KEY)
+        localStorage.setItem(GITHUB_SEEN_SHA_KEY, sha)
+        // Establish a baseline on first visit; only later commits notify.
+        if (!previous || previous === sha) return
+        const message = latest.commit?.message?.split('\n')[0] || 'تم تحديث المستودع الأصلي'
+        const shortSha = sha.slice(0, 7)
+        const title = '🔄 تحديث جديد في مستودع DZ-GPT'
+        const body = `${message} · ${shortSha}`
+        addNotif({ type: 'task', title, body, link: `https://github.com/Nadirinfograph23/DZ-GPT/commit/${sha}`, source: 'GitHub' })
+        browserPush(title, body)
+      } catch {}
+    }
+    checkRepository()
+    const interval = setInterval(checkRepository, 2 * 60 * 1000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [addNotif, browserPush])
 
   // ── Poll: Currency Rate Changes ─────────────────────────────────────────────
   useEffect(() => {
@@ -371,14 +341,7 @@ export default function DZNotifications({ theme }: Props) {
             </span>
             <div className="dzn-panel-actions">
               {notifs.length > 0 && (
-                <button
-                  className="dzn-panel-trash"
-                  onClick={() => setNotifs([])}
-                  title="مسح جميع الإشعارات"
-                  aria-label="مسح جميع الإشعارات"
-                >
-                  <Trash2 size={14} />
-                </button>
+                <button className="dzn-panel-clear" onClick={() => setNotifs([])}>مسح الكل</button>
               )}
               <button className="dzn-panel-close" onClick={() => setPanelOpen(false)}>
                 <X size={15} />

@@ -9,48 +9,6 @@
   0%   { background-position: -400px 0; }
   100% { background-position:  400px 0; }
 }
-
-/* ── React Loop (shared loader) ── */
-.dzd-loop-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 18px 0;
-}
-.dzd-loop {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-}
-.dzd-loop-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2.5px solid rgba(129, 140, 248, 0.12);
-  border-top-color: #818cf8;
-  border-right-color: rgba(129, 140, 248, 0.4);
-  animation: dzd-spin 0.9s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-.dzd-loop-dot {
-  position: absolute;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #818cf8;
-  top: 50%;
-  left: 50%;
-  animation: dzd-loop-orbit 1.8s linear infinite;
-  box-shadow: 0 0 5px rgba(129, 140, 248, 0.8);
-}
-.dzd-loop-dot--1 { animation-delay: 0s;     opacity: 1; }
-.dzd-loop-dot--2 { animation-delay: -0.6s;  opacity: 0.6; }
-.dzd-loop-dot--3 { animation-delay: -1.2s;  opacity: 0.3; }
-@keyframes dzd-loop-orbit {
-  from { transform: translate(-50%, -50%) rotate(0deg)   translateX(11px) scale(1); }
-  50%  { transform: translate(-50%, -50%) rotate(180deg) translateX(11px) scale(1.2); }
-  to   { transform: translate(-50%, -50%) rotate(360deg) translateX(11px) scale(1); }
-}
 @keyframes dzdFadeIn  { from { opacity: 0; } to { opacity: 1; } }
 @keyframes dzdScaleIn {
   from { opacity: 0; transform: scale(.94); }
@@ -447,13 +405,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 6px;
   background: var(--dzd-card-bg);
   border: 1px solid var(--dzd-card-border);
   border-radius: 14px;
-  padding: 10px 6px;
-  aspect-ratio: 1;
+  padding: 14px 6px;
   text-align: center;
   transition: all .18s;
   cursor: default;
@@ -557,7 +513,21 @@
   font-weight: 700;
   color: var(--dzd-accent-2);
 }
-.dzd-wmc-icon { width: 56px; height: 56px; filter: drop-shadow(0 0 10px rgba(129,140,248,.25)); }
+.dzd-wmc-icon {
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 56px;
+  filter: drop-shadow(0 0 10px rgba(129,140,248,.25));
+}
+.dzd-wmc-icon--sunny  { color: #fbbf24; }
+.dzd-wmc-icon--cloudy { color: #cbd5e1; }
+.dzd-wmc-icon--rainy  { color: #60a5fa; }
+.dzd-wmc-icon--snowy  { color: #bae6fd; }
+.dzd-wmc-icon--foggy   { color: #94a3b8; }
+.dzd-wmc-icon--stormy  { color: #a78bfa; }
 .dzd-wmc-temp-row { display: flex; align-items: flex-end; gap: 14px; position: relative; z-index: 1; }
 .dzd-wmc-temp {
   font-size: 58px;
@@ -645,18 +615,6 @@
 .dzd-news-card--tech { background: var(--dzd-card-bg); border-color: var(--dzd-card-border); border-right-color: var(--dzd-accent-border); }
 .dzd-news-card--sport:hover,
 .dzd-news-card--tech:hover { background: var(--dzd-accent-hover); border-right-color: var(--dzd-accent); }
-
-.dzd-news-card--national {
-  background: rgba(34, 197, 94, .06);
-  border-color: rgba(34, 197, 94, .25);
-  border-right: 3px solid #16a34a;
-}
-.dzd-news-card--national:hover {
-  background: rgba(34, 197, 94, .13);
-  border-right-color: #22c55e;
-  transform: translateX(2px);
-}
-.dzd-news-source--national { color: #22c55e !important; }
 
 .dzd-news-card-left {
   display: flex;

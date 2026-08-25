@@ -71,6 +71,13 @@ interface MatchItem {
   link?: string
 }
 
+function normalizePrayerTime(value: unknown): string {
+  if (typeof value !== 'string') return '--:--'
+  const match = value.match(/T?(\d{1,2}):(\d{2})/)
+  if (!match) return value
+  return `${match[1].padStart(2, '0')}:${match[2]}`
+}
+
 interface CurrencyData {
   base: string
   provider: string
@@ -514,7 +521,12 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
         if (!r.ok) throw new Error(`Prayer API error: ${r.status}`)
         return r.json()
       }, 1)
-      setPrayerData(result)
+       if (result?.times && typeof result.times === 'object') {
+         result.times = Object.fromEntries(
+           Object.entries(result.times).map(([name, time]) => [name, normalizePrayerTime(time)])
+         )
+       }
+       setPrayerData(result)
     } catch (err) {
       console.error('[DZDashboard] loadPrayer failed:', err)
       setPrayerData(null)

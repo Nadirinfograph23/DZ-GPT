@@ -8933,6 +8933,26 @@ const TECH_FEEDS_DASHBOARD = [
   { name: 'Google تحول رقمي',     url: 'https://news.google.com/rss/search?q=%D8%AA%D8%AD%D9%88%D9%84+%D8%B1%D9%82%D9%85%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 
+// Some specialist sites intermittently return HTML instead of RSS. Keep an
+// independent fallback set so one blocked provider cannot blank the card.
+const TECH_FEEDS_FALLBACK = [
+  { name: 'Menabytes تقنية MENA', url: 'https://www.menabytes.com/feed/' },
+  { name: 'Google أخبار الذكاء الاصطناعي', url: 'https://news.google.com/rss/search?q=%D8%B0%D9%83%D8%A7%D8%A1+%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google أخبار التكنولوجيا', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%83%D9%86%D9%88%D9%84%D9%88%D8%AC%D9%8A%D8%A7&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google أخبار التحول الرقمي', url: 'https://news.google.com/rss/search?q=%D8%AA%D8%AD%D9%88%D9%84+%D8%B1%D9%82%D9%85%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
+  { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
+]
+
+async function fetchDashboardTechFeeds() {
+  const primary = await fetchMultipleFeeds(TECH_FEEDS_DASHBOARD)
+  const count = primary.reduce((sum, feed) => sum + (feed?.items?.length || 0), 0)
+  if (count >= 3) return primary
+  const fallback = await fetchMultipleFeeds(TECH_FEEDS_FALLBACK)
+  const seen = new Set(primary.map(feed => feed.url))
+  return [...primary, ...fallback.filter(feed => !seen.has(feed.url))]
+}
+
 const TECH_CATEGORY_KEYWORDS = {
   'ذكاء اصطناعي 🤖': [
     'ai', 'artificial intelligence', 'machine learning', 'gpt', 'llm', 'neural', 'model',
@@ -9179,7 +9199,7 @@ app.get('/api/dz-agent/dashboard', async (req, res) => {
     Promise.allSettled([
       fetchMultipleFeeds(NEWS_FEEDS_DASHBOARD),
       fetchMultipleFeeds(SPORTS_FEEDS_DASHBOARD),
-      fetchMultipleFeeds(TECH_FEEDS_DASHBOARD),
+      fetchDashboardTechFeeds(),
       fetchWeatherAlgiers(),
       fetchAlgerianLeague({ bypassCache }),
       // GN-RSS: fetch Arabic Algeria feeds for dashboard augmentation

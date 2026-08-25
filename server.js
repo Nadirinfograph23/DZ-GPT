@@ -9172,8 +9172,9 @@ app.get('/api/dz-agent/dashboard', async (req, res) => {
     return res.json(DASHBOARD_CACHE.data)
   }
 
-  // Vercel serverless: cap total fetch time to 50s to stay within the 60s function limit
-  const FETCH_TIMEOUT_MS = 50000
+  // Do not make the dashboard wait for a blocked RSS provider. The preload/cache
+  // below can serve useful headlines while slow providers refresh in the background.
+  const FETCH_TIMEOUT_MS = 15000
   const [newsFeeds, sportsFeeds, techFeeds, weather, lfpResult, gnRssResult] = await Promise.race([
     Promise.allSettled([
       fetchMultipleFeeds(NEWS_FEEDS_DASHBOARD),
@@ -9194,12 +9195,37 @@ app.get('/api/dz-agent/dashboard', async (req, res) => {
     ]), FETCH_TIMEOUT_MS)),
   ])
 
-  const existingNews = (newsFeeds.status === 'fulfilled' ? newsFeeds.value : [])
+  let existingNews = (newsFeeds.status === 'fulfilled' ? newsFeeds.value : [])
     .flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
 
   // Merge GN-RSS articles with existing news (GN-RSS first for freshness, then deduplicate)
-  const gnDashboardArticles = (gnRssResult.status === 'fulfilled' ? gnRssResult.value : [])
+  let gnDashboardArticles = (gnRssResult.status === 'fulfilled' ? gnRssResult.value : [])
     .map(item => ({ ...item, feedName: item.gnSource || 'Google News' }))
+
+  // A single slow/blocked feed must never turn the whole news card empty. The
+  // priority cache is populated during startup and contains the same approved
+  // Algerian sources, while GN_RSS_CACHE covers the Google News fallback.
+  if (existingNews.length === 0) {
+    const priorityCached = DZ_NEWS_CACHE.get('dz_priority_all')
+    if (priorityCached?.items?.length) {
+      existingNews = priorityCached.items.map(item => ({
+        ...item,
+        feedName: item._source || item.source || 'أخبار الجزائر',
+      }))
+      console.warn(`[Dashboard] Using cached DZ news fallback (${existingNews.length} articles)`)
+    }
+  }
+  if (gnDashboardArticles.length === 0) {
+    const cachedGoogleNews = [...GN_RSS_CACHE.values()]
+      .flatMap(entry => entry.data || [])
+    if (cachedGoogleNews.length) {
+      gnDashboardArticles = cachedGoogleNews.map(item => ({
+        ...item,
+        feedName: item.gnSource || 'Google News',
+      }))
+      console.warn(`[Dashboard] Using cached Google News fallback (${gnDashboardArticles.length} articles)`)
+    }
+  }
 
   // ── NEWS INTELLIGENCE PIPELINE ──────────────────────────────────────────
   // 1. merge GN-RSS + classic feeds  2. dedup by title similarity
@@ -9216,8 +9242,15 @@ app.get('/api/dz-agent/dashboard', async (req, res) => {
   const allNews = balanceNewsCategories(dedupedNews, 18)
   if (allNews.length === 0) diagLog('empty', { module: 'dashboard.news', upstream: mergedNewsRaw.length })
 
-  const allSports = (sportsFeeds.status === 'fulfilled' ? sportsFeeds.value : [])
-    .flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
+  const cachedFeedItems = (feeds) => feeds.flatMap(feed => {
+    const cached = RSS_CACHE.get(feed.url)
+    return (cached?.data?.items || []).map(item => ({ ...item, feedName: feed.name }))
+  })
+
+  const sportsRows = sportsFeeds.status === 'fulfilled'
+    ? sportsFeeds.value.flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
+    : cachedFeedItems(SPORTS_FEEDS_DASHBOARD)
+  const allSports = sportsRows
     .slice(0, 6)
 
   // Prepend LFP matches/articles to sports
@@ -9250,8 +9283,9 @@ app.get('/api/dz-agent/dashboard', async (req, res) => {
   const weatherData = weather.status === 'fulfilled' ? weather.value : []
 
   // ── Tech Intelligence: classify + score + sort ────────────────────────────
-  const rawTech = (techFeeds.status === 'fulfilled' ? techFeeds.value : [])
-    .flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
+  const rawTech = techFeeds.status === 'fulfilled'
+    ? techFeeds.value.flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
+    : cachedFeedItems(TECH_FEEDS_DASHBOARD)
 
   const allTech = rawTech
     .filter((item, idx, arr) => arr.findIndex(x => x.title === item.title) === idx)

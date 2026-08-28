@@ -907,11 +907,21 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                     <MapPin size={12} /> {getArName(selectedCity)}
                   </div>
                   {weatherData.icon && (
-                    <img
-                      src={`https://openweathermap.org/img/wn/${weatherData.icon}@2x.png`}
-                      alt=""
-                      className="dzd-wmc-icon"
-                    />
+                    <span className="dzd-wmc-icon" aria-hidden="true">
+                      {(() => {
+                        const code = Number(weatherData.icon)
+                        if (code <= 3) return '☀️'
+                        if ([45, 48].includes(code)) return '🌫️'
+                        if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return '🌧️'
+                        if ([71, 73, 75, 77, 85, 86].includes(code)) return '❄️'
+                        if ([95, 96, 99].includes(code)) return '⛈️'
+                        if (typeof weatherData.icon === 'string' && weatherData.icon.startsWith('01')) return '☀️'
+                        if (typeof weatherData.icon === 'string' && (weatherData.icon.startsWith('02') || weatherData.icon.startsWith('03') || weatherData.icon.startsWith('04'))) return '⛅'
+                        if (typeof weatherData.icon === 'string' && (weatherData.icon.startsWith('09') || weatherData.icon.startsWith('10'))) return '🌧️'
+                        if (typeof weatherData.icon === 'string' && weatherData.icon.startsWith('13')) return '❄️'
+                        return '☁️'
+                      })()}
+                    </span>
                   )}
                 </div>
                 <div className="dzd-wmc-temp-row">

@@ -342,22 +342,302 @@ async function fetchGlobalLeaguesDirect(request) {
     })
   }
 
-  return new Response(JSON.stringify({
-    leagues: [],
-    date: new Date().toISOString().split('T')[0],
-    fetchedAt: new Date().toISOString(),
-    source: 'unavailable',
-    status: 'unavailable',
-    message: 'بيانات الدوريات العالمية غير متاح حالياً'
-  }), {
-    headers: {
-      'content-type': 'application/json',
-      'cache-control': 'no-store',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+  try {
+    const dateStr = new Date().toISOString().split('T')[0]
+    const bypassCache = requestUrl.searchParams.get('bypassCache') === '1' || requestUrl.searchParams.get('refresh') === '1'
+    
+    // Try fetching from jdwel.com via Jina reader (bypasses Cloudflare)
+    const jinaUrl = `https://r.jina.ai/https://jdwel.com/matches/?date=${dateStr}`
+    const jinaResp = await fetch(jinaUrl, {
+      headers: { 'User-Agent': 'DZ-Agent-Worker/1.0', 'Accept': 'text/plain,text/markdown,*/*' },
+      signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 15000); return ctrl.signal })()
+    })
+    
+    if (jinaResp.ok) {
+      const md = await jinaResp.text()
+      if (md && md.length > 200) {
+        // Parse top-5 European leagues from markdown
+        const leagues = []
+        const leagueMatchers = [
+          { key: 'Champions League', match: ['دوري أبطال أوروبا', 'champions league'] },
+          { key: 'Premier League', match: ['الدوري الإنجليزي الممتاز', 'premier league'] },
+          { key: 'La Liga', match: ['الدوري الإسباني', 'la liga'] },
+          { key: 'Serie A', match: ['الدوري الإيطالي', 'serie a'] },
+          { key: 'Bundesliga', match: ['الدوري الألماني', 'bundesliga'] },
+        ]
+        
+        for (const matcher of leagueMatchers) {
+          const leagueMd = md.match(new RegExp(`## ${matcher.match[0]}[\s\S]*?(?=## |$)`, 'i'))
+          if (!leagueMd) continue
+          
+          const matches = []
+          const matchRegex = /\*\s+([^\n!*]+?)\n[^\n]*?(\d+)\s*-\s*(\d+)[^\n]*\n\n([^\n!*]+)/g
+          let m
+          while ((m = matchRegex.exec(leagueMd[0])) !== null && matches.length < 8) {
+            matches.push({
+              homeTeam: m[1].trim(),
+              awayTeam: m[4].trim(),
+              homeScore: parseInt(m[2]),
+              awayScore: parseInt(m[3]),
+              statusType: 'finished',
+              startTime: '',
+              link: 'https://jdwel.com/today/'
+            })
+          }
+          
+          if (matches.length > 0) {
+            leagues.push({ name: matcher.key, matches })
+          }
+        }
+        
+        if (leagues.length > 0) {
+          return new Response(JSON.stringify({
+            leagues,
+            date: dateStr,
+            fetchedAt: new Date().toISOString(),
+            source: 'jdwel.com',
+            status: 'ok'
+          }), {
+            headers: {
+              'content-type': 'application/json',
+              'cache-control': 'no-store',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            }
+          })
+        }
+      }
     }
-  })
+    
+    // Fallback: return empty with clear message
+    return new Response(JSON.stringify({
+      leagues: [],
+      date: dateStr,
+      fetchedAt: new Date().toISOString(),
+      source: 'jdwel.com',
+      status: 'unavailable',
+      message: 'بيانات الدوريات العالمية غير متاحة حالياً'
+    }), {
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  } catch (err) {
+    console.error('[Worker:GlobalLeagues] Failed:', err.message)
+    return new Response(JSON.stringify({
+      leagues: [],
+      date: new Date().toISOString().split('T')[0],
+      fetchedAt: new Date().toISOString(),
+      source: 'error',
+      status: 'unavailable',
+      message: 'بيانات الدوريات العالمية غير متاحة حالياً'
+    }), {
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  }
+}
+
+
+// ===== LFP DIRECT (Worker-native, no server.js) =====
+async function fetchLfpDirect(request) {
+  const requestUrl = new URL(request.url)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  }
+
+  try {
+    // Try lfp.dz directly
+    const [calRes, articlesRes] = await Promise.allSettled([
+      fetch('https://lfp.dz/ar/calendar', { 
+        headers: { 'User-Agent': 'DZ-Agent-Worker/1.0', 'Accept': 'text/html,application/xhtml+xml,*/*' },
+        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 12000); return ctrl.signal })()
+      }),
+      fetch('https://lfp.dz/ar/articles', { 
+        headers: { 'User-Agent': 'DZ-Agent-Worker/1.0', 'Accept': 'text/html,application/xhtml+xml,*/*' },
+        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 12000); return ctrl.signal })()
+      }),
+    ])
+
+    const calHtml = calRes.status === 'fulfilled' && calRes.value.ok ? await calRes.value.text() : ''
+    const articlesHtml = articlesRes.status === 'fulfilled' && articlesRes.value.ok ? await articlesRes.value.text() : ''
+
+    // Simple parsing for matches
+    const matches = []
+    if (calHtml) {
+      const matchRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi
+      let match
+      while ((match = matchRegex.exec(calHtml)) !== null && matches.length < 20) {
+        const row = match[1]
+        const teams = row.match(/<td[^>]*>([^<]*)<\/td>/gi)
+        if (teams && teams.length >= 3) {
+          const home = teams[0]?.replace(/<[^>]+>/g, '').trim() || ''
+          const away = teams[2]?.replace(/<[^>]+>/g, '').trim() || ''
+          const score = teams[1]?.replace(/<[^>]+>/g, '').trim() || ''
+          if (home && away) {
+            const scoreMatch = score.match(/(\d+)\s*-\s*(\d+)/)
+            matches.push({
+              round: 'Ligue 1',
+              home,
+              away,
+              homeScore: scoreMatch ? parseInt(scoreMatch[1]) : null,
+              awayScore: scoreMatch ? parseInt(scoreMatch[2]) : null,
+              played: !!scoreMatch,
+              date: '',
+              time: '',
+              link: 'https://lfp.dz/ar/calendar'
+            })
+          }
+        }
+      }
+    }
+
+    // Simple parsing for articles
+    const articles = []
+    if (articlesHtml) {
+      const articleRegex = /<h[23][^>]*>([^<]*)<\/h[23]>/gi
+      let article
+      while ((article = articleRegex.exec(articlesHtml)) !== null && articles.length < 10) {
+        articles.push({
+          title: article[1].trim(),
+          link: 'https://lfp.dz/ar/articles',
+          date: '',
+          source: 'lfp.dz'
+        })
+      }
+    }
+
+    return new Response(JSON.stringify({
+      matches,
+      articles,
+      fetchedAt: new Date().toISOString(),
+      source: 'lfp.dz',
+      status: 'ok'
+    }), {
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  } catch (err) {
+    console.error('[Worker:LFP] Failed:', err.message)
+    return new Response(JSON.stringify({
+      matches: [],
+      articles: [],
+      fetchedAt: new Date().toISOString(),
+      source: 'lfp.dz',
+      status: 'unavailable'
+    }), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  }
+}
+
+
+// ===== TECH NEWS DIRECT (Worker-native, no server.js) =====
+const WORKER_TECH_CACHE = { data: null, ts: 0 }
+const WORKER_TECH_TTL = 15 * 60 * 1000
+
+const WORKER_TECH_FEEDS = [
+  { name: 'تك عربي', url: 'https://techarabi.com/feed/' },
+  { name: 'Menabytes', url: 'https://www.menabytes.com/feed/' },
+  { name: 'Google AI', url: 'https://news.google.com/rss/search?q=ذكاء+اصطناعي&hl=ar&gl=US&ceid=US:ar' },
+  { name: 'Google Tech', url: 'https://news.google.com/rss/search?q=تكنولوجيا&hl=ar&gl=US&ceid=US:ar' },
+]
+
+async function fetchTechDirect(request) {
+  const requestUrl = new URL(request.url)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  }
+
+  const now = Date.now()
+  if (WORKER_TECH_CACHE.data && WORKER_TECH_CACHE.ts > now - WORKER_TECH_TTL) {
+    return new Response(JSON.stringify(WORKER_TECH_CACHE.data), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  }
+
+  try {
+    const settled = await Promise.allSettled(
+      WORKER_TECH_FEEDS.map(async (feed) => {
+        const response = await fetch(feed.url, {
+          headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*', 'User-Agent': 'DZ-Agent-Worker/1.0' },
+          signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 8000); return ctrl.signal })()
+        })
+        if (!response.ok) return []
+        const xml = await response.text()
+        return parseWorkerRss(xml, feed.name)
+      }),
+    )
+
+    const seen = new Set()
+    const items = settled
+      .flatMap(result => result.status === 'fulfilled' ? result.value : [])
+      .filter(item => {
+        const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .sort((a, b) => {
+        const aTime = Date.parse(a.pubDate || '') || 0
+        const bTime = Date.parse(b.pubDate || '') || 0
+        return bTime - aTime
+      })
+      .slice(0, 15)
+
+    const data = { items, generatedAt: new Date().toISOString() }
+    WORKER_TECH_CACHE.data = data
+    WORKER_TECH_CACHE.ts = now
+    return new Response(JSON.stringify(data), {
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  } catch (err) {
+    console.error('[Worker:Tech] Failed:', err.message)
+    return new Response(JSON.stringify({ items: [], error: 'تعذّر جلب الأخبار التقنية', generatedAt: new Date().toISOString() }), {
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  }
 }
 
 // ===== DASHBOARD DIRECT (Worker-native, no server.js) =====
@@ -376,17 +656,23 @@ async function fetchDashboardDirect(request) {
 
   try {
     // Fetch from direct endpoints
-    const [newsRes, sportsRes, weatherRes, prayerRes] = await Promise.allSettled([
+    const [newsRes, nationalRes, lfpRes, techRes, weatherRes, prayerRes, globalRes] = await Promise.allSettled([
       fetchNewsDirect(request),
       fetchNationalTeamNewsDirect(request),
+      fetchLfpDirect(request),
+      fetchTechDirect(request),
       fetchWeatherDirect(new Request('https://dzagent.app/api/dz-agent/weather?city=Algiers')),
       fetchPrayerDirect(new Request('https://dzagent.app/api/dz-agent/prayer?city=Algiers')),
+      fetchGlobalLeaguesDirect(request),
     ])
 
     const newsData = newsRes.status === 'fulfilled' ? await newsRes.value.json() : { items: [] }
-    const sportsData = sportsRes.status === 'fulfilled' ? await sportsRes.value.json() : { items: [] }
+    const nationalData = nationalRes.status === 'fulfilled' ? await nationalRes.value.json() : { items: [] }
+    const lfpData = lfpRes.status === 'fulfilled' ? await lfpRes.value.json() : null
+    const techData = techRes.status === 'fulfilled' ? await techRes.value.json() : { items: [] }
     const weatherData = weatherRes.status === 'fulfilled' ? await weatherRes.value.json() : {}
     const prayerData = prayerRes.status === 'fulfilled' ? await prayerRes.value.json() : {}
+    const globalData = globalRes.status === 'fulfilled' ? await globalRes.value.json() : { leagues: [] }
 
     const news = (newsData.items || []).slice(0, 10).map(item => ({
       title: item.title,
@@ -396,7 +682,7 @@ async function fetchDashboardDirect(request) {
       feedName: item.source || 'أخبار',
     }))
 
-    const sports = (sportsData.items || []).slice(0, 6).map(item => ({
+    const sports = (nationalData.items || []).slice(0, 6).map(item => ({
       title: item.title,
       link: item.link,
       source: item.source,
@@ -404,12 +690,23 @@ async function fetchDashboardDirect(request) {
       feedName: item.source || 'رياضة',
     }))
 
+    const tech = (techData.items || []).slice(0, 15).map(item => ({
+      title: item.title,
+      link: item.link,
+      source: item.source,
+      pubDate: item.pubDate || '',
+      feedName: item.source || 'تقنية',
+      category: item.category || 'تقنية',
+      trending_score: item.trending_score || 0,
+    }))
+
     const data = {
       news,
       sports,
-      tech: [],
+      tech,
       weather: weatherData.status === 'ok' ? [weatherData] : [],
-      lfp: null,
+      lfp: lfpData || null,
+      globalLeagues: globalData.leagues || [],
       fetchedAt: new Date().toISOString(),
     }
 

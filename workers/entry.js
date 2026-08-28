@@ -326,6 +326,114 @@ async function fetchNationalTeamNewsDirect(request) {
   }
 }
 
+
+
+// ===== GLOBAL LEAGUES DIRECT (Worker-native, no server.js) =====
+async function fetchGlobalLeaguesDirect(request) {
+  const requestUrl = new URL(request.url)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  }
+
+  return new Response(JSON.stringify({
+    leagues: [],
+    date: new Date().toISOString().split('T')[0],
+    fetchedAt: new Date().toISOString(),
+    source: 'unavailable',
+    status: 'unavailable',
+    message: 'بيانات الدوريات العالمية غير متاح حالياً'
+  }), {
+    headers: {
+      'content-type': 'application/json',
+      'cache-control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    }
+  })
+}
+
+// ===== DASHBOARD DIRECT (Worker-native, no server.js) =====
+async function fetchDashboardDirect(request) {
+  const requestUrl = new URL(request.url)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  }
+
+  try {
+    // Fetch from direct endpoints
+    const [newsRes, sportsRes, weatherRes, prayerRes] = await Promise.allSettled([
+      fetchNewsDirect(request),
+      fetchNationalTeamNewsDirect(request),
+      fetchWeatherDirect(new Request('https://dzagent.app/api/dz-agent/weather?city=Algiers')),
+      fetchPrayerDirect(new Request('https://dzagent.app/api/dz-agent/prayer?city=Algiers')),
+    ])
+
+    const newsData = newsRes.status === 'fulfilled' ? await newsRes.value.json() : { items: [] }
+    const sportsData = sportsRes.status === 'fulfilled' ? await sportsRes.value.json() : { items: [] }
+    const weatherData = weatherRes.status === 'fulfilled' ? await weatherRes.value.json() : {}
+    const prayerData = prayerRes.status === 'fulfilled' ? await prayerRes.value.json() : {}
+
+    const news = (newsData.items || []).slice(0, 10).map(item => ({
+      title: item.title,
+      link: item.link,
+      source: item.source,
+      pubDate: item.pubDate || '',
+      feedName: item.source || 'أخبار',
+    }))
+
+    const sports = (sportsData.items || []).slice(0, 6).map(item => ({
+      title: item.title,
+      link: item.link,
+      source: item.source,
+      pubDate: item.pubDate || '',
+      feedName: item.source || 'رياضة',
+    }))
+
+    const data = {
+      news,
+      sports,
+      tech: [],
+      weather: weatherData.status === 'ok' ? [weatherData] : [],
+      lfp: null,
+      fetchedAt: new Date().toISOString(),
+    }
+
+    return new Response(JSON.stringify(data), {
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    })
+  } catch (err) {
+    console.error('[Worker:Dashboard] Failed:', err.message)
+    return new Response(JSON.stringify({
+      news: [], sports: [], tech: [], weather: [], lfp: null,
+      error: 'تعذّر جلب بيانات لوحة التحكم', status: 'unavailable',
+      fetchedAt: new Date().toISOString()
+    }), {
+      status: 200, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+    })
+  }
+}
+
 // ===== WEATHER DIRECT (Worker-native, no server.js) =====
 const WORKER_WEATHER_CACHE = { data: null, ts: 0 }
 const WORKER_WEATHER_TTL = 10 * 60 * 1000 // 10 min
@@ -472,7 +580,7 @@ async function fetchPrayerDirect(request) {
     // Use aladhan API (free, no key)
     const method = 2 // Islamic Society of North America
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    const aladhanUrl = `https://api.aladhan.com/v1/timings/${date}?latitude=${coords.lat}&longitude=${coords.lon}&method=${method}&iso8601=true`
+    const aladhanUrl = `https://api.aladhan.com/v1/timings/${date}?latitude=${coords.lat}&longitude=${coords.lon}&method=${method}`
     const resp = await fetch(aladhanUrl, { headers: { 'User-Agent': 'DZ-Agent-Worker/1.0' }, signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 8000); return ctrl.signal })() })
     if (!resp.ok) throw new Error(`aladhan ${resp.status}`)
     const json = await resp.json()
@@ -845,6 +953,12 @@ export default {
       }
       if (url.pathname === '/api/national-team/news' && request.method === 'GET') {
         return fetchNationalTeamNewsDirect(request)
+      }
+      if (url.pathname === '/api/dz-agent/dashboard' && request.method === 'GET') {
+        return fetchDashboardDirect(request)
+      }
+      if (url.pathname === '/api/dz-agent/global-leagues' && request.method === 'GET') {
+        return fetchGlobalLeaguesDirect(request)
       }
 
       // Preserve the body for a Worker-native fallback. The Express bridge

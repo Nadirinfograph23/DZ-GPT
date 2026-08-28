@@ -464,77 +464,86 @@ async function fetchLfpDirect(request) {
   }
 
   try {
-    // Try lfp.dz via Jina reader (bypasses Cloudflare)
-    const jinaUrl = 'https://r.jina.ai/https://lfp.dz/ar/calendar'
-    const jinaResp = await fetch(jinaUrl, {
-      headers: { 'User-Agent': 'DZ-Agent-Worker/1.0', 'Accept': 'text/plain,text/markdown,*/*' },
-      signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 15000); return ctrl.signal })()
-    })
+    // Try Algerian league news from Google News RSS
+    const feeds = [
+      { name: 'Google الدوري الجزائري', url: 'https://news.google.com/rss/search?q=الدوري+الجزائري&hl=ar&gl=DZ&ceid=DZ:ar' },
+      { name: 'Google LFP', url: 'https://news.google.com/rss/search?q=ligue+1+algerie&hl=ar&gl=DZ&ceid=DZ:ar' },
+    ]
 
-    if (jinaResp.ok) {
-      const md = await jinaResp.text()
-      if (md && md.length > 200) {
-        const matches = []
-        const lines = md.split('\n')
-        for (let i = 0; i < lines.length && matches.length < 30; i++) {
-          const line = lines[i].trim()
-          if (line.startsWith('* ')) {
-            const parts = line.replace('* ', '').split('\s*-\s*')
-            if (parts.length >= 2) {
-              const home = parts[0].trim()
-              const awayParts = parts[1].split('\s+')
-              if (awayParts.length >= 2) {
-                const away = awayParts.slice(0, -1).join(' ')
-                const score = awayParts[awayParts.length - 1]
-                const scoreMatch = score.match(/(\d+)\s*-\s*(\d+)/)
-                if (home && away) {
-                  matches.push({
-                    round: 'Ligue 1',
-                    home,
-                    away,
-                    homeScore: scoreMatch ? parseInt(scoreMatch[1]) : null,
-                    awayScore: scoreMatch ? parseInt(scoreMatch[2]) : null,
-                    played: !!scoreMatch,
-                    date: '',
-                    time: '',
-                    link: 'https://lfp.dz/ar/calendar'
-                  })
-                }
-              }
-            }
+    const settled = await Promise.allSettled(
+      feeds.map(async (feed) => {
+        const response = await fetch(feed.url, {
+          headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*', 'User-Agent': 'DZ-Agent-Worker/1.0' },
+          signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 8000); return ctrl.signal })()
+        })
+        if (!response.ok) return []
+        const xml = await response.text()
+        return parseWorkerRss(xml, feed.name)
+      }),
+    )
+
+    const seen = new Set()
+    const articles = settled
+      .flatMap(result => result.status === 'fulfilled' ? result.value : [])
+      .filter(item => {
+        const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .sort((a, b) => {
+        const aTime = Date.parse(a.pubDate || '') || 0
+        const bTime = Date.parse(b.pubDate || '') || 0
+        return bTime - aTime
+      })
+      .slice(0, 10)
+
+    // Also try to get matches from kooora.com via Jina
+    let matches = []
+    try {
+      const koooraUrl = 'https://r.jina.ai/https://www.kooora.com/%D9%83%D8%B1%D8%A9-%D8%A7%D9%84%D9%82%D8%AF%D9%85/%D9%85%D8%A8%D8%A7%D8%B1%D9%8A%D8%A7%D8%AA-%D8%A7%D9%84%D9%8A%D9%88%D9%85'
+      const koooraResp = await fetch(koooraUrl, {
+        headers: { 'User-Agent': 'DZ-Agent-Worker/1.0', 'Accept': 'text/plain,text/markdown,*/*' },
+        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 15000); return ctrl.signal })()
+      })
+      if (koooraResp.ok) {
+        const md = await koooraResp.text()
+        if (md && md.length > 200) {
+          const matchRegex = /\*\s+([^\n!*]+?)\n[^\n]*?(\d+)\s*-\s*(\d+)[^\n]*\n\n([^\n!*]+)/g
+          let m
+          while ((m = matchRegex.exec(md)) !== null && matches.length < 20) {
+            matches.push({
+              round: 'Ligue 1',
+              home: m[1].trim(),
+              away: m[4].trim(),
+              homeScore: parseInt(m[2]),
+              awayScore: parseInt(m[3]),
+              played: true,
+              date: '',
+              time: '',
+              link: 'https://www.kooora.com/'
+            })
           }
         }
-
-        if (matches.length > 0) {
-          return new Response(JSON.stringify({
-            matches,
-            articles: [],
-            fetchedAt: new Date().toISOString(),
-            source: 'lfp.dz',
-            status: 'ok'
-          }), {
-            headers: {
-              'content-type': 'application/json',
-              'cache-control': 'no-store',
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET, OPTIONS',
-              'Access-Control-Allow-Headers': 'Content-Type',
-            }
-          })
-        }
       }
+    } catch (e) {
+      console.warn('[Worker:LFP] kooora fallback failed:', e.message)
     }
 
-    // Fallback: return empty with clear message
     return new Response(JSON.stringify({
-      matches: [],
-      articles: [],
+      matches,
+      articles,
       fetchedAt: new Date().toISOString(),
-      source: 'lfp.dz',
-      status: 'unavailable',
-      message: 'لا توجد مباريات حالياً'
+      source: matches.length > 0 ? 'kooora.com' : 'google-news',
+      status: 'ok'
     }), {
-      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
     })
   } catch (err) {
     console.error('[Worker:LFP] Failed:', err.message)

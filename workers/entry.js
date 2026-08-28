@@ -371,7 +371,7 @@ async function fetchGlobalLeaguesDirect(request) {
           if (!leagueMd) continue
           
           const matches = []
-          const matchRegex = /\*\s+([^\n!*]+?)\n[^\n]*?(\d+)\s*-\s*(\d+)[^\n]*\n\n([^\n!*]+)/g
+          const matchRegex = /\*\s+([^\n!*]+?)\n[^\n]*?(\d+)\s*-\s*(\d+)[^\n]*\n\n([^\n!*]+)/gs
           let m
           while ((m = matchRegex.exec(leagueMd[0])) !== null && matches.length < 8) {
             matches.push({
@@ -464,80 +464,63 @@ async function fetchLfpDirect(request) {
   }
 
   try {
-    // Try lfp.dz directly
-    const [calRes, articlesRes] = await Promise.allSettled([
-      fetch('https://lfp.dz/ar/calendar', { 
-        headers: { 'User-Agent': 'DZ-Agent-Worker/1.0', 'Accept': 'text/html,application/xhtml+xml,*/*' },
-        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 12000); return ctrl.signal })()
-      }),
-      fetch('https://lfp.dz/ar/articles', { 
-        headers: { 'User-Agent': 'DZ-Agent-Worker/1.0', 'Accept': 'text/html,application/xhtml+xml,*/*' },
-        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 12000); return ctrl.signal })()
-      }),
-    ])
+    // Try jdwel.com Algerian league via Jina reader (bypasses Cloudflare)
+    const jinaUrl = 'https://r.jina.ai/https://jdwel.com/2025-2026-algerian-ligue-1-fixtures/'
+    const jinaResp = await fetch(jinaUrl, {
+      headers: { 'User-Agent': 'DZ-Agent-Worker/1.0', 'Accept': 'text/plain,text/markdown,*/*' },
+      signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 15000); return ctrl.signal })()
+    })
 
-    const calHtml = calRes.status === 'fulfilled' && calRes.value.ok ? await calRes.value.text() : ''
-    const articlesHtml = articlesRes.status === 'fulfilled' && articlesRes.value.ok ? await articlesRes.value.text() : ''
+    if (jinaResp.ok) {
+      const md = await jinaResp.text()
+      if (md && md.length > 200) {
+        const matches = []
+        const fixtureRegex = /\*\s+([^\n!*]+?)\n[^\n]*?(\d+)\s*-\s*(\d+)[^\n]*\n\n([^\n!*]+)/g
+        let m
+        while ((m = fixtureRegex.exec(md)) !== null && matches.length < 30) {
+          matches.push({
+            round: 'Ligue 1',
+            home: m[1].trim(),
+            away: m[4].trim(),
+            homeScore: parseInt(m[2]),
+            awayScore: parseInt(m[3]),
+            played: true,
+            date: '',
+            time: '',
+            link: 'https://jdwel.com/2025-2026-algerian-ligue-1-fixtures/'
+          })
+        }
 
-    // Simple parsing for matches
-    const matches = []
-    if (calHtml) {
-      const matchRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi
-      let match
-      while ((match = matchRegex.exec(calHtml)) !== null && matches.length < 20) {
-        const row = match[1]
-        const teams = row.match(/<td[^>]*>([^<]*)<\/td>/gi)
-        if (teams && teams.length >= 3) {
-          const home = teams[0]?.replace(/<[^>]+>/g, '').trim() || ''
-          const away = teams[2]?.replace(/<[^>]+>/g, '').trim() || ''
-          const score = teams[1]?.replace(/<[^>]+>/g, '').trim() || ''
-          if (home && away) {
-            const scoreMatch = score.match(/(\d+)\s*-\s*(\d+)/)
-            matches.push({
-              round: 'Ligue 1',
-              home,
-              away,
-              homeScore: scoreMatch ? parseInt(scoreMatch[1]) : null,
-              awayScore: scoreMatch ? parseInt(scoreMatch[2]) : null,
-              played: !!scoreMatch,
-              date: '',
-              time: '',
-              link: 'https://lfp.dz/ar/calendar'
-            })
-          }
+        if (matches.length > 0) {
+          return new Response(JSON.stringify({
+            matches,
+            articles: [],
+            fetchedAt: new Date().toISOString(),
+            source: 'jdwel.com',
+            status: 'ok'
+          }), {
+            headers: {
+              'content-type': 'application/json',
+              'cache-control': 'no-store',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            }
+          })
         }
       }
     }
 
-    // Simple parsing for articles
-    const articles = []
-    if (articlesHtml) {
-      const articleRegex = /<h[23][^>]*>([^<]*)<\/h[23]>/gi
-      let article
-      while ((article = articleRegex.exec(articlesHtml)) !== null && articles.length < 10) {
-        articles.push({
-          title: article[1].trim(),
-          link: 'https://lfp.dz/ar/articles',
-          date: '',
-          source: 'lfp.dz'
-        })
-      }
-    }
-
+    // Fallback: return empty with clear message
     return new Response(JSON.stringify({
-      matches,
-      articles,
+      matches: [],
+      articles: [],
       fetchedAt: new Date().toISOString(),
-      source: 'lfp.dz',
-      status: 'ok'
+      source: 'jdwel.com',
+      status: 'unavailable',
+      message: 'لا توجد مباريات حالياً'
     }), {
-      headers: {
-        'content-type': 'application/json',
-        'cache-control': 'no-store',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      }
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
     })
   } catch (err) {
     console.error('[Worker:LFP] Failed:', err.message)
@@ -545,7 +528,7 @@ async function fetchLfpDirect(request) {
       matches: [],
       articles: [],
       fetchedAt: new Date().toISOString(),
-      source: 'lfp.dz',
+      source: 'error',
       status: 'unavailable'
     }), {
       headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }

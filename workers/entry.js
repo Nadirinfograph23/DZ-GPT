@@ -464,11 +464,11 @@ async function fetchLfpDirect(request) {
   }
 
   try {
-    // Algerian league from multiple RSS sources
     const feeds = [
       { name: 'Google الدوري الجزائري', url: 'https://news.google.com/rss/search?q=الدوري+الجزائري&hl=ar&gl=DZ&ceid=DZ:ar' },
       { name: 'Google LFP', url: 'https://news.google.com/rss/search?q=ligue+1+algerie&hl=ar&gl=DZ&ceid=DZ:ar' },
       { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
+      { name: 'Sport DZ', url: 'https://www.sport-dz.com/feed/' },
     ]
 
     const settled = await Promise.allSettled(
@@ -591,7 +591,14 @@ async function fetchTechDirect(request) {
       })
       .slice(0, 15)
 
-    const data = { items, generatedAt: new Date().toISOString() }
+    // Add category and trending score
+    const categorizedItems = items.map(item => ({
+      ...item,
+      category: item.category || classifyTechArticle(item.title, item.description),
+      trending_score: item.trending_score || computeTrendingScore(item, items),
+    }))
+
+    const data = { items: categorizedItems, generatedAt: new Date().toISOString() }
     WORKER_TECH_CACHE.data = data
     WORKER_TECH_CACHE.ts = now
     return new Response(JSON.stringify(data), {

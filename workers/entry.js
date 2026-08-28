@@ -347,7 +347,7 @@ async function fetchGlobalLeaguesDirect(request) {
     const bypassCache = requestUrl.searchParams.get('bypassCache') === '1' || requestUrl.searchParams.get('refresh') === '1'
     
     // Try fetching from jdwel.com via Jina reader (bypasses Cloudflare)
-    const jinaUrl = `https://r.jina.ai/https://jdwel.com/matches/?date=${dateStr}`
+    const jinaUrl = `https://r.jina.ai/disabled/https://jdwel.com/matches/?date=${dateStr}`
     const jinaResp = await fetch(jinaUrl, {
       headers: { 'User-Agent': 'DZ-Agent-Worker/1.0', 'Accept': 'text/plain,text/markdown,*/*' },
       signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 15000); return ctrl.signal })()

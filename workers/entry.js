@@ -344,73 +344,94 @@ async function fetchGlobalLeaguesDirect(request) {
 
   try {
     const dateStr = new Date().toISOString().split('T')[0]
-    const bypassCache = requestUrl.searchParams.get('bypassCache') === '1' || requestUrl.searchParams.get('refresh') === '1'
     
-    // Try fetching from jdwel.com via Jina reader (bypasses Cloudflare)
-    const jinaUrl = `https://jdwel.com/matches/?date=${dateStr}`
-    const jinaResp = await fetch(jinaUrl, {
-      headers: { 'User-Agent': 'DZ-Agent-Worker/1.0', 'Accept': 'text/plain,text/markdown,*/*' },
-      signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 15000); return ctrl.signal })()
-    })
-    
-    if (jinaResp.ok) {
-      const md = await jinaResp.text()
-      if (md && md.length > 200) {
-        // Parse top-5 European leagues from markdown
-        const leagues = []
-        const leagueMatchers = [
-          { key: 'Champions League', match: ['دوري أبطال أوروبا', 'champions league'] },
-          { key: 'Premier League', match: ['الدوري الإنجليزي الممتاز', 'premier league'] },
-          { key: 'La Liga', match: ['الدوري الإسباني', 'la liga'] },
-          { key: 'Serie A', match: ['الدوري الإيطالي', 'serie a'] },
-          { key: 'Bundesliga', match: ['الدوري الألماني', 'bundesliga'] },
-        ]
-        
-        for (const matcher of leagueMatchers) {
-          const leagueMd = md.match(new RegExp(`## ${matcher.match[0]}[\s\S]*?(?=## |$)`, 'i'))
-          if (!leagueMd) continue
-          
-          const matches = []
-          const matchRegex = /\*\s+([^\n!*]+?)\n[^\n]*?(\d+)\s*-\s*(\d+)[^\n]*\n\n([^\n!*]+)/gs
-          let m
-          while ((m = matchRegex.exec(leagueMd[0])) !== null && matches.length < 8) {
-            matches.push({
-              homeTeam: m[1].trim(),
-              awayTeam: m[4].trim(),
-              homeScore: parseInt(m[2]),
-              awayScore: parseInt(m[3]),
-              statusType: 'finished',
-              startTime: '',
-              link: 'https://jdwel.com/today/'
-            })
-          }
-          
-          if (matches.length > 0) {
-            leagues.push({ name: matcher.key, matches })
-          }
-        }
-        
-        if (leagues.length > 0) {
-          return new Response(JSON.stringify({
-            leagues,
-            date: dateStr,
-            fetchedAt: new Date().toISOString(),
-            source: 'jdwel.com',
-            status: 'ok'
-          }), {
-            headers: {
-              'content-type': 'application/json',
-              'cache-control': 'no-store',
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET, OPTIONS',
-              'Access-Control-Allow-Headers': 'Content-Type',
-            }
-          })
-        }
+    // Try multiple RSS sources for global leagues
+    const feeds = [
+      { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
+      { name: 'Google Premier League', url: 'https://news.google.com/rss/search?q=premier+league&hl=en&gl=US&ceid=US:en' },
+      { name: 'Google La Liga', url: 'https://news.google.com/rss/search?q=la+liga&hl=en&gl=US&ceid=US:en' },
+      { name: 'Google Champions League', url: 'https://news.google.com/rss/search?q=champions+league&hl=en&gl=US&ceid=US:en' },
+      { name: 'Google Serie A', url: 'https://news.google.com/rss/search?q=serie+a&hl=en&gl=US&ceid=US:en' },
+      { name: 'Google Bundesliga', url: 'https://news.google.com/rss/search?q=bundesliga&hl=en&gl=US&ceid=US:en' },
+    ]
+
+    const settled = await Promise.allSettled(
+      feeds.map(async (feed) => {
+        const response = await fetch(feed.url, {
+          headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*', 'User-Agent': 'DZ-Agent-Worker/1.0' },
+          signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 8000); return ctrl.signal })()
+        })
+        if (!response.ok) return []
+        const xml = await response.text()
+        return parseWorkerRss(xml, feed.name)
+      }),
+    )
+
+    const seen = new Set()
+    const items = settled
+      .flatMap(result => result.status === 'fulfilled' ? result.value : [])
+      .filter(item => {
+        const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .sort((a, b) => {
+        const aTime = Date.parse(a.pubDate || '') || 0
+        const bTime = Date.parse(b.pubDate || '') || 0
+        return bTime - aTime
+      })
+      .slice(0, 30)
+
+    // Group by league
+    const leagueKeywords = {
+      'Champions League': ['champions league', 'دوري أبطال أوروبا', 'ucl'],
+      'Premier League': ['premier league', 'الدوري الإنجليزي', 'epl'],
+      'La Liga': ['la liga', 'الدوري الإسباني', 'laliga'],
+      'Serie A': ['serie a', 'الدوري الإيطالي'],
+      'Bundesliga': ['bundesliga', 'الدوري الألماني'],
+    }
+
+    const leagues = []
+    for (const [leagueName, keywords] of Object.entries(leagueKeywords)) {
+      const leagueItems = items.filter(item => 
+        keywords.some(kw => item.title.toLowerCase().includes(kw))
+      )
+      if (leagueItems.length > 0) {
+        leagues.push({
+          name: leagueName,
+          matches: leagueItems.slice(0, 8).map(item => ({
+            homeTeam: item.title.split(' - ')[0] || item.title,
+            awayTeam: item.title.split(' - ')[1] || '',
+            homeScore: null,
+            awayScore: null,
+            statusType: 'scheduled',
+            startTime: item.pubDate || '',
+            link: item.link || '',
+            description: item.description || ''
+          }))
+        })
       }
     }
-    
-    // Fallback: return empty with clear message
+
+    if (leagues.length > 0) {
+      return new Response(JSON.stringify({
+        leagues,
+        date: dateStr,
+        fetchedAt: new Date().toISOString(),
+        source: 'rss-feeds',
+        status: 'ok'
+      }), {
+        headers: {
+          'content-type': 'application/json',
+          'cache-control': 'no-store',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        }
+      })
+    }
+
     return new Response(JSON.stringify({
       leagues: [],
       date: dateStr,

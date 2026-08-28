@@ -464,10 +464,11 @@ async function fetchLfpDirect(request) {
   }
 
   try {
-    // Try Algerian league news from Google News RSS
+    // Algerian league from multiple RSS sources
     const feeds = [
       { name: 'Google الدوري الجزائري', url: 'https://news.google.com/rss/search?q=الدوري+الجزائري&hl=ar&gl=DZ&ceid=DZ:ar' },
       { name: 'Google LFP', url: 'https://news.google.com/rss/search?q=ligue+1+algerie&hl=ar&gl=DZ&ceid=DZ:ar' },
+      { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
     ]
 
     const settled = await Promise.allSettled(
@@ -496,45 +497,13 @@ async function fetchLfpDirect(request) {
         const bTime = Date.parse(b.pubDate || '') || 0
         return bTime - aTime
       })
-      .slice(0, 10)
-
-    // Also try to get matches from kooora.com via Jina
-    let matches = []
-    try {
-      const koooraUrl = 'https://r.jina.ai/https://www.kooora.com/%D9%83%D8%B1%D8%A9-%D8%A7%D9%84%D9%82%D8%AF%D9%85/%D9%85%D8%A8%D8%A7%D8%B1%D9%8A%D8%A7%D8%AA-%D8%A7%D9%84%D9%8A%D9%88%D9%85'
-      const koooraResp = await fetch(koooraUrl, {
-        headers: { 'User-Agent': 'DZ-Agent-Worker/1.0', 'Accept': 'text/plain,text/markdown,*/*' },
-        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 15000); return ctrl.signal })()
-      })
-      if (koooraResp.ok) {
-        const md = await koooraResp.text()
-        if (md && md.length > 200) {
-          const matchRegex = /\*\s+([^\n!*]+?)\n[^\n]*?(\d+)\s*-\s*(\d+)[^\n]*\n\n([^\n!*]+)/g
-          let m
-          while ((m = matchRegex.exec(md)) !== null && matches.length < 20) {
-            matches.push({
-              round: 'Ligue 1',
-              home: m[1].trim(),
-              away: m[4].trim(),
-              homeScore: parseInt(m[2]),
-              awayScore: parseInt(m[3]),
-              played: true,
-              date: '',
-              time: '',
-              link: 'https://www.kooora.com/'
-            })
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[Worker:LFP] kooora fallback failed:', e.message)
-    }
+      .slice(0, 15)
 
     return new Response(JSON.stringify({
-      matches,
+      matches: [],
       articles,
       fetchedAt: new Date().toISOString(),
-      source: matches.length > 0 ? 'kooora.com' : 'google-news',
+      source: 'rss-feeds',
       status: 'ok'
     }), {
       headers: {
@@ -569,6 +538,8 @@ const WORKER_TECH_FEEDS = [
   { name: 'Menabytes', url: 'https://www.menabytes.com/feed/' },
   { name: 'Google AI', url: 'https://news.google.com/rss/search?q=ذكاء+اصطناعي&hl=ar&gl=US&ceid=US:ar' },
   { name: 'Google Tech', url: 'https://news.google.com/rss/search?q=تكنولوجيا&hl=ar&gl=US&ceid=US:ar' },
+  { name: 'BBC Technology', url: 'https://feeds.bbci.co.uk/news/technology/rss.xml' },
+  { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
 ]
 
 async function fetchTechDirect(request) {

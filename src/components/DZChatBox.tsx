@@ -396,7 +396,7 @@ const _DZ_PHASES: Record<string, string[]> = {
 }
 function _detectPhaseCategory(msg: string): keyof typeof _DZ_PHASES {
   const t = msg.toLowerCase()
-  if (/أخبار|خبر|مستجدات|عاجل|اليوم.*الجزائر|الجزائر.*اليوم/.test(t)) return 'news'
+  if (/أخبار|خبر|مستجدات|عاجل|اليوم.*الجزائر|الجزائر.*اليوم|ذكاء\s*اصطناعي.*\b(?:أخبار|أسبوع|جديد)|أخبار.*(?:تقنية|تكنولوجيا|ذكاء|AI)/i.test(t)) return 'news'
   if (/سعر|صرف|دولار|يورو|دينار|عملة|ثمن.*دولار|قداش.*دولار|صرف.*اليوم/.test(t)) return 'currency'
   if (/مباراة|مباريات|كرة|دوري|فريق|ماتش|نتيجة.*مبار|ترتيب.*دوري/.test(t)) return 'sports'
   if (/طقس|حرارة|أمطار|جو.*اليوم|تساقط|رياح/.test(t)) return 'weather'
@@ -7263,8 +7263,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
 
     // كشف الأخبار
     const _isNewsQ = !_isWeatherQ && !_isSportsQ && !_isPersonQ && (
-      /أخبار|خبر|مستجدات|عاجل|آخر\s+الأحداث|أحدث\s+الأخبار/.test(_t) ||
-      /اليوم.*الجزائر|الجزائر.*اليوم|الجزائر.*اليوم/.test(_t)
+      /أخبار|خبر|مستجدات|عاجل|آخر\s+الأحداث|أحدث\s+الأخبار|أخبار.*(?:تقنية|تكنولوجيا|ذكاء)/.test(_t) ||
+      /اليوم.*الجزائر|الجزائر.*اليوم|الجزائر.*اليوم/.test(_t) ||
+      /ذكاء\s*اصطناعي.*\b(?:أخبار|أسبوع|جديد|مستجدات)\b/i.test(_t)
     )
 
     if (_isWeatherQ) {

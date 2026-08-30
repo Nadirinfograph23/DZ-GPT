@@ -3850,7 +3850,8 @@ function filterFreshItems(items, maxAgeDays = 60) {
 function buildFreshGNRssUrl(query, lang = 'ar', maxAgeDays = 30) {
   const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
   const afterStr = cutoff.toISOString().split('T')[0] // YYYY-MM-DD
-  const hl = lang === 'ar' ? 'ar&gl=DZ&ceid=DZ:ar' : 'en&gl=US&ceid=US:en'
+  // allow passing full hl string (e.g. "ar&gl=ALL&ceid=ALL:ar") for global search
+  const hl = lang.includes('&') ? lang : (lang === 'ar' ? 'ar&gl=DZ&ceid=DZ:ar' : 'en&gl=US&ceid=US:en')
   return `https://news.google.com/rss/search?q=${encodeURIComponent(query + ' after:' + afterStr)}&hl=${hl}`
 }
 
@@ -6572,11 +6573,17 @@ function buildOptimizedQueries(query, intent) {
   const year = new Date().getFullYear()
   const isArabic = /[\u0600-\u06FF]/.test(query)
 
+  // كشف إذا كان السؤال عن الذكاء الاصطناعي تحديداً
+  const isAIQuery = /ذكاء\s*اصطناعي|ai|artificial\s*intelligence|gpt|chatgpt|gemini|claude|llm|deepseek/i.test(query)
+  const isTechNewsQuery = isAIQuery || /أخبار.*تقنية|تقنية.*أخبار|تكنولوجيا|tech.*news|technology/i.test(query)
+
   const suffixMap = {
     sports:      isArabic ? `كرة القدم نتائج ${year}` : `football results ${year}`,
     economy:     isArabic ? `الاقتصاد الجزائري أخبار ${year}` : `Algeria economy latest ${year}`,
     politics:    isArabic ? `سياسة ${year}` : `politics ${year}`,
-    tech:        isArabic ? `تكنولوجيا ${year}` : `technology ${year}`,
+    tech:        isArabic
+      ? (isAIQuery ? `أخبار الذكاء الاصطناعي ${year}` : `تكنولوجيا أخبار ${year}`)
+      : `technology ${year}`,
     news:        isArabic ? `أخبار ${year}` : `news ${year}`,
     celebrities: isArabic ? `أخبار فنانين مشاهير ${year}` : `celebrity news latest ${year}`,
     incidents:   isArabic ? `حادثة أخبار عاجلة ${year}` : `incident breaking news ${year}`,
@@ -6587,8 +6594,16 @@ function buildOptimizedQueries(query, intent) {
   const cseQuery  = `${query} ${suffix}`
 
   const rssLang = isArabic ? 'ar' : 'en'
-  // Always restrict to the last 30 days using the `after:` operator
-  const rssQuery = buildFreshGNRssUrl(query, rssLang, 30)
+
+  // للأخبار التقنية/الذكاء الاصطناعي — نبحث عالمياً لا جزائرياً فقط
+  const isAIorTech = intent.primary === 'tech' || isAIQuery || isTechNewsQuery
+  let rssQuery
+  if (isAIorTech && isArabic) {
+    // AI/tech queries → global Arabic results, not DZ-only
+    rssQuery = buildFreshGNRssUrl(query, 'ar&gl=ALL&ceid=ALL:ar', 14)
+  } else {
+    rssQuery = buildFreshGNRssUrl(query, rssLang, 30)
+  }
 
   const enMap = { sports: 'sport football match result', economy: 'economy finance', politics: 'politics government', tech: 'technology AI', news: 'news', celebrities: 'celebrity news', incidents: 'incident breaking news', general: '' }
   const enSuffix = enMap[intent.primary] || ''
@@ -8924,13 +8939,13 @@ const SPORTS_FEEDS_DASHBOARD = [
 // المصادر العربية المتخصصة في التقنية، الذكاء الاصطناعي، والرقمنة
 const TECH_FEEDS_DASHBOARD = [
   // ── مصادر عربية متخصصة في التقنية ──────────────────────────────────────
-  { name: 'تك عربي',            url: 'https://techarabi.com/feed/' },
   { name: 'Menabytes تقنية MENA', url: 'https://www.menabytes.com/feed/' },
-  // ── Google News عربي — ذكاء اصطناعي وتكنولوجيا ──────────────────────────
   { name: 'Google ذكاء اصطناعي',  url: 'https://news.google.com/rss/search?q=%D8%B0%D9%83%D8%A7%D8%A1+%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: 'Google تكنولوجيا',     url: 'https://news.google.com/rss/search?q=%D8%AA%D9%83%D9%86%D9%88%D9%84%D9%88%D8%AC%D9%8A%D8%A7&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google ChatGPT Gemini', url: 'https://news.google.com/rss/search?q=ChatGPT+Gemini+AI+2025&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google ChatGPT Gemini AI', url: 'https://news.google.com/rss/search?q=ChatGPT+Gemini+AI+2026&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: 'Google تحول رقمي',     url: 'https://news.google.com/rss/search?q=%D8%AA%D8%AD%D9%88%D9%84+%D8%B1%D9%82%D9%85%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // ── مصادر عربية إضافية موثوقة ──────────────────────────────────────────
+  { name: 'Google أخبار التقنية', url: 'https://news.google.com/rss/search?q=%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1+%D8%A7%D9%84%D8%AA%D9%82%D9%86%D9%8A%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 
 // Some specialist sites intermittently return HTML instead of RSS. Keep an

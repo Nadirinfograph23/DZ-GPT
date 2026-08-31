@@ -4,7 +4,7 @@ import {
   Newspaper, Trophy, Wind, Droplets, ExternalLink, RefreshCw,
   MapPin, Thermometer, Cpu, TrendingUp, Navigation, Eye,
   BookOpen, Moon, Sunrise, Sun, CloudSun, Sunset, CloudMoon,
-  Cloud, CloudRain, CloudSnow, CloudFog, Globe, DollarSign, ArrowLeftRight, BarChart2,
+  Cloud, Globe, DollarSign, ArrowLeftRight, BarChart2,
   CalendarDays, CheckCircle2, Radio, Layers, Clock,
 } from 'lucide-react'
 import '../styles/dz-dashboard.css'
@@ -31,7 +31,7 @@ interface WeatherData {
   temp_min?: number
   temp_max?: number
   condition: string | null
-  icon: string | number | null
+  icon: string | null
   humidity?: number
   wind?: number
   visibility?: number | null
@@ -53,7 +53,7 @@ interface DashboardData {
   lfp?: {
     matches: MatchItem[]
     articles: { title: string; link: string; date?: string }[]
-    fetchedAt?: number
+    fetchedAt?: string | number
     source?: string
   } | null
   fetchedAt: string
@@ -69,13 +69,6 @@ interface MatchItem {
   date?: string
   time?: string
   link?: string
-}
-
-function normalizePrayerTime(value: unknown): string {
-  if (typeof value !== 'string') return '--:--'
-  const match = value.match(/T?(\d{1,2}):(\d{2})/)
-  if (!match) return value
-  return `${match[1].padStart(2, '0')}:${match[2]}`
 }
 
 interface CurrencyData {
@@ -186,32 +179,13 @@ const CURRENCY_NAMES: Record<string, string> = {
   JPY: 'ين ياباني',
 }
 
-type WeatherKind = 'sunny' | 'cloudy' | 'rainy' | 'snowy' | 'foggy' | 'stormy'
-
-function getWeatherKind(icon: string | number | null, condition?: string | null): WeatherKind {
-  const value = String(icon ?? '').toLowerCase()
-  const text = String(condition ?? '').toLowerCase()
-  if (value === '0' || value.startsWith('01') || /صحو|مشمس|sun|clear/.test(text)) return 'sunny'
-  if (/45|48|fog|ضباب/.test(value + text)) return 'foggy'
-  if (/95|96|99|storm|عاصف|رعد/.test(value + text)) return 'stormy'
-  if (/13|71|73|75|77|85|86|snow|ثلج/.test(value + text)) return 'snowy'
-  if (/09|10|51|53|55|56|57|61|63|65|66|67|80|81|82|rain|مطر|ممطر|زخ/.test(value + text)) return 'rainy'
-  return 'cloudy'
-}
-
-function getWeatherBg(icon: string | number | null, condition?: string | null) {
-  return `weather-${getWeatherKind(icon, condition)}`
-}
-
-function WeatherIcon({ icon, condition }: { icon: string | number | null; condition?: string | null }) {
-  const kind = getWeatherKind(icon, condition)
-  const props = { size: 42, strokeWidth: 1.6, 'aria-hidden': true as const }
-  if (kind === 'sunny') return <Sun {...props} />
-  if (kind === 'rainy') return <CloudRain {...props} />
-  if (kind === 'snowy') return <CloudSnow {...props} />
-  if (kind === 'foggy') return <CloudFog {...props} />
-  if (kind === 'stormy') return <CloudRain {...props} />
-  return <CloudSun {...props} />
+function getWeatherBg(icon: string | null) {
+  if (!icon) return 'weather-default'
+  if (icon.startsWith('01')) return 'weather-sunny'
+  if (icon.startsWith('02') || icon.startsWith('03') || icon.startsWith('04')) return 'weather-cloudy'
+  if (icon.startsWith('09') || icon.startsWith('10')) return 'weather-rainy'
+  if (icon.startsWith('13')) return 'weather-snowy'
+  return 'weather-default'
 }
 
 function formatPubDate(dateStr: string) {
@@ -230,7 +204,7 @@ function getArName(enName: string) {
   return WILAYAS.find(w => w.en === enName)?.ar || enName
 }
 
-type DashboardContext = { priority: 'weather'; city: string; cityAr?: string }
+type DashboardContext = { priority: 'weather'; city: string }
 
 type ModalStep = 'ask' | 'loading' | 'denied' | 'error'
 
@@ -477,12 +451,35 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
     setLoading(true)
     try {
       const url = opts.force ? '/api/dz-agent/dashboard?bypassCache=1' : '/api/dz-agent/dashboard'
-      const result = await withRetry(async () => {
-        const r = await fetch(url)
-        if (!r.ok) throw new Error(`Dashboard API error: ${r.status}`)
-        return r.json()
-      }, 1)
-      setData(result)
+      const leagueUrl = opts.force ? '/api/dz-agent/lfp?bypassCache=1' : '/api/dz-agent/lfp'
+      const [dashboardResult, leagueResult] = await Promise.all([
+        withRetry(async () => {
+          const r = await fetch(url)
+          if (!r.ok) throw new Error(`Dashboard API error: ${r.status}`)
+          return r.json()
+        }, 1),
+        fetch(leagueUrl).then(r => {
+          if (!r.ok) throw new Error(`League API error: ${r.status}`)
+          return r.json()
+        }),
+      ])
+      // The official LFP page can be slower than news/weather. Keep the
+      // league card independent so available fixtures are never hidden by a
+      // dashboard-wide timeout.
+      const league = leagueResult?.matches?.length || leagueResult?.articles?.length
+        ? leagueResult
+        : dashboardResult?.lfp || null
+      const leagueNews = (league?.articles || []).slice(0, 3).map((item: { title: string; link?: string; date?: string }) => ({
+        title: item.title,
+        link: item.link || 'https://lfp.dz',
+        pubDate: item.date || '',
+        feedName: '🏆 رابطة LFP',
+      }))
+      setData({
+        ...dashboardResult,
+        lfp: league,
+        sports: leagueNews,
+      })
     } catch (err) {
       console.error('[DZDashboard] loadDashboard failed:', err)
     } finally {
@@ -521,12 +518,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
         if (!r.ok) throw new Error(`Prayer API error: ${r.status}`)
         return r.json()
       }, 1)
-       if (result?.times && typeof result.times === 'object') {
-         result.times = Object.fromEntries(
-           Object.entries(result.times).map(([name, time]) => [name, normalizePrayerTime(time)])
-         )
-       }
-       setPrayerData(result)
+      setPrayerData(result)
     } catch (err) {
       console.error('[DZDashboard] loadPrayer failed:', err)
       setPrayerData(null)
@@ -820,16 +812,20 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
               </div>
             ) : weatherData && weatherData.temp !== null ? (
               <div
-                className={`dzd-weather-main-card ${getWeatherBg(weatherData.icon, weatherData.condition)}`}
-                onClick={() => onSend(`حالة الطقس في ${getArName(selectedCity)} اليوم`, { priority: 'weather', city: selectedCity, cityAr: getArName(selectedCity) })}
+                className={`dzd-weather-main-card ${getWeatherBg(weatherData.icon)}`}
+                onClick={() => onSend(`حالة الطقس في ${getArName(selectedCity)} اليوم`, { priority: 'weather', city: selectedCity })}
               >
                 <div className="dzd-wmc-header">
                   <div className="dzd-wmc-city">
                     <MapPin size={12} /> {getArName(selectedCity)}
                   </div>
-                  <span className={`dzd-wmc-icon dzd-wmc-icon--${getWeatherKind(weatherData.icon, weatherData.condition)}`} title={weatherData.condition || 'حالة الطقس'}>
-                    <WeatherIcon icon={weatherData.icon} condition={weatherData.condition} />
-                  </span>
+                  {weatherData.icon && (
+                    <img
+                      src={`https://openweathermap.org/img/wn/${weatherData.icon}@2x.png`}
+                      alt=""
+                      className="dzd-wmc-icon"
+                    />
+                  )}
                 </div>
                 <div className="dzd-wmc-temp-row">
                   <span className="dzd-wmc-temp">{weatherData.temp}°</span>
@@ -897,7 +893,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
             ) : (
               <div className="dzd-news-list">
                 {(data.news).map((item, i) => (
-                  <div key={i} className="dzd-news-card" onClick={() => onSend(`لخّص لي هذا الخبر وأعطني أبرز تفاصيله:\n"${item.title}"`)}>
+                  <div key={i} className="dzd-news-card" onClick={() => onSend(`اخبار: ${item.title}`)}>
                     <div className="dzd-news-card-left">
                       <span className="dzd-news-source"><Newspaper size={9} /> {item.feedName}</span>
                       <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
@@ -989,7 +985,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                 {(data?.sports || []).length > 0 && (
                   <div className="dzd-news-list dzd-sports-news-list">
                     {(data?.sports || []).slice(0, 5).map((item, i) => (
-                      <div key={i} className="dzd-news-card dzd-news-card--sport" onClick={() => onSend(`أعطني ملخصاً عن هذا الخبر الرياضي:\n"${item.title}"`)}>
+                      <div key={i} className="dzd-news-card dzd-news-card--sport" onClick={() => onSend(`رياضة: ${item.title}`)}>
                         <div className="dzd-news-card-left">
                           <span className="dzd-news-source dzd-news-source--sport"><Trophy size={9} /> {item.feedName}</span>
                           <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
@@ -1277,7 +1273,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
             ) : (
               <div className="dzd-news-list">
                 {(data.tech).map((item, i) => (
-                  <div key={i} className="dzd-news-card dzd-news-card--tech" onClick={() => onSend(`أعطني ملخصاً عن هذا الخبر التقني:\n"${item.title}"`)}>
+                  <div key={i} className="dzd-news-card dzd-news-card--tech" onClick={() => onSend(`تقنية: ${item.title}`)}>
                     <div className="dzd-news-card-left">
                       <span className="dzd-news-source dzd-news-source--tech"><Cpu size={9} /> {item.feedName}</span>
                       <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>

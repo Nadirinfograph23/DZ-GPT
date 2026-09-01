@@ -20120,10 +20120,17 @@ function sendDmNotify(recipSession, senderName, senderId, preview, timestamp, ms
 import { spawn } from 'child_process'
 import fs from 'fs'
 import os from 'os'
-import ytdl from '@distube/ytdl-core'
 import YouTubeSR from 'youtube-sr'
 
 const YouTube = YouTubeSR.default || YouTubeSR
+let _ytdlPromise = null
+
+async function getYtdl() {
+  if (!_ytdlPromise) {
+    _ytdlPromise = import('@distube/ytdl-core').then(module => module.default || module)
+  }
+  return _ytdlPromise
+}
 
 let _ytDlpAvailable = null
 function ytDlpAvailable() {
@@ -20303,6 +20310,7 @@ async function jsSearch(q, limit) {
 }
 
 async function jsInfo(url) {
+  const ytdl = await getYtdl()
   const info = await ytdl.getInfo(url)
   const vd = info.videoDetails
   const heights = Array.from(new Set(

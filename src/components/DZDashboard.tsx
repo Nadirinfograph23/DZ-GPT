@@ -180,6 +180,117 @@ async function fetchGlobalLeaguesFree(): Promise<{ leagues: { name: string; matc
   return null
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// Free Weather API (Open-Meteo — no key, CORS-enabled)
+// ═══════════════════════════════════════════════════════════════════════
+
+const WILAYA_COORDS: Record<string, { lat: number; lon: number }> = {
+  'Adrar': { lat: 27.87, lon: -0.29 }, 'Chlef': { lat: 36.17, lon: 1.33 },
+  'Laghouat': { lat: 33.80, lon: 2.88 }, 'Oum el Bouaghi': { lat: 35.87, lon: 7.11 },
+  'Batna': { lat: 35.56, lon: 6.17 }, 'Bejaia': { lat: 36.75, lon: 5.08 },
+  'Biskra': { lat: 34.85, lon: 5.73 }, 'Bechar': { lat: 31.62, lon: -2.22 },
+  'Blida': { lat: 36.47, lon: 2.83 }, 'Bouira': { lat: 36.38, lon: 3.90 },
+  'Tamanrasset': { lat: 22.79, lon: 5.52 }, 'Tebessa': { lat: 35.40, lon: 8.12 },
+  'Tlemcen': { lat: 34.88, lon: -1.31 }, 'Tiaret': { lat: 35.37, lon: 1.32 },
+  'Tizi Ouzou': { lat: 36.71, lon: 4.05 }, 'Algiers': { lat: 36.75, lon: 3.06 },
+  'Djelfa': { lat: 34.67, lon: 3.25 }, 'Jijel': { lat: 36.82, lon: 5.77 },
+  'Setif': { lat: 36.19, lon: 5.41 }, 'Saida': { lat: 34.83, lon: 0.15 },
+  'Skikda': { lat: 36.88, lon: 6.91 }, 'Sidi bel Abbes': { lat: 35.19, lon: -0.63 },
+  'Annaba': { lat: 36.90, lon: 7.77 }, 'Guelma': { lat: 36.46, lon: 7.43 },
+  'Constantine': { lat: 36.37, lon: 6.61 }, 'Medea': { lat: 36.27, lon: 2.75 },
+  'Mostaganem': { lat: 35.93, lon: 0.09 }, 'Msila': { lat: 35.70, lon: 4.54 },
+  'Mascara': { lat: 35.40, lon: 0.14 }, 'Ouargla': { lat: 31.95, lon: 5.33 },
+  'Oran': { lat: 35.69, lon: -0.63 }, 'El Bayadh': { lat: 33.68, lon: 1.02 },
+  'Illizi': { lat: 26.50, lon: 8.47 }, 'Bordj Bou Arreridj': { lat: 36.07, lon: 4.76 },
+  'Boumerdes': { lat: 36.75, lon: 3.47 }, 'El Tarf': { lat: 36.77, lon: 8.31 },
+  'Tindouf': { lat: 27.67, lon: -8.14 }, 'Tissemsilt': { lat: 35.61, lon: 1.81 },
+  'El Oued': { lat: 33.35, lon: 6.86 }, 'Khenchela': { lat: 35.44, lon: 7.14 },
+  'Souk Ahras': { lat: 36.29, lon: 7.95 }, 'Tipaza': { lat: 36.59, lon: 2.45 },
+  'Mila': { lat: 36.45, lon: 6.26 }, 'Ain Defla': { lat: 36.18, lon: 1.97 },
+  'Naama': { lat: 33.27, lon: -0.31 }, 'Ain Temouchent': { lat: 35.30, lon: -1.14 },
+  'Ghardaia': { lat: 32.49, lon: 3.67 }, 'Relizane': { lat: 35.74, lon: 0.56 },
+  'Timimoun': { lat: 29.26, lon: 0.24 }, 'Bordj Badji Mokhtar': { lat: 21.33, lon: -0.95 },
+  'Ouled Djellal': { lat: 34.42, lon: 5.07 }, 'Beni Abbes': { lat: 30.13, lon: -2.17 },
+  'In Salah': { lat: 27.19, lon: 2.48 }, 'In Guezzam': { lat: 19.57, lon: 5.77 },
+  'Touggourt': { lat: 33.10, lon: 6.06 }, 'Djanet': { lat: 24.55, lon: 9.48 },
+  'El Meghaier': { lat: 33.95, lon: 5.93 }, 'El Meniaa': { lat: 30.58, lon: 2.87 },
+}
+
+const WMO_CODES: Record<number, string> = {
+  0: 'صافي', 1: 'صافي غالباً', 2: 'غائم جزئياً', 3: 'غائم',
+  45: 'ضباب', 48: 'ضباب متجمد',
+  51: 'رذاذ خفيف', 53: 'رذاذ', 55: 'رذاذ كثيف',
+  56: 'رذاذ متجمد', 57: 'رذاذ متجمد كثيف',
+  61: 'مطر خفيف', 63: 'مطر', 65: 'مطر غزير',
+  66: 'مطر متجمد', 67: 'مطر متجمد غزير',
+  71: 'ثلج خفيف', 73: 'ثلج', 75: 'ثلج كثيف',
+  77: 'حبيبات ثلج', 80: 'زخات مطر', 81: 'زخات مطر كثيفة', 82: 'عاصفة مطر',
+  85: 'زخات ثلج', 86: 'زخات ثلج كثيفة',
+  95: 'عاصفة رعدية', 96: 'عاصفة رعدية مع برد', 99: 'عاصفة رعدية مع برد كثيف',
+}
+
+async function fetchWeatherFree(city: string, coords?: { lat: number; lon: number }): Promise<WeatherData> {
+  try {
+    const c = coords || WILAYA_COORDS[city] || WILAYA_COORDS['Algiers']
+    const resp = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,visibility&daily=temperature_2m_max,temperature_2m_min&timezone=auto`,
+      { signal: AbortSignal.timeout(8000) }
+    )
+    if (!resp.ok) throw new Error(`Open-Meteo: ${resp.status}`)
+    const d = await resp.json()
+    const cur = d.current
+    return {
+      city,
+      temp: cur.temperature_2m ?? null,
+      feels_like: cur.apparent_temperature ?? undefined,
+      temp_min: d.daily?.temperature_2m_min?.[0] ?? undefined,
+      temp_max: d.daily?.temperature_2m_max?.[0] ?? undefined,
+      condition: WMO_CODES[cur.weather_code] || 'غير معروف',
+      icon: null,
+      humidity: cur.relative_humidity_2m ?? undefined,
+      wind: cur.wind_speed_10m ?? undefined,
+      visibility: cur.visibility ? Math.round(cur.visibility / 1000) : undefined,
+    }
+  } catch {
+    return { city, temp: null, condition: null, icon: null }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Free Prayer API (Aladhan — no key, CORS-enabled)
+// ═══════════════════════════════════════════════════════════════════════
+
+const ALGERIA_CITY_COORDS: Record<string, { lat: number; lon: number }> = WILAYA_COORDS
+
+async function fetchPrayerFree(city: string, coords?: { lat: number; lon: number }): Promise<PrayerData> {
+  try {
+    const c = coords || ALGERIA_CITY_COORDS[city] || ALGERIA_CITY_COORDS['Algiers']
+    const resp = await fetch(
+      `https://api.aladhan.com/v1/timings/${new Date().toISOString().split('T')[0]}?latitude=${c.lat}&longitude=${c.lon}&method=3`,
+      { signal: AbortSignal.timeout(8000) }
+    )
+    if (!resp.ok) throw new Error(`Aladhan: ${resp.status}`)
+    const d = await resp.json()
+    const t = d.data?.timings || {}
+    const dateStr = d.data?.date?.hijri || new Date().toLocaleDateString('ar-DZ')
+    return {
+      city,
+      date: `${dateStr} — ${d.data?.date?.readable || ''}`,
+      source: 'aladhan.com',
+      times: {
+        'الفجر': t.Fajr || '--',
+        'الشروق': t.Sunrise || '--',
+        'الظهر': t.Dhuhr || '--',
+        'العصر': t.Asr || '--',
+        'المغرب': t.Maghrib || '--',
+        'العشاء': t.Isha || '--',
+      },
+    }
+  } catch {
+    return { city, date: '', source: 'unavailable', times: {} }
+  }
+}
+
 interface NewsItem {
   title: string
   link: string
@@ -668,14 +779,9 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadWeather = useCallback(async (city: string, coords?: { lat: number; lon: number }) => {
     setWeatherLoading(true)
     try {
-      const url = coords
-        ? `/api/dz-agent/weather?lat=${coords.lat}&lon=${coords.lon}`
-        : `/api/dz-agent/weather?city=${encodeURIComponent(city)}`
-      const result = await withRetry(async () => {
-        const r = await fetch(url)
-        if (!r.ok) throw new Error(`Weather API error: ${r.status}`)
-        return r.json()
-      }, 1)
+      // Fetch weather directly from free Open-Meteo API in browser
+      // This bypasses the broken Express/Worker bridge for /api/dz-agent/weather
+      const result = await fetchWeatherFree(city, coords)
       setWeatherData(result)
     } catch (err) {
       console.error('[DZDashboard] loadWeather failed:', err)
@@ -688,14 +794,9 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadPrayer = useCallback(async (city: string, coords?: { lat: number; lon: number }) => {
     setPrayerLoading(true)
     try {
-      const url = coords
-        ? `/api/dz-agent/prayer?lat=${coords.lat}&lon=${coords.lon}`
-        : `/api/dz-agent/prayer?city=${encodeURIComponent(city)}`
-      const result = await withRetry(async () => {
-        const r = await fetch(url)
-        if (!r.ok) throw new Error(`Prayer API error: ${r.status}`)
-        return r.json()
-      }, 1)
+      // Fetch prayer times directly from free Aladhan API in browser
+      // This bypasses the broken Express/Worker bridge for /api/dz-agent/prayer
+      const result = await fetchPrayerFree(city, coords)
       setPrayerData(result)
     } catch (err) {
       console.error('[DZDashboard] loadPrayer failed:', err)

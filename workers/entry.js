@@ -30,6 +30,63 @@ const WORKER_NEWS_FEEDS = [
 
 const WORKER_NEWS_QUERY_RE = /(?:أخبار|خبر|عاجل|اليوم|الآن|آخر|news|breaking|actualité|derni[eè]res)/i
 
+const WORKER_DEVELOPER_RESPONSE = Object.freeze({
+  content: `👨‍💻 **نذير حوامرية — Nadir Infograph** 🇩🇿
+
+مطوّر ومهندس ذكاء اصطناعي جزائري متخصص، من **عنابة** 🇩🇿
+منشئ ومطوّر **DZ Agent** و**DZ-GPT** — منصة الذكاء الاصطناعي الجزائرية الأولى.
+
+### 🎯 المجالات
+- Full-Stack AI Development
+- Multi-Agent Systems & NLP
+- تطوير تطبيقات الذكاء الاصطناعي الموجّهة للمحتوى الجزائري
+
+### 📺 ظهورات تلفزيونية
+- 🇩🇿 ضيف في **التلفزيون الوطني الجزائري** في حصة تقصي مع الدكتورة **عوماري فاطمة الزهراء**
+  🎬 [شاهد الحلقة](https://youtu.be/-DPOFfvRS-Q?si=TOkP1VFTApMcktJ7)
+- 🌍 ضيف في قناة **الجزائر الدولية AL24** حول الذكاء الاصطناعي
+  🎬 [شاهد على يوتيوب](https://m.youtube.com/watch?v=gAzvBi4N7ic)
+
+### 🌐 التواصل الاجتماعي
+🔵 [فيسبوك](https://www.facebook.com/share/1AM1jDkz8o/) | 📸 [إنستغرام](https://www.instagram.com/nadir.infograph?igsh=ZmJsZGhheXB0emli) | 🎵 [تيكتوك](https://www.tiktok.com/@nadirinfograph2?_r=1&_t=ZS-96pplHnvWo4) | ▶️ [يوتيوب](https://www.youtube.com/@Nadirinfograph)
+
+🌍 الموقع: [dzagent.app](https://dzagent.app/) | GitHub: [Nadirinfograph23](https://github.com/Nadirinfograph23)`,
+  showDevCard: true,
+  model: 'static-developer',
+})
+
+function normalizeWorkerQuery(value = '') {
+  return String(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u064B-\u0652\u0670\u0640]/g, '')
+    .replace(/[؟?!.,،:;()[\]{}"']/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const WORKER_DEVELOPER_PATTERNS = [
+  'من هو مطورك', 'من مطورك', 'من صنعك', 'من برمجك', 'من انشاك', 'من طورك',
+  'من هو المطور', 'من المطور', 'معلومات المطور', 'معلومات عن المطور',
+  'معلومات على المطور', 'معلومات مطورك', 'اعطني معلومات المطور',
+  'عطيني معلومات المطور', 'شكون خدمك', 'شكون لي خدمك', 'شكون اللي خدمك',
+  'شكون دارك', 'شكون لي دارك', 'شكون اللي دارك', 'شكون بناك',
+  'شكون لي بناك', 'شكون اللي بناك', 'شكون برمجك', 'شكون لي برمجك',
+  'شكون اللي برمجك', 'شكون صاوبك', 'شكون اللي صاوبك', 'شكون خدم dz agent',
+  'شكون دار dz agent', 'شكون صاوب dz agent',
+  'who is your developer', 'who made you', 'who built you',
+  'who created you', 'who programmed you', 'who designed you',
+  'who owns this site', 'who is the owner', 'developer information',
+  'qui est votre developpeur', 'qui vous a cree', 'qui vous a fait',
+  'qui a developpe ce site', 'qui est le proprietaire', 'qui a fait ce site',
+]
+
+function isWorkerDeveloperQuestion(value) {
+  const normalized = normalizeWorkerQuery(value)
+  return WORKER_DEVELOPER_PATTERNS.some(pattern => normalized.includes(pattern))
+}
+
 function decodeXmlText(value = '') {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
@@ -105,6 +162,19 @@ async function fetchChatDirect(request) {
     const lastUser = [...messages].reverse().find(m => m?.role === 'user')?.content?.trim() || ''
     const lower = lastUser.toLowerCase()
 
+    // Deterministic identity answer must run before all static guards and AI
+    // fallbacks; otherwise the live Worker can answer with a generic sentence.
+    if (isWorkerDeveloperQuestion(lastUser)) {
+      return new Response(JSON.stringify(WORKER_DEVELOPER_RESPONSE), {
+        headers: {
+          'content-type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
+      })
+    }
+
     // Static guards
     if (/ما هي قدراتك|ما يمكنك|ماذا يمكنك/.test(lower)) {
       return new Response(JSON.stringify({ content: 'أنا DZ Agent — مساعد ذكي جزائري. أستطيع:\n- 💬 المحادثة والرد على الأسئلة\n- 🌤️ الطقس لجميع ولايات الجزائر\n- 🕌 مواقيت الصلاة\n- 📰 آخر الأخبار الجزائرية\n- 📺 تحميل فيديوهات يوتيوب\n- 📊 تحليل البيانات والرسوم\n- 🔍 البحث على الإنترنت\n- 📄 إنشاء وتعديل الملفات\n\nاطرح أي سؤال!', model: 'static-guard' }), {
@@ -116,14 +186,14 @@ async function fetchChatDirect(request) {
       }
       })
     }
-    if (/من أنت|من مطورك|من صانعك/.test(lower)) {
+    if (/من أنت/.test(lower)) {
       return new Response(JSON.stringify({ content: 'أنا DZ Agent، مساعد ذكي مصمم خصيصاً للمستخدمين الجزائريين. أعمل على توفير معلومات دقيقة وخدمات متنوعة.', model: 'static-guard' }), {
         headers: {
-        'content-type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      }
+          'content-type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
       })
     }
 

@@ -123,6 +123,7 @@ import {
 import {
   callAIRouter,
   getRouterHealthSnapshot,
+  getModelRotationSnapshot,
   getProviderStatus,
   testSingleProvider,
   getProviderScores,
@@ -395,10 +396,17 @@ const DEVELOPER_QUESTION_PATTERNS = [
   'التطبيق ملك من', 'هذا التطبيق ملك من', 'الموقع ملك من', 'هذا الموقع ملك من',
   'من صنع هذا التطبيق', 'من برمج التطبيق', 'من طور التطبيق', 'من أنشأ التطبيق',
   'من صنع التطبيق', 'من عمل التطبيق',
+  'معلومات المطور', 'معلومات عن المطور', 'معلومات على المطور',
+  'معلومات مطورك', 'اعطني معلومات المطور', 'عطيني معلومات المطور',
+  'احكيلي على المطور', 'احكيلي عن المطور',
   // Variants with definite article ال
   'من هو المطور', 'هو المطور', 'من المطور', 'صاحبك من', 'مطورك من',
   // Arabic dialect (Algerian/Maghrebi) — شكون
   'شكون خدمك', 'شكون برمجك', 'شكون صنعك', 'شكون عملك', 'شكون درك',
+  'شكون لي خدمك', 'شكون اللي خدمك', 'شكون دارك', 'شكون لي دارك', 'شكون اللي دارك',
+  'شكون بناك', 'شكون لي بناك', 'شكون اللي بناك', 'شكون لي صاوبك', 'شكون اللي صاوبك',
+  'شكون لي برمجك', 'شكون اللي برمجك', 'شكون لي طورك', 'شكون اللي طورك',
+  'شكون خدم dz agent', 'شكون دار dz agent', 'شكون صاوب dz agent',
   'شكون صاوبك', 'شكون مطورك', 'شكون دار', 'شكون هو مطور', 'شكون صاحب',
   'شكون مالك', 'شكون خدم', 'شكون برمج',
   'شكون عمل التطبيق', 'شكون دار التطبيق', 'شكون صاوب التطبيق',
@@ -963,9 +971,11 @@ app.use('/api', createHealthRouter({
   resilientFetch,
   MAX_REQ_PER_SEC,
   getGroqKeys,
+  getKeyStats,
   systemHealthSnapshot,
   getProviderStatus,
   getRouterHealthSnapshot,
+  getModelRotationSnapshot,
 }))
 app.use('/api', createOwnerRouter({ getRSSFeeds: () => RSS_FEEDS }))
 app.use('/api', createGitHubRouter({ githubLimiter }))
@@ -1149,7 +1159,8 @@ app.post('/api/dz-agent/thinking-trace', async (req, res) => {
 
 function isDeveloperOrOwnerQuestion(message) {
   if (typeof message !== 'string' || !message) return false
-  return DEVELOPER_QUESTION_PATTERNS.some(p => normalizeQuery(message).includes(p))
+  const normalized = normalizeQuery(message)
+  return DEVELOPER_QUESTION_PATTERNS.some(p => normalized.includes(normalizeQuery(p)))
 }
 
 // ===== PERSON / PERSONALITY QUERY DETECTION =====
@@ -13177,6 +13188,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         model: 'anti-hallucination',
       })
     }
+  }
+
+  // ── Developer / Owner identity — before every search/cache/AI fast-path ──
+  // This deterministic local answer must never be misrouted to news,
+  // Wikipedia, or a generic AI fallback.
+  if (isDeveloperOrOwnerQuestion(lastUserMessage)) {
+    return res.status(200).json(DEVELOPER_RESPONSE)
   }
 
   // ── Static Fast-Path — إجابة فورية <1ms للمعرفة الثابتة ────────────────

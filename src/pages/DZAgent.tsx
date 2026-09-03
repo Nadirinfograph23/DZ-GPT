@@ -286,14 +286,6 @@ export default function DZAgent() {
           <div className="dzn-header-slot">
             <DZNotifications theme={theme} />
           </div>
-          <div
-            className="dz-update-notice"
-            role="status"
-            title="آخر تحديث للنظام"
-            style={{ fontSize: '10px', color: '#b7f34a', whiteSpace: 'nowrap', textAlign: 'center' }}
-          >
-            ✓ الأخبار والتقنية محدثة
-          </div>
           <button
             className="dza-header-bug-btn"
             onClick={() => setBugReportOpen(true)}

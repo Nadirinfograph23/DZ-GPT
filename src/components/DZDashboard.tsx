@@ -10,6 +10,176 @@ import {
 import '../styles/dz-dashboard.css'
 import { withRetry } from '../utils/dzMemory'
 
+// ═══════════════════════════════════════════════════════════════════════
+// Browser-side RSS parser & free API fetchers
+// These run directly in the browser to bypass broken Express/Worker bridge
+// ═══════════════════════════════════════════════════════════════════════
+
+function decodeXmlText(value = ''): string {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .trim()
+}
+
+function parseRssItems(xml: string, sourceName: string): NewsItem[] {
+  const items: NewsItem[] = []
+  const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
+  let m: RegExpExecArray | null
+  while ((m = itemRegex.exec(xml)) !== null && items.length < 10) {
+    const block = m[1]
+    const get = (tag: string): string => {
+      const found = block.match(
+        new RegExp(
+          `<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`,
+          'i',
+        ),
+      )
+      return found ? decodeXmlText(found[1]) : ''
+    }
+    const title = get('title')
+    if (!title) continue
+    const link = get('link') ||
+      (block.match(/<link[^>]+href=["']([^"']+)["']/i) || [])[1] || ''
+    items.push({
+      title,
+      link,
+      description: get('description'),
+      pubDate: get('pubDate') || get('dc:date') || '',
+      source: sourceName,
+      feedName: sourceName,
+    })
+  }
+  return items
+}
+
+const ALGERIA_NEWS_FEEDS = [
+  { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
+  { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
+  { name: 'البلاد', url: 'https://www.elbilad.net/feed' },
+]
+
+const TECH_NEWS_FEEDS = [
+  { name: 'TechArabic', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%82%D9%86%D9%8A%D8%A9+%D8%A7%D9%84%D8%B1%D8%A7%D8%A6%D8%B9&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google Tech', url: 'https://news.google.com/rss/search?q=technology+OR+%D8%A3%D8%AC%D9%87%D8%B2%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
+]
+
+const SPORTS_NEWS_FEEDS = [
+  { name: '🏆 رياضة', url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '⚽ الدوري', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AF%D9%88%D8%B1%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%84%D9%85%D8%AD%D8%AA%D8%B1%D9%81&hl=ar&gl=DZ&ceid=DZ:ar' },
+]
+
+async function fetchRssFeed(feed: { name: string; url: string }): Promise<NewsItem[]> {
+  try {
+    const resp = await fetch(feed.url, {
+      headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!resp.ok) return []
+    const xml = await resp.text()
+    return parseRssItems(xml, feed.name)
+  } catch { return [] }
+}
+
+async function fetchAllRss(feeds: { name: string; url: string }[]): Promise<NewsItem[]> {
+  const results = await Promise.allSettled(feeds.map(f => fetchRssFeed(f)))
+  const seen = new Set<string>()
+  return results
+    .flatMap(r => r.status === 'fulfilled' ? r.value : [])
+    .filter(item => {
+      const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .sort((a, b) => {
+      const ta = a.pubDate ? new Date(a.pubDate).getTime() : 0
+      const tb = b.pubDate ? new Date(b.pubDate).getTime() : 0
+      return tb - ta
+    })
+    .slice(0, 30)
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Free currency API (fawazahmed0 — CORS-enabled, no key needed)
+// ═══════════════════════════════════════════════════════════════════════
+
+async function fetchCurrencyFree(): Promise<CurrencyData> {
+  try {
+    const resp = await fetch(
+      'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json',
+      { signal: AbortSignal.timeout(8000) }
+    )
+    if (!resp.ok) throw new Error(`Currency API: ${resp.status}`)
+    const data = await resp.json()
+    // fawazahmed0 returns rates as base=EUR, so we convert to base=DZD
+    // Actually use DZD as base directly:
+    const dzdResp = await fetch(
+      'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/dzd.json',
+      { signal: AbortSignal.timeout(8000) }
+    )
+    if (!dzdResp.ok) throw new Error(`Currency API DZD: ${dzdResp.status}`)
+    const dzdData = await dzdResp.json()
+    const rates: Record<string, number> = {}
+    const targets = ['USD', 'EUR', 'GBP', 'SAR', 'AED', 'TND', 'MAD', 'EGP', 'QAR', 'KWD', 'CAD', 'CHF', 'CNY', 'TRY', 'JPY']
+    for (const code of targets) {
+      if (dzdData.dzd?.[code]) {
+        // fawazahmed0 returns 1 DZD = X foreign, invert to get foreign = Y DZD
+        rates[code] = dzdData.dzd[code]
+      }
+    }
+    return {
+      base: 'DZD',
+      provider: 'fawazahmed0/currency-api',
+      rates,
+      status: 'live',
+      last_update: dzdData.date || new Date().toISOString().split('T')[0],
+    }
+  } catch {
+    return { base: 'DZD', provider: 'unavailable', rates: {}, status: 'unavailable' }
+  }
+}
+
+async function fetchLfpFree(): Promise<{ matches: MatchItem[]; articles: { title: string; link: string; date?: string }[]; fetchedAt: string; source: string }> {
+  try {
+    // Try fetching LFP RSS or news
+    const items = await fetchRssFeed({
+      name: 'LFP',
+      url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AF%D9%88%D8%B1%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A+%D8%A7%D9%84%D9%85%D8%AD%D8%AA%D8%B1%D9%81+%D9%85%D8%A8%D8%A7%D8%B1%D9%8A%D8%A7%D8%AA&hl=ar&gl=DZ&ceid=DZ:ar',
+    })
+    return {
+      matches: [],
+      articles: items.slice(0, 5).map(item => ({
+        title: item.title,
+        link: item.link,
+        date: item.pubDate,
+      })),
+      fetchedAt: new Date().toISOString(),
+      source: 'Google News (LFP)',
+    }
+  } catch {
+    return { matches: [], articles: [], fetchedAt: new Date().toISOString(), source: 'unavailable' }
+  }
+}
+
+async function fetchStandingsFree(): Promise<{ standings: { rank: string; team: string; played: string; wins: string; draws: string; losses: string; points: string }[]; source: string; fetchedAt: string }> {
+  // Standings data is very hard to get from free APIs
+  // Return empty so the component shows its "retry" state
+  return { standings: [], source: 'unavailable', fetchedAt: new Date().toISOString() }
+}
+
+async function fetchGlobalLeaguesFree(): Promise<{ leagues: { name: string; matches: { homeTeam: string; awayTeam: string; homeScore: number | null; awayScore: number | null; statusType: string; startTime: string; link: string }[] }[]; date: string; source: string } | null> {
+  // Global leagues data needs specialized API
+  return null
+}
+
 interface NewsItem {
   title: string
   link: string
@@ -450,35 +620,43 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadDashboard = async (opts: { force?: boolean } = {}) => {
     setLoading(true)
     try {
-      const url = opts.force ? '/api/dz-agent/dashboard?bypassCache=1' : '/api/dz-agent/dashboard'
-      const leagueUrl = opts.force ? '/api/dz-agent/lfp?bypassCache=1' : '/api/dz-agent/lfp'
-      const [dashboardResult, leagueResult] = await Promise.all([
-        withRetry(async () => {
-          const r = await fetch(url)
-          if (!r.ok) throw new Error(`Dashboard API error: ${r.status}`)
-          return r.json()
-        }, 1),
-        fetch(leagueUrl).then(r => {
-          if (!r.ok) throw new Error(`League API error: ${r.status}`)
-          return r.json()
-        }),
+      // Fetch news, sports, tech, and LFP data directly from free RSS APIs
+      // This bypasses the broken Express/Worker bridge for dashboard data
+      const [newsItems, sportsItems, techItems, leagueData] = await Promise.allSettled([
+        fetchAllRss(ALGERIA_NEWS_FEEDS),
+        fetchAllRss(SPORTS_NEWS_FEEDS),
+        fetchAllRss(TECH_NEWS_FEEDS),
+        fetchLfpFree(),
       ])
-      // The official LFP page can be slower than news/weather. Keep the
-      // league card independent so available fixtures are never hidden by a
-      // dashboard-wide timeout.
-      const league = leagueResult?.matches?.length || leagueResult?.articles?.length
-        ? leagueResult
-        : dashboardResult?.lfp || null
-      const leagueNews = (league?.articles || []).slice(0, 3).map((item: { title: string; link?: string; date?: string }) => ({
+
+      const news = newsItems.status === 'fulfilled' ? newsItems.value : []
+      const sportsRaw = sportsItems.status === 'fulfilled' ? sportsItems.value : []
+      const tech = techItems.status === 'fulfilled'
+        ? techItems.value.map(item => ({
+            ...item,
+            category: 'تقنية',
+            trending_score: 0,
+          } as TechItem))
+        : []
+      const league = leagueData.status === 'fulfilled' ? leagueData.value : null
+
+      // LFP sports news (if league had articles)
+      const leagueNews = (league?.articles || []).slice(0, 3).map(item => ({
         title: item.title,
         link: item.link || 'https://lfp.dz',
+        description: '',
         pubDate: item.date || '',
+        source: '🏆 رابطة LFP',
         feedName: '🏆 رابطة LFP',
       }))
+
       setData({
-        ...dashboardResult,
+        news,
+        sports: leagueNews.length > 0 ? leagueNews : sportsRaw,
+        tech,
+        weather: [],
         lfp: league,
-        sports: leagueNews,
+        fetchedAt: new Date().toISOString(),
       })
     } catch (err) {
       console.error('[DZDashboard] loadDashboard failed:', err)
@@ -530,10 +708,26 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadDollar = useCallback(async () => {
     setDollarLoading(true)
     try {
-      const r = await fetch('/api/dz-dollar')
-      if (r.ok) {
-        const d = await r.json()
-        setDollarData(d)
+      // Try backend endpoint first
+      try {
+        const r = await fetch('/api/dz-dollar', { signal: AbortSignal.timeout(5000) })
+        if (r.ok) {
+          const d = await r.json()
+          setDollarData(d)
+          return
+        }
+      } catch { /* fall through */ }
+      // Fallback: use currency API to get USD, EUR, GBP rates
+      const curr = await fetchCurrencyFree()
+      if (curr.rates?.USD || curr.rates?.EUR || curr.rates?.GBP) {
+        setDollarData({
+          usd: curr.rates.USD ? +(1 / curr.rates.USD).toFixed(2) : 0,
+          eur: curr.rates.EUR ? +(1 / curr.rates.EUR).toFixed(2) : 0,
+          gbp: curr.rates.GBP ? +(1 / curr.rates.GBP).toFixed(2) : 0,
+          trend: '📊 الأسعار من فورا زهمد (السعر الرسمي)',
+          updatedAt: new Date().toISOString(),
+          source: 'fawazahmed0/currency-api',
+        })
       }
     } catch { /* ignore */ }
     finally { setDollarLoading(false) }
@@ -542,11 +736,9 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadCurrency = useCallback(async () => {
     setCurrencyLoading(true)
     try {
-      const result = await withRetry(async () => {
-        const r = await fetch('/api/currency/latest')
-        if (!r.ok) throw new Error(`Currency API error: ${r.status}`)
-        return r.json()
-      }, 1)
+      // Fetch currency rates directly from free fawazahmed0 API
+      // This bypasses the broken Express bridge for /api/currency/latest
+      const result = await fetchCurrencyFree()
       setCurrencyData(result)
     } catch (err) {
       console.error('[DZDashboard] loadCurrency failed:', err)
@@ -560,11 +752,18 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadStandings = useCallback(async () => {
     setStandingsLoading(true)
     try {
-      const result = await withRetry(async () => {
+      // Try backend first, fall back to empty data
+      try {
         const r = await fetch('/api/dz-agent/standings')
-        if (!r.ok) throw new Error(`Standings API error: ${r.status}`)
-        return r.json()
-      }, 2)
+        if (r.ok) {
+          const result = await r.json()
+          if (result?.standings?.length) {
+            setStandingsData(result)
+            return
+          }
+        }
+      } catch { /* fall through to free fetch */ }
+      const result = await fetchStandingsFree()
       setStandingsData(result)
     } catch (err) {
       console.error('[DZDashboard] loadStandings failed:', err)
@@ -577,12 +776,19 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadGlobalLeagues = useCallback(async (opts: { force?: boolean } = {}) => {
     setGlobalLoading(true)
     try {
-      const url = opts.force ? '/api/dz-agent/global-leagues?bypassCache=1' : '/api/dz-agent/global-leagues'
-      const result = await withRetry(async () => {
+      // Try backend first, fall back to free fetch
+      try {
+        const url = opts.force ? '/api/dz-agent/global-leagues?bypassCache=1' : '/api/dz-agent/global-leagues'
         const r = await fetch(url)
-        if (!r.ok) throw new Error(`Global leagues API error: ${r.status}`)
-        return r.json()
-      }, 2)
+        if (r.ok) {
+          const result = await r.json()
+          if (result?.leagues?.length) {
+            setGlobalLeagues(result)
+            return
+          }
+        }
+      } catch { /* fall through to free fetch */ }
+      const result = await fetchGlobalLeaguesFree()
       setGlobalLeagues(result)
     } catch (err) {
       console.error('[DZDashboard] loadGlobalLeagues failed:', err)

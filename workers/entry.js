@@ -208,21 +208,21 @@ async function fetchChatDirect(request) {
       'Access-Control-Allow-Headers': 'Content-Type',
     }
 
-    // 1) Pollinations gen.pollinations.ai (new API, key from env if available)
+    // 1) Pollinations text.pollinations.ai (verified working, free, no key)
     try {
-      const polKey = env.POLLINATIONS_API_KEY || env.POLLI_API_KEY || ''
-      const polHeaders = { 'Content-Type': 'application/json' }
-      if (polKey) polHeaders['Authorization'] = `Bearer ${polKey}`
-      const polResp = await fetch('https://gen.pollinations.ai/openai/v1/chat/completions', {
+      const polResp = await fetch('https://text.pollinations.ai/', {
         method: 'POST',
-        headers: polHeaders,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'openai/gpt-4.1-nano',
-          messages: [{ role: 'system', content: systemPrompt }, ...messages],
-          temperature: 0.7,
-          max_tokens: 1024,
+          model: 'openai',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages
+          ],
+          seed: Math.floor(Math.random() * 999999),
+          private: true,
         }),
-        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 25000); return ctrl.signal })()
+        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 30000); return ctrl.signal })()
       })
       if (polResp.ok) {
         const polData = await polResp.json()
@@ -237,55 +237,34 @@ async function fetchChatDirect(request) {
       console.warn('[Worker:Chat] Pollinations failed:', e.message)
     }
 
-    // 2) Fallback: text.pollinations.ai (legacy endpoint, may work for some)
+    // 2) Pollinations gen endpoint (new API, key from env if available)
     try {
-      const legResp = await fetch('https://text.pollinations.ai/', {
+      const polKey = env.POLLINATIONS_API_KEY || env.POLLI_API_KEY || ''
+      const polHeaders = { 'Content-Type': 'application/json' }
+      if (polKey) polHeaders['Authorization'] = `Bearer ${polKey}`
+      const polResp = await fetch('https://gen.pollinations.ai/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: polHeaders,
         body: JSON.stringify({
-          model: 'openai',
+          model: 'openai/gpt-4.1-nano',
           messages: [{ role: 'system', content: systemPrompt }, ...messages],
-          seed: Math.floor(Math.random() * 999999),
-          private: true,
+          temperature: 0.7,
+          max_tokens: 1024,
         }),
         signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 20000); return ctrl.signal })()
       })
-      if (legResp.ok) {
-        const legData = await legResp.json()
-        const reply = legData.choices?.[0]?.message?.content || legData.content || ''
+      if (polResp.ok) {
+        const polData = await polResp.json()
+        const reply = polData.choices?.[0]?.message?.content || polData.content || ''
         if (reply && reply.trim().length > 5) {
-          return new Response(JSON.stringify({ content: reply.trim(), model: 'pollinations-legacy' }), { headers: corsHeaders })
+          return new Response(JSON.stringify({ content: reply.trim(), model: 'pollinations-gen' }), { headers: corsHeaders })
         }
       }
     } catch (e) {
-      console.warn('[Worker:Chat] Pollinations legacy failed:', e.message)
+      console.warn('[Worker:Chat] Pollinations gen failed:', e.message)
     }
 
-    // 3) Fallback: DuckDuckGo AI Chat (free, no key, anonymous)
-    try {
-      const ddgResp = await fetch('https://duckduckgo.com/duckchat/v1/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-vqd-accept': '1',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'user', content: messages[messages.length - 1]?.content || '' }],
-        }),
-        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 15000); return ctrl.signal })()
-      })
-      if (ddgResp.ok) {
-        const ddgText = await ddgResp.text()
-        if (ddgText && ddgText.trim().length > 5) {
-          return new Response(JSON.stringify({ content: ddgText.trim(), model: 'duckduckgo' }), { headers: corsHeaders })
-        }
-      }
-    } catch (e) {
-      console.warn('[Worker:Chat] DuckDuckGo failed:', e.message)
-    }
-
-    // 4) Last resort: smart keyword-based Arabic helper
+    // 3) Last resort: smart keyword-based Arabic helper
     const lastMsg = lastUser
     let smartReply = ''
     if (/مرحبا|السلام|أهلا|هاي|hey|hello/i.test(lastMsg)) {

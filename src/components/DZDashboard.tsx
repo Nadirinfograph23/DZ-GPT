@@ -60,17 +60,29 @@ function parseRssItems(xml: string, sourceName: string): NewsItem[] {
 }
 
 const ALGERIA_NEWS_FEEDS = [
-  { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google الجزائر أخبار عامة', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'SkyNews Arabia', url: 'https://www.skynewsarabia.com/rss/feed' },
-  { name: 'RT Arabic', url: 'https://arabic.rt.com/rss/' },
-  { name: 'DW Arabic', url: 'https://rss.dw.com/xml/rss-ar-all' },
+  // ── Algerian-specific news (highest priority) ──────────────────────────
+  { name: '🇩🇿 أحداث نت', url: 'https://news.google.com/rss/search?q=%D8%A3%D8%AD%D8%AF%D8%A7%D8%AB+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🇩🇿 جزاير توداي', url: 'https://news.google.com/rss/search?q=%D8%AC%D8%B2%D8%A7%D8%A6%D9%8A%D8%B1+%D8%AA%D9%88%D8%AF%D8%A7%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🇩🇿 النهار', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D9%86%D9%87%D8%A7%D8%B1+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🇩🇿 الشروق', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B4%D8%B1%D9%88%D9%82+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // ── General Algeria news ──────────────────────────────────────────────
+  { name: '🇩🇿 أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🇩🇿 وطن أخبار', url: 'https://news.google.com/rss/search?q=%D9%88%D8%B7%D9%86+%D8%A2%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // ── International Arabic news (secondary) ──────────────────────────────
+  { name: 'عربية: سكاي', url: 'https://news.google.com/rss/search?q=%D8%B3%D9%83%D8%A7%D9%8A+%D9%86%D9%8A%D8%B8%D8%A7%D9%84&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'عربية: العربية', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9+%D9%86%D9%8A%D9%88%D8%B2&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'عربية: الجزيرة', url: 'https://news.google.com/rss/search?q+%D8%A7%D9%84%D8%AC%D8%B2%D9%8A%D8%B1%D8%A9+%D9%86%D9%8A%D9%88%D8%B2&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 
 const TECH_NEWS_FEEDS = [
-  { name: 'TechArabic', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%82%D9%86%D9%8A%D8%A9+%D8%A7%D9%84%D8%B1%D8%A7%D8%A6%D8%B9&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google Tech', url: 'https://news.google.com/rss/search?q=technology+OR+%D8%A3%D8%AC%D9%87%D8%B2%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Arabic Tech', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%82%D9%86%D9%8A%D8%A7%D8%AA+%D8%A7%D9%84%D8%B1%D8%A7%D8%A6%D8%B9&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // ── Arabic tech news (priority) ───────────────────────────────────────
+  { name: '🖥️ تك عربي', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%82%D9%86%D9%8A%D8%A7%D8%AA+%D8%A7%D9%84%D8%B1%D8%A7%D8%A6%D8%B9&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🖥️ آythings', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%82%D9%86%D9%8A%D8%A7%D8%AA&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🖥️ هوستك', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B1%D8%A7%D8%A6%D8%B9+%D8%A7%D9%84%D8%A5%D9%84%D9%83%D8%AA%D8%B1%D9%88%D9%86%D9%8A+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🖥️ أبل العربية', url: 'https://news.google.com/rss/search?q=%D8%A3%D8%A8%D9%84+%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9+OR+%D8%A3%D9%8A%D9%81%D9%88%D9%86+OR+%D8%B3%D8%A7%D9%85%D8%B3%D9%88%D9%86%D8%BA+OR+%D8%BA%D9%88%D9%88%D8%BA%D9%84&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // ── General tech news in Arabic ───────────────────────────────────────
+  { name: '🖥️ ذكاء اصطناعي', url: 'https://news.google.com/rss/search?q=%D8%B0%D9%83%D8%A7%D8%A1+%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A+OR+%D9%86%D9%85%D8%B7%D8%A7%D8%AC+OR+%D8%A7%D9%84%D8%B9%D9%84%D9%85&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🖥️ تقنية عربية', url: 'https://news.google.com/rss/search?q=%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1+%D8%AA%D9%82%D9%86%D9%8A%D8%A9+%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 
 const SPORTS_NEWS_FEEDS = [
@@ -80,43 +92,73 @@ const SPORTS_NEWS_FEEDS = [
 ]
 
 async function fetchRssFeed(feed: { name: string; url: string }): Promise<NewsItem[]> {
-  // Route all RSS fetches through a CORS proxy to avoid browser CORS blocks
-  // on Algerian news sites that don't send Access-Control-Allow-Origin headers
-  const CORS_PROXY = 'https://api.allorigins.win/raw?url='
-  const proxyUrl = CORS_PROXY + encodeURIComponent(feed.url)
-  const urls = [proxyUrl, feed.url] // try proxy first, then direct
-  for (const url of urls) {
+  // Multiple CORS proxy fallbacks to ensure RSS feeds load reliably
+  // Google News RSS works well but browsers block direct CORS from client
+  const CORS_PROXIES = [
+    (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  ]
+
+  // Try each proxy, then try direct fetch as last resort
+  for (const proxyFn of CORS_PROXIES) {
     try {
-      const resp = await fetch(url, {
+      const resp = await fetch(proxyFn(feed.url), {
         headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(8000),
       })
       if (!resp.ok) continue
-      const xml = await resp.text()
-      if (!xml || xml.length < 50) continue
-      const items = parseRssItems(xml, feed.name)
+      const text = await resp.text()
+      if (!text || text.length < 50) continue
+      // Verify it looks like XML/RSS, not an error page
+      if (!text.includes('<item') && !text.includes('<entry')) continue
+      const items = parseRssItems(text, feed.name)
       if (items.length > 0) return items
-    } catch { /* try next URL */ }
+    } catch { /* try next proxy */ }
   }
+
+  // Last resort: direct fetch (works for feeds with CORS headers)
+  try {
+    const resp = await fetch(feed.url, {
+      headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (resp.ok) {
+      const text = await resp.text()
+      if (text && text.length > 50 && (text.includes('<item') || text.includes('<entry'))) {
+        return parseRssItems(text, feed.name)
+      }
+    }
+  } catch { /* all methods failed */ }
   return []
 }
 
 async function fetchAllRss(feeds: { name: string; url: string }[]): Promise<NewsItem[]> {
   const results = await Promise.allSettled(feeds.map(f => fetchRssFeed(f)))
   const seen = new Set<string>()
-  return results
-    .flatMap(r => r.status === 'fulfilled' ? r.value : [])
-    .filter(item => {
+  // Fetch results are in feed order — use feedIndex to preserve priority
+  const allItems: { item: NewsItem; feedIndex: number }[] = []
+  results.forEach((r, feedIndex) => {
+    if (r.status === 'fulfilled') {
+      r.value.forEach(item => allItems.push({ item, feedIndex }))
+    }
+  })
+  return allItems
+    .filter(({ item }) => {
       const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
       if (!key || seen.has(key)) return false
       seen.add(key)
       return true
     })
+    // Primary sort: feed priority (lower index = higher priority)
+    // Secondary sort: most recent first
     .sort((a, b) => {
-      const ta = a.pubDate ? new Date(a.pubDate).getTime() : 0
-      const tb = b.pubDate ? new Date(b.pubDate).getTime() : 0
+      if (a.feedIndex !== b.feedIndex) return a.feedIndex - b.feedIndex
+      const ta = a.item.pubDate ? new Date(a.item.pubDate).getTime() : 0
+      const tb = b.item.pubDate ? new Date(b.item.pubDate).getTime() : 0
       return tb - ta
     })
+    .map(({ item }) => item)
     .slice(0, 30)
 }
 

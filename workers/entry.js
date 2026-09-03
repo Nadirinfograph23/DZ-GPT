@@ -196,48 +196,108 @@ async function fetchChatDirect(request) {
       }
     }
 
-    // Try Pollinations.ai (free, no key)
+    // ── AI PROVIDER FALLBACK CHAIN ──────────────────────────────────────
+    // Try multiple free AI providers. Each one has a timeout and if it
+    // fails we move to the next. The last resort is a keyword-based
+    // Arabic helper so users never see a blank error.
+    const systemPrompt = 'أنت DZ Agent — مساعد ذكي جزائري متعدد المهام. تحدث بالعربية الفصحى أو الجزائرية حسب سؤال المستخدم. أجب بشكل مفيد، دقيق، ومختصر.'
+    const corsHeaders = {
+      'content-type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    }
+
+    // 1) Pollinations gen.pollinations.ai (new API, key from env if available)
     try {
-      const polResp = await fetch('https://text.pollinations.ai/', {
+      const polKey = env.POLLINATIONS_API_KEY || env.POLLI_API_KEY || ''
+      const polHeaders = { 'Content-Type': 'application/json' }
+      if (polKey) polHeaders['Authorization'] = `Bearer ${polKey}`
+      const polResp = await fetch('https://gen.pollinations.ai/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: polHeaders,
         body: JSON.stringify({
-          model: 'openai',
-          messages: [
-            { role: 'system', content: 'أنت DZ Agent — مساعد ذكي جزائري متعدد المهام. تحدث بالعربية الفصحى أو الجزائرية حسب سؤال المستخدم. أجب بشكل مفيد، دقيق، ومختصر.' },
-            ...messages
-          ],
-          seed: Math.floor(Math.random() * 999999),
-          private: true,
+          model: 'openai/gpt-4.1-nano',
+          messages: [{ role: 'system', content: systemPrompt }, ...messages],
+          temperature: 0.7,
+          max_tokens: 1024,
         }),
-        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 30000); return ctrl.signal })()
+        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 25000); return ctrl.signal })()
       })
       if (polResp.ok) {
         const polData = await polResp.json()
         const reply = polData.choices?.[0]?.message?.content || polData.content || ''
         if (reply && reply.trim().length > 5) {
-          return new Response(JSON.stringify({ content: reply, model: 'pollinations' }), {
-            headers: {
-        'content-type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      }
-          })
+          return new Response(JSON.stringify({ content: reply.trim(), model: 'pollinations' }), { headers: corsHeaders })
         }
+      } else {
+        console.warn('[Worker:Chat] Pollinations status:', polResp.status)
       }
     } catch (e) {
       console.warn('[Worker:Chat] Pollinations failed:', e.message)
     }
 
-    return new Response(JSON.stringify({ content: 'عذراً، لم أتمكن من الحصول على رد الآن. يرجى المحاولة مرة أخرى.', model: 'fallback' }), {
-      headers: {
-        'content-type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+    // 2) Fallback: text.pollinations.ai (legacy endpoint, may work for some)
+    try {
+      const legResp = await fetch('https://text.pollinations.ai/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'openai',
+          messages: [{ role: 'system', content: systemPrompt }, ...messages],
+          seed: Math.floor(Math.random() * 999999),
+          private: true,
+        }),
+        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 20000); return ctrl.signal })()
+      })
+      if (legResp.ok) {
+        const legData = await legResp.json()
+        const reply = legData.choices?.[0]?.message?.content || legData.content || ''
+        if (reply && reply.trim().length > 5) {
+          return new Response(JSON.stringify({ content: reply.trim(), model: 'pollinations-legacy' }), { headers: corsHeaders })
+        }
       }
-    })
+    } catch (e) {
+      console.warn('[Worker:Chat] Pollinations legacy failed:', e.message)
+    }
+
+    // 3) Fallback: DuckDuckGo AI Chat (free, no key, anonymous)
+    try {
+      const ddgResp = await fetch('https://duckduckgo.com/duckchat/v1/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-vqd-accept': '1',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: messages[messages.length - 1]?.content || '' }],
+        }),
+        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 15000); return ctrl.signal })()
+      })
+      if (ddgResp.ok) {
+        const ddgText = await ddgResp.text()
+        if (ddgText && ddgText.trim().length > 5) {
+          return new Response(JSON.stringify({ content: ddgText.trim(), model: 'duckduckgo' }), { headers: corsHeaders })
+        }
+      }
+    } catch (e) {
+      console.warn('[Worker:Chat] DuckDuckGo failed:', e.message)
+    }
+
+    // 4) Last resort: smart keyword-based Arabic helper
+    const lastMsg = lastUser
+    let smartReply = ''
+    if (/مرحبا|السلام|أهلا|هاي|hey|hello/i.test(lastMsg)) {
+      smartReply = 'مرحباً! 👋 أنا DZ Agent، مساعدك الذكي الجزائري. كيف يمكنني مساعدتك اليوم؟\n\nيمكنني:\n- 🌤️ إخبارك بالطقس في أي ولاية\n- 🕌 مواقيت الصلاة\n- 📰 آخر الأخبار\n- ❓ الإجابة على أسئلتك المتنوعة\n\nاطرح سؤالك!'
+    } else if (/شكر|ممتاز|أحسنت|رائع/i.test(lastMsg)) {
+      smartReply = 'العفو! 😊 سعيد بمساعدتك. هل تحتاج أي شيء آخر؟'
+    } else if (/كم.*الساعة|الوقت|توق/i.test(lastMsg)) {
+      smartReply = `الساعة الآن: ${new Date().toLocaleTimeString('ar-DZ', { timeZone: 'Africa/Algiers' })}\nالتاريخ: ${new Date().toLocaleDateString('ar-DZ', { timeZone: 'Africa/Algiers' })}`
+    } else {
+      smartReply = `شكراً على سؤالك! 🤔\n\nأنا DZ Agent — مساعد ذكي جزائري. حالياً خدمة الذكاء الاصطناعي غير متاحة مؤقتاً.\n\nيمكنني مساعدتك بـ:\n- 🌤️ **طقس** أي ولاية — اسأل مثل: "طقس الجزائر اليوم"\n- 🕌 **مواقيت الصلاة** — اسأل مثل: "مواقيت الصلاة في وهران"\n- 📰 **أخبار** — اسأل مثل: "آخر أخبار الجزائر"\n\nأو حاول مرة أخرى لاحقاً للحصول على رد ذكي.`
+    }
+    return new Response(JSON.stringify({ content: smartReply, model: 'smart-fallback' }), { headers: corsHeaders })
   } catch (err) {
     console.error('[Worker:Chat] Error:', err)
     return new Response(JSON.stringify({ error: 'Server error', message: err.message, stack: err.stack?.split("\\n").slice(0, 10).join("\\n") }), {

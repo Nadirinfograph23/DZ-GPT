@@ -39,3 +39,8 @@ CF_PAGES = "1"
 [alias]
 "lightningcss" = "./workers/stubs/lightningcss.js"
 "vite" = "./workers/stubs/vite.js"
+"@distube/ytdl-core" = "./workers/stubs/ytdl-core.js"
+"youtube-sr" = "./workers/stubs/youtube-sr.js"
+"fast-xml-parser" = "./workers/stubs/fast-xml-parser.js"
+"ws" = "./workers/stubs/ws.js"
+"cheerio" = "./workers/stubs/cheerio.js"

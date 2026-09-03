@@ -61,31 +61,44 @@ function parseRssItems(xml: string, sourceName: string): NewsItem[] {
 
 const ALGERIA_NEWS_FEEDS = [
   { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
-  { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
-  { name: 'البلاد', url: 'https://www.elbilad.net/feed' },
+  { name: 'Google الجزائر أخبار عامة', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'SkyNews Arabia', url: 'https://www.skynewsarabia.com/rss/feed' },
+  { name: 'RT Arabic', url: 'https://arabic.rt.com/rss/' },
+  { name: 'DW Arabic', url: 'https://rss.dw.com/xml/rss-ar-all' },
 ]
 
 const TECH_NEWS_FEEDS = [
   { name: 'TechArabic', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%82%D9%86%D9%8A%D8%A9+%D8%A7%D9%84%D8%B1%D8%A7%D8%A6%D8%B9&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: 'Google Tech', url: 'https://news.google.com/rss/search?q=technology+OR+%D8%A3%D8%AC%D9%87%D8%B2%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Arabic Tech', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%82%D9%86%D9%8A%D8%A7%D8%AA+%D8%A7%D9%84%D8%B1%D8%A7%D8%A6%D8%B9&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 
 const SPORTS_NEWS_FEEDS = [
   { name: '🏆 رياضة', url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: '⚽ الدوري', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AF%D9%88%D8%B1%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%84%D9%85%D8%AD%D8%AA%D8%B1%D9%81&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '⚽ عربي', url: 'https://news.google.com/rss/search?q=%D9%83%D8%B1%D8%A9+%D8%A7%D9%84%D9%82%D8%AF%D9%85+%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A+%D8%A7%D9%84%D9%85%D8%AD%D8%AA%D8%B1%D9%81&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 
 async function fetchRssFeed(feed: { name: string; url: string }): Promise<NewsItem[]> {
-  try {
-    const resp = await fetch(feed.url, {
-      headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
-      signal: AbortSignal.timeout(8000),
-    })
-    if (!resp.ok) return []
-    const xml = await resp.text()
-    return parseRssItems(xml, feed.name)
-  } catch { return [] }
+  // Route all RSS fetches through a CORS proxy to avoid browser CORS blocks
+  // on Algerian news sites that don't send Access-Control-Allow-Origin headers
+  const CORS_PROXY = 'https://api.allorigins.win/raw?url='
+  const proxyUrl = CORS_PROXY + encodeURIComponent(feed.url)
+  const urls = [proxyUrl, feed.url] // try proxy first, then direct
+  for (const url of urls) {
+    try {
+      const resp = await fetch(url, {
+        headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
+        signal: AbortSignal.timeout(10000),
+      })
+      if (!resp.ok) continue
+      const xml = await resp.text()
+      if (!xml || xml.length < 50) continue
+      const items = parseRssItems(xml, feed.name)
+      if (items.length > 0) return items
+    } catch { /* try next URL */ }
+  }
+  return []
 }
 
 async function fetchAllRss(feeds: { name: string; url: string }[]): Promise<NewsItem[]> {

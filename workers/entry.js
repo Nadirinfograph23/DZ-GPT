@@ -11,6 +11,7 @@
  */
 
 import { Readable } from 'node:stream'
+import { lookupStaticFact } from '../lib/static-facts.js'
 
 let expressApp = null
 
@@ -266,17 +267,31 @@ async function fetchChatDirect(request) {
       }
     }
 
-    // ── AI PROVIDER FALLBACK CHAIN ──────────────────────────────────────
-    // Try multiple free AI providers. Each one has a timeout and if it
-    // fails we move to the next. The last resort is a keyword-based
-    // Arabic helper so users never see a blank error.
-    const systemPrompt = 'أنت DZ Agent — مساعد ذكي جزائري متعدد المهام. تحدث بالعربية الفصحى أو الجزائرية حسب سؤال المستخدم. أجب بشكل مفيد، دقيق، ومختصر.'
+    // ── Static knowledge fast-path — إجابة فورية صحيحة بدون أي مزوّد ────────
+    // يعمل حتى لو تعطلت كل خدمات الذكاء الاصطناعي (نفس قاعدة معرفة server.js).
+    // مطابق مع lookupStaticFact: عواصم، حقائق جزائرية، معرفة إسلامية وعامة...
     const corsHeaders = {
       'content-type': 'application/json',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     }
+    try {
+      const staticAnswer = lookupStaticFact(lastUser)
+      if (staticAnswer) {
+        return new Response(JSON.stringify({ content: staticAnswer, model: 'static-fact', _static: true }), {
+          headers: corsHeaders,
+        })
+      }
+    } catch (e) {
+      console.warn('[Worker:Chat] lookupStaticFact failed:', e.message)
+    }
+
+    // ── AI PROVIDER FALLBACK CHAIN ──────────────────────────────────────
+    // Try multiple free AI providers. Each one has a timeout and if it
+    // fails we move to the next. The last resort is a keyword-based
+    // Arabic helper so users never see a blank error.
+    const systemPrompt = 'أنت DZ Agent — مساعد ذكي جزائري متعدد المهام. تحدث بالعربية الفصحى أو الجزائرية حسب سؤال المستخدم. أجب بشكل مفيد، دقيق، ومختصر.'
 
     // 1) Pollinations text.pollinations.ai (verified working, free, no key)
     try {
@@ -344,7 +359,9 @@ async function fetchChatDirect(request) {
     } else if (/كم.*الساعة|الوقت|توق/i.test(lastMsg)) {
       smartReply = `الساعة الآن: ${new Date().toLocaleTimeString('ar-DZ', { timeZone: 'Africa/Algiers' })}\nالتاريخ: ${new Date().toLocaleDateString('ar-DZ', { timeZone: 'Africa/Algiers' })}`
     } else {
-      smartReply = `شكراً على سؤالك! 🤔\n\nأنا DZ Agent — مساعد ذكي جزائري. حالياً خدمة الذكاء الاصطناعي غير متاحة مؤقتاً.\n\nيمكنني مساعدتك بـ:\n- 🌤️ **طقس** أي ولاية — اسأل مثل: "طقس الجزائر اليوم"\n- 🕌 **مواقيت الصلاة** — اسأل مثل: "مواقيت الصلاة في وهران"\n- 📰 **أخبار** — اسأل مثل: "آخر أخبار الجزائر"\n\nأو حاول مرة أخرى لاحقاً للحصول على رد ذكي.`
+      // Last resort: give a useful generic reply — never claim "AI unavailable"
+      // for a definitional/general-knowledge question unless it truly can't answer.
+      smartReply = `شكراً على سؤالك! 🤔\n\nلا أحصل حالياً على إجابة من مزودي الذكاء الاصطناعي، لذلك لا أستطيع إعطاء إجابة دقيقة وموثوقة عن هذا السؤال المحدد.\n\nيمكنني مساعدتك الآن بـ:\n- 🌤️ **طقس** أي ولاية — اسأل مثل: "طقس الجزائر اليوم"\n- 🕌 **مواقيت الصلاة** — اسأل مثل: "مواقيت الصلاة في وهران"\n- 📰 **أخبار** — اسأل مثل: "آخر أخبار الجزائر"\n\nأو أعد صياغة سؤالك وحاول مرة أخرى لاحقاً.`
     }
     return new Response(JSON.stringify({ content: smartReply, model: 'smart-fallback' }), { headers: corsHeaders })
   } catch (err) {

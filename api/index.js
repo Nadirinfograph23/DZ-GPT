@@ -3,6 +3,7 @@
 // and falls back to server.js for other routes.
 
 import { createRequire } from 'module'
+import { lookupStaticFact } from '../lib/static-facts.js'
 const require = createRequire(import.meta.url)
 
 // Standalone chat handler (no server.js needed)
@@ -82,6 +83,12 @@ async function handleChat(req, res) {
     }
     if (/من أنت|من مطورك|من صانعك/.test(lower)) {
       return res.status(200).json({ content: 'أنا DZ Agent، مساعد ذكي مصمم خصيصاً للمستخدمين الجزائريين. أعمل على توفير معلومات دقيقة وخدمات متنوعة.', model: 'static-guard' })
+    }
+
+    // Static knowledge fast-path (no AI provider needed)
+    const staticAnswer = lookupStaticFact(lastUser)
+    if (staticAnswer) {
+      return res.status(200).json({ content: staticAnswer, model: 'static-fact' })
     }
 
     // Try AI providers in order

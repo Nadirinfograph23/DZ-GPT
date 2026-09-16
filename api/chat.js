@@ -1,6 +1,8 @@
 // Vercel Serverless Function — Chat (standalone, no server.js)
 // /api/dz-agent-chat
 
+import { lookupStaticFact } from '../lib/static-facts.js'
+
 const AI_API_KEY = process.env.AI_API_KEY || process.env.GROQ_API_KEY || ''
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ''
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY || ''
@@ -80,6 +82,12 @@ export default async function handler(req, res) {
     }
     if (/من أنت|من مطورك|من صانعك/.test(lower)) {
       return res.status(200).json({ content: 'أنا DZ Agent، مساعد ذكي مصمم خصيصاً للمستخدمين الجزائريين. أعمل على توفير معلومات دقيقة وخدمات متنوعة.', model: 'static-guard' })
+    }
+
+    // Static knowledge fast-path (no AI provider needed)
+    const staticAnswer = lookupStaticFact(lastUser)
+    if (staticAnswer) {
+      return res.status(200).json({ content: staticAnswer, model: 'static-fact' })
     }
 
     // Try AI providers in order

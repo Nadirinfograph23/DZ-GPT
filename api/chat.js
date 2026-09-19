@@ -1,8 +1,7 @@
+import { callKeylessAI } from '../lib/keyless-ai.js'
+
 // Vercel Serverless Function — Chat (standalone, no server.js)
 // /api/dz-agent-chat
-
-import { lookupStaticFact } from '../lib/static-facts.js'
-
 const AI_API_KEY = process.env.AI_API_KEY || process.env.GROQ_API_KEY || ''
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ''
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY || ''
@@ -11,23 +10,6 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || ''
 const DZ_SYSTEM_PROMPT = `أنت DZ Agent — مساعد ذكي جزائري متعدد المهام.
 تحدث بالعربية الفصحى أو الجزائرية حسب سؤال المستخدم.
 أجب بشكل مفيد، دقيق، ومختصر.`
-
-async function callPollinations(messages) {
-  const resp = await fetch('https://text.pollinations.ai/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'openai',
-      messages: [{ role: 'system', content: DZ_SYSTEM_PROMPT }, ...messages],
-      seed: Math.floor(Math.random() * 999999),
-      private: true,
-    }),
-    signal: AbortSignal.timeout(30000),
-  })
-  if (!resp.ok) throw new Error(`pollinations ${resp.status}`)
-  const data = await resp.json()
-  return data.choices?.[0]?.message?.content || data.content || ''
-}
 
 async function callGroq(messages) {
   if (!AI_API_KEY) throw new Error('no groq key')
@@ -84,18 +66,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ content: 'أنا DZ Agent، مساعد ذكي مصمم خصيصاً للمستخدمين الجزائريين. أعمل على توفير معلومات دقيقة وخدمات متنوعة.', model: 'static-guard' })
     }
 
-    // Static knowledge fast-path (no AI provider needed)
-    const staticAnswer = lookupStaticFact(lastUser)
-    if (staticAnswer) {
-      return res.status(200).json({ content: staticAnswer, model: 'static-fact' })
-    }
-
     // Try AI providers in order
     let reply = ''
     const providers = []
     if (AI_API_KEY) providers.push(() => callGroq(messages))
     if (GEMINI_API_KEY) providers.push(() => callGemini(messages))
-    providers.push(() => callPollinations(messages))
+    providers.push(async () => (await callKeylessAI(
+      [{ role: 'system', content: DZ_SYSTEM_PROMPT }, ...messages],
+      2048,
+    ))?.content || '')
 
     for (const provider of providers) {
       try {

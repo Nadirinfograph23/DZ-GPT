@@ -551,3 +551,13 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - Restored Worker-side DZ Maps interception so place queries such as "مسجد في عنابة" use the existing OpenStreetMap/Leaflet map engine instead of falling through to AI.
 - Preserved the existing deterministic doctor fixed-answer flow and live multi-source doctor search.
 - Commits: 4f72e50d5ae8dceef41e865100356830e24e3ab5, d5118ebed66fe46dd0b42d30c252c8ff7a5aa0a3.
+
+
+## 2026-09-20 — Deep historical restore of doctor sources/table
+
+- Re-inspected repository history instead of relying only on the current branch.
+- Historical commit 8de18e9957a928cccced2f510f009c7eb1e8634c contained the upgraded Algerian doctor directory aggregator with 10 sources: SahaDoc, Algerie-Docto, Addalile, SALIM-DZ, PJ-DZ, Docteur360, Sihhatech, Machrou3, Beesiha, and Altibbi.
+- Restored that historical source aggregation into lib/doctorSearch.js while keeping the mandatory Markdown table output and clickable Google Maps/tel links.
+- Restored the historical DoctorResultsPanel from commit 186f52d710dbb3216a4e12aa717913f98bca143f, including source badges/links.
+- Added UI labels for SALIM-DZ and Altibbi.
+- Commits: a73267e69894dcfc730a2923b8816594dcf7127d, ff751bd86d7bde6a1a7b75d012d6822a12213b8d, 4856aa08414a6810589ad3c7e60d476080cebae6, 7b3857d22cc4ed0c0326474c5c4dabf7fb3565bd.

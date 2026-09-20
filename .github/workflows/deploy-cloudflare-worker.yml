@@ -1,7 +1,5 @@
 name: Deploy Cloudflare Worker
 
-run-name: "🚀 نشر DZ Agent — ${{ github.sha }}"
-
 on:
   push:
     branches:
@@ -19,7 +17,6 @@ jobs:
   deploy:
     name: Build and deploy dzagent
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
@@ -35,34 +32,36 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Use public npm tarballs in CI
-        run: sed -i 's#http://package-firewall\\.replit\\.local/npm/#https://registry.npmjs.org/#g' package-lock.json
-
       - name: Generate deployment metadata
         shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p public data
-          COMMIT="${GITHUB_SHA}"
-          SHORT="${COMMIT:0:8}"
-          MESSAGE="$(git log -1 --pretty=%B | tr '\\n' ' ' | sed 's/[[:space:]]\\+/ /g; s/^ *//; s/ *$//')"
-          DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          MESSAGE_JSON="$(printf '%s' "$MESSAGE" | python -c 'import json,sys; print(json.dumps(sys.stdin.read(), ensure_ascii=False))')"
-          cat > public/version.json <<EOF
-{
-  "commit": "$COMMIT",
-  "commitShort": "$SHORT",
-  "branch": "${GITHUB_REF_NAME}",
-  "message": $MESSAGE_JSON,
-  "deployedAt": "$DEPLOYED_AT",
-  "deployedBy": "GitHub Actions + Cloudflare Workers"
-}
-EOF
-          cp public/version.json data/build-info.json
-          echo "Deploy metadata: $SHORT — $MESSAGE"
+          node <<'NODE'
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+          const commit = process.env.GITHUB_SHA;
+          const short = commit.slice(0, 8);
+          const message = execSync('git log -1 --pretty=%B', { encoding: 'utf8' }).replace(/\\s+/g, ' ').trim();
+          const deployedAt = new Date().toISOString();
+          const data = {
+            commit,
+            commitShort: short,
+            branch: process.env.GITHUB_REF_NAME,
+            message,
+            deployedAt,
+            deployedBy: 'GitHub Actions + Cloudflare Workers'
+          };
+          fs.mkdirSync('public', { recursive: true });
+          fs.mkdirSync('data', { recursive: true });
+          fs.writeFileSync('public/version.json', JSON.stringify(data, null, 2) + '\\n');
+          fs.writeFileSync('data/build-info.json', JSON.stringify(data, null, 2) + '\\n');
+          console.log('Deploy metadata:', short, message);
+          NODE
+
+      - name: Use public npm tarballs in CI
+        run: sed -i 's#http://package-firewall\\.replit\\.local/npm/#https://registry.npmjs.org/#g' package-lock.json
 
       - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       - name: Build application assets
         run: npm run build

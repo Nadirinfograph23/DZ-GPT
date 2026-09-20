@@ -1152,3 +1152,79 @@
 
 /* ─── legacy class from dz-agent.css wrapper ─── */
 .dz-dashboard-wrapper { width: 100%; }
+
+/* ================================================================
+   DZ DASHBOARD — PREMIUM VISUAL POLISH
+   Visual-only overrides; existing data fetching and tab behavior stay intact.
+   ================================================================ */
+.dzd-root {
+  border-radius: 22px;
+  border-color: rgba(148,163,184,.14);
+  background:
+    radial-gradient(700px 320px at 90% -10%, var(--dzd-accent-dim), transparent 65%),
+    var(--dzd-surface);
+  box-shadow:
+    0 18px 60px rgba(0,0,0,.34),
+    0 0 0 1px rgba(255,255,255,.025) inset;
+}
+
+.dzd-topbar {
+  min-height: 52px;
+  padding: 0 12px;
+  background: rgba(255,255,255,.025);
+  backdrop-filter: blur(18px);
+}
+
+.dzd-tab {
+  padding: 13px 13px 11px;
+  border-radius: 9px 9px 0 0;
+  transition: transform .18s ease, background .18s ease, color .18s ease, opacity .18s ease;
+}
+.dzd-tab:hover { transform: translateY(-1px); }
+.dzd-tab--active,
+.dzd-tab[data-tab].dzd-tab--active {
+  background: rgba(100,116,139,.32) !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,.12);
+}
+
+.dzd-refresh-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.035);
+}
+
+.dzd-panel {
+  padding: 18px;
+}
+
+.dzd-card {
+  border-radius: 16px !important;
+  border-color: rgba(148,163,184,.13) !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,.14);
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.dzd-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--dzd-accent-border) !important;
+  box-shadow: 0 16px 36px rgba(0,0,0,.2);
+}
+
+.dzd-section-title {
+  letter-spacing: -.15px;
+}
+
+@media (max-width: 640px) {
+  .dzd-root { border-radius: 16px; }
+  .dzd-panel { padding: 12px; }
+  .dzd-topbar { overflow-x: auto; }
+  .dzd-tab { padding-left: 10px; padding-right: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dzd-root *, .dzd-root *::before, .dzd-root *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+

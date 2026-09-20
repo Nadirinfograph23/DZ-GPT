@@ -214,3 +214,32 @@ User
 - تم تطوير `src/styles/site-announcement.css` بتصميم premium، shimmer خفيف، responsive mobile، ودعم `prefers-reduced-motion`.
 - Commits: `e9dc278d82cef68f9400b696bd3e21d504728764`, `41de06f7b446a168b9efc999c4722215dfaed4a2`.
 - قاعدة دائمة: أي تعديل لاحق على رسالة/بانر التحديث يجب تسجيله هنا قبل اعتبار المهمة مكتملة.
+
+
+## سجل مهمة 2026-09-20 — Live Research Brain بدون تغيير الإجابات الثابتة
+
+### المطلوب
+إضافة تقنية تجعل DZ Agent يكتشف تلقائياً الأسئلة التي تحتاج بحثاً حياً، ثم يجري بحثاً مباشراً ويستخدم النتائج مع AI Router، مع **عدم تغيير أو تجاوز الإجابات الثابتة الحالية**.
+
+### التنفيذ
+- أُضيف `lib/worker-live-search.js` — Worker-native بالكامل ويستخدم `fetch()` فقط.
+- أُضيف كاشف نية بحث حي متعدد اللغات (العربية/الدارجة/الفرنسية/الإنجليزية) للأسئلة الزمنية، الحالية، صريحة البحث، والتحقق.
+- تم الحفاظ على Static Knowledge Fast Path في `workers/entry.js` كما هو، ويُنفذ Live Research بعده فقط.
+- مصادر البحث المجانية: SearXNG public instances كـ metasearch، مع دعم `SEARXNG_INSTANCES` لتخصيص instances؛ Google News RSS كمصدر إضافي مجاني؛ وWikipedia العربية كـ fallback معرفي.
+- نتائج البحث لا تصبح إجابة خاماً؛ تُرسل إلى AI Router داخل سياق `[LIVE_WEB_RESEARCH]` ليقوم بتحليلها وصياغة الإجابة.
+- تُرفق المصادر والروابط في استجابة API عبر `sources`.
+- في حال فشل البحث الحي، يستمر المسار الحالي إلى AI Router/fallback بدون كسر المحادثة.
+- لا توجد API keys داخل Git.
+
+### Commits
+- `4f5d2ef41747438a8670e1b52d4466d79a6aa4ff` — إضافة Worker Live Research Brain.
+- `3a9503d396489401a4e5832489880ee96384f6cf` — ربط البحث الحي بمسار `workers/entry.js`.
+
+### مصادر تقنية للتحقق
+SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغيل محركات بحث متعددة حسب إعداداته. citeturn0search0turn0search11
+
+### الحالة
+تم تنفيذ الربط الأساسي. يلزم اختبار deployment فعلياً للتأكد من عمل instances العامة من بيئة Cloudflare، واختبار سؤال ثابت `سكان العالم`، وسؤال حالي، وسؤال صريح للبحث، وسؤال عادي لا يحتاج بحثاً.
+
+### قاعدة دائمة
+أي تعديل لاحق على Live Research Brain أو قرار SEARCH/NO_SEARCH يجب تسجيله في هذا الملف مع التاريخ، الوصف، الحالة وcommit SHA.

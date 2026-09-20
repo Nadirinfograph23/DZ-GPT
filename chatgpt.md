@@ -182,3 +182,27 @@ User
 ## الحالة الحالية
 تم تنفيذ الربط الأساسي. الخطوة التالية ليست إعادة كتابة المشروع؛ بل:
 **اختبار endpoint فعلياً، التأكد من deployment، ثم إصلاح أي مشكلة runtime في Cloudflare Worker، وبعدها إضافة/تحسين provider health checks وfallback إذا لزم.**
+
+
+## سجل تغييرات 2026-09-20 — Darija + GitHub + Task Persistence
+
+### Darija Extended
+- أُضيف الملف `data/dz_darija_extended.json` — commit `e7ef739e1b5d11d5219915b6511880bdc47a6a11`.
+- يحتوي على variants، مفردات تقنية جزائرية، تعبيرات محادثة، Arabizi، وأمثلة أصلية قصيرة.
+- أُضيف retrieval سياقي إلى `lib/darija-prompt.js` بدل حقن corpus ضخم بالكامل — commit `b05e22fca090e3044d0ab52fcdeeace8b40332e9`.
+- المرجع الخارجي المستخدم للتحقق من طبيعة code-switching وحجم الموارد: Algerian Darja Corpus (CC BY 4.0). لا يتم نسخ مقاطع طويلة من corpus إلى المشروع. citeturn0search2
+
+### إصلاح زر GitHub
+- أُصلح تحكم اتصال GitHub في `src/pages/DZAgentGitHub.tsx`.
+- الزر أصبح يعيد فحص `/api/dz-agent/github/agent-status` ويعرض حالة الاتصال والحساب بدلاً من أن يكون مجرد badge ثابت.
+- commit: `6018b498487f123ef484056126dc94554ac14cb9`.
+
+### حفظ المهام في chatgpt.md — قاعدة دائمة
+- أُضيف endpoint: `POST /api/dz-agent/github/task-log`.
+- عند بدء كل مهمة من واجهة DZ Agent، تُرسل المهمة تلقائياً إلى endpoint ليتم حفظها في `chatgpt.md` عبر GitHub.
+- commit: `db825615810df055e408eb40a84ce5095d7eaa74`.
+- **قاعدة إلزامية للمستقبل:** كل مهمة/إصلاح/طلب تعديل يتم تنفيذه على المشروع يجب تسجيله في `chatgpt.md` مع التاريخ، الوصف، الحالة، وcommit SHA عند توفره. لا تبدأ جلسة تعديل جديدة بدون قراءة `chatgpt.md` أولاً.
+- إذا فشل حفظ المهمة آلياً، يجب ألا يتم تجاهل ذلك بصمت في مسار الإدارة؛ يجب تسجيل سبب الفشل ضمن تقرير المهمة عند الإمكان.
+
+### ملاحظة GitHub
+المصادقة الحالية تعتمد على token موجود في بيئة الخادم. GitHub توصي باستخدام GitHub Apps عندما يكون ذلك مناسباً لأنها توفر صلاحيات أدق وtokens قصيرة العمر؛ OAuth apps تستخدم OAuth 2.0 أيضاً. citeturn0search0turn0search7

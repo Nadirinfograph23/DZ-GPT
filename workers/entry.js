@@ -404,6 +404,23 @@ async function fetchChatDirect(request, env = {}) {
       }
     }
 
+    // ── Restored deterministic Doctor Search fixed-answer flow ─────────────
+    // Must run before static knowledge / live research / AI so the original
+    // specialty → city conversation and structured doctor table are preserved.
+    try {
+      const doctorResponse = await handleWorkerDoctorSearch(messages, lastUser, payload?.userLocation || null)
+      if (doctorResponse) {
+        return new Response(JSON.stringify(doctorResponse), { headers: {
+          'content-type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        }})
+      }
+    } catch (e) {
+      console.warn('[Worker:Chat] Doctor search interception failed:', e?.message || e)
+    }
+
     // ── Static knowledge fast-path — إجابة فورية صحيحة بدون أي مزوّد ────────
     // يعمل حتى لو تعطلت كل خدمات الذكاء الاصطناعي (نفس قاعدة معرفة server.js).
     // مطابق مع lookupStaticFact: عواصم، حقائق جزائرية، معرفة إسلامية وعامة...

@@ -576,3 +576,12 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - Inspected historical DZ Place Search commit 21b910d63f767aa95799d34413bb5d901353432c: OpenStreetMap Nominatim place search, 58 wilayas, 12 POI types, and Leaflet mini-map. Current Worker also intercepts place queries through modules/dz-maps before AI, restoring queries such as “مسجد في عنابة”.
 - Corrected the Worker doctor result metadata from 8 to the restored 10-source directory set.
 - Latest code fix: 85be7226bece8582b2be6b7d7cf7077773305c6eb.
+
+
+## 2026-09-20 — Restore historical doctor table source links
+- Restored the historical doctor-table behavior: structured RTL table with doctor name, address, phone, specialty, and source information.
+- Kept the ten-source Algerian doctor aggregation and merge/dedup logic already present in lib/doctorSearch.js.
+- Restored clickable source badges in DoctorResultsPanel using the merged sourceUrls data, so each listed source can open its corresponding doctor/directory page.
+- Address links continue to use Google Maps URLs with coordinates when available, otherwise an encoded doctor/city search; Google documents that these universal Maps URLs open the Google Maps app on Android when installed, or the browser otherwise. 
+- Updated the doctor source-list documentation comment to include all ten restored sources.
+- Commits: f5b170c61ddc821fa211abadd6322fb3ff82d490 and feb1327733606e123e1771cf036b1ab811ffe755.

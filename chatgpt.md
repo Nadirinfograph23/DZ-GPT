@@ -561,3 +561,10 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - Restored the historical DoctorResultsPanel from commit 186f52d710dbb3216a4e12aa717913f98bca143f, including source badges/links.
 - Added UI labels for SALIM-DZ and Altibbi.
 - Commits: a73267e69894dcfc730a2923b8816594dcf7127d, ff751bd86d7bde6a1a7b75d012d6822a12213b8d, 4856aa08414a6810589ad3c7e60d476080cebae6, 7b3857d22cc4ed0c0326474c5c4dabf7fb3565bd.
+
+
+## 2026-09-20 — Restore direct “ابحث عن طبيب” conversation flow
+- Confirmed the Worker already contains the restored deterministic Doctor Search state machine: clicking the doctor entry should begin with “أريد طبيب”, then ask for specialty and wilaya, and a complete query such as “طبيب أسنان في عنابة” goes directly to doctor search.
+- Confirmed the Worker calls handleWorkerDoctorSearch(...) before the AI fallback.
+- Fixed src/components/DZDashboard.tsx so clicking the dashboard “نحوس على طبيب؟” entry immediately sends `أريد طبيب` instead of first forcing the GPS popup. This restores the intended original conversational flow; GPS remains optional through the existing GPS path.
+- Commit: f502f09be36047f14059bce5231ca546863b0f11.

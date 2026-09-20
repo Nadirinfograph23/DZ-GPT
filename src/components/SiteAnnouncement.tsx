@@ -14,10 +14,22 @@ interface Announcement {
 
 const POLL_INTERVAL = 30_000  // 30s — احتياطي فقط، SSE هو المسار الأساسي
 
+// A deployment update is a site message, not a bell notification. Keep it
+// visible at the top until the visitor dismisses it; live admin broadcasts
+// can still replace it through the existing SSE/API paths.
+const DEFAULT_ANNOUNCEMENT: Announcement = {
+  id: 'dzagent-update-20260920-keyless-router',
+  text: 'تم تحديث DZ Agent: تحسين الاتصال بـ GitHub، توحيد موجّه الذكاء الاصطناعي، وإضافة تدوير تلقائي لمزودات مجانية بلا تسجيل.',
+  link: null,
+  linkText: null,
+  timestamp: Date.now(),
+  from: 'DZ Agent',
+}
+
 export default function SiteAnnouncement() {
-  const [ann, setAnn]         = useState<Announcement | null>(null)
-  const [visible, setVisible] = useState(false)
-  const [entering, setEntering] = useState(false)
+  const [ann, setAnn]         = useState<Announcement | null>(DEFAULT_ANNOUNCEMENT)
+  const [visible, setVisible] = useState(true)
+  const [entering, setEntering] = useState(true)
   const dismissedRef           = useRef<string | null>(null)
   const showTimerRef           = useRef<ReturnType<typeof setTimeout> | null>(null)
   const navigate               = useNavigate()
@@ -44,7 +56,7 @@ export default function SiteAnnouncement() {
       if (!res.ok) return
       const data = await res.json()
       const a: Announcement | null = data.announcement
-      if (!a) { setAnn(null); setVisible(false); return }
+       if (!a) return
       showAnn(a)
     } catch {}
   }, [showAnn])

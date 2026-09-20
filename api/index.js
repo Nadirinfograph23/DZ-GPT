@@ -1,5 +1,5 @@
 // deploy-trigger: 20260615-squad-fix
-import { callKeylessAI } from '../lib/keyless-ai.js'
+import { callAIRouter } from '../lib/ai-router/index.js'
 
 // Vercel serverless entry point — routes /api/dz-agent-chat to standalone handler
 // and falls back to server.js for other routes.
@@ -8,43 +8,9 @@ import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 
 // Standalone chat handler (no server.js needed)
-const AI_API_KEY = process.env.AI_API_KEY || process.env.GROQ_API_KEY || ''
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ''
 const DZ_SYSTEM_PROMPT = `أنت DZ Agent — مساعد ذكي جزائري متعدد المهام.
 تحدث بالعربية الفصحى أو الجزائرية حسب سؤال المستخدم.
 أجب بشكل مفيد، دقيق، ومختصر.`
-
-async function callGroq(messages) {
-  if (!AI_API_KEY) throw new Error('no groq key')
-  const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${AI_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'system', content: DZ_SYSTEM_PROMPT }, ...messages],
-      max_tokens: 2048,
-      temperature: 0.4,
-    }),
-    signal: AbortSignal.timeout(30000),
-  })
-  if (!resp.ok) throw new Error(`groq ${resp.status}`)
-  const data = await resp.json()
-  return data.choices?.[0]?.message?.content || ''
-}
-
-async function callGemini(messages) {
-  if (!GEMINI_API_KEY) throw new Error('no gemini key')
-  const contents = messages.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }))
-  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents, generationConfig: { temperature: 0.4, maxOutputTokens: 2048 } }),
-    signal: AbortSignal.timeout(30000),
-  })
-  if (!resp.ok) throw new Error(`gemini ${resp.status}`)
-  const data = await resp.json()
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-}
 
 async function handleChat(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -69,30 +35,15 @@ async function handleChat(req, res) {
       return res.status(200).json({ content: 'أنا DZ Agent، مساعد ذكي مصمم خصيصاً للمستخدمين الجزائريين. أعمل على توفير معلومات دقيقة وخدمات متنوعة.', model: 'static-guard' })
     }
 
-    // Try AI providers in order
-    let reply = ''
-    const providers = []
-    if (AI_API_KEY) providers.push(() => callGroq(messages))
-    if (GEMINI_API_KEY) providers.push(() => callGemini(messages))
-    providers.push(async () => (await callKeylessAI(
+    const result = await callAIRouter(
       [{ role: 'system', content: DZ_SYSTEM_PROMPT }, ...messages],
-      2048,
-    ))?.content || '')
-
-    for (const provider of providers) {
-      try {
-        reply = await provider()
-        if (reply && reply.trim().length > 5) break
-      } catch (e) {
-        console.warn('[Chat] Provider failed:', e.message)
-      }
-    }
-
-    if (!reply) {
-      return res.status(200).json({ content: 'عذراً، لم أتمكن من الحصول على رد الآن. يرجى المحاولة مرة أخرى.', model: 'fallback' })
-    }
-
-    return res.status(200).json({ content: reply, model: 'dz-agent' })
+      { max_tokens: 2048, taskHint: 'multilingual' },
+    )
+    return res.status(200).json({
+      content: result?.content || 'عذراً، لم أتمكن من الحصول على رد الآن. يرجى المحاولة مرة أخرى.',
+      model: result?.model || 'fallback',
+      provider: result?.provider || undefined,
+    })
   } catch (err) {
     console.error('[Chat] Error:', err)
     return res.status(500).json({ error: 'Server error', message: err.message })

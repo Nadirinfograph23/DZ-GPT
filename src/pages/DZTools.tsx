@@ -1078,51 +1078,64 @@ function HealthTool() {
     setLoading(true); setResult(''); setDoctorData(null)
 
     if (mode === 'symptoms') {
-      // Always send symptoms to AI in Arabic regardless of input language
-      // The AI is instructed to respond in Arabic
-      const prompt = `[TOOL:SYMPTOM_ANALYZER — تحليل أعراض طبي — لا مقدمات — ابدأ مباشرةً بالعربية]
-
-أنت طبيب مساعد ذكي مدرَّب على مصادر طبية معتمدة دولية وجزائرية. المريض: ${gender==='male'?'ذكر':'أنثى'}، العمر: ${age||'غير محدد'} سنة.
-
-**الأعراض المُدخلة:** ${symptoms}
-
-⚠️ مهم: مهما كانت لغة الأعراض أعلاه (عربية، فرنسية، إنجليزية، دارجة)، يجب أن يكون ردّك كله بالعربية الفصحى الواضحة.
-
-التزم بهذه الأعراض فقط — لا تضف أعراضاً أخرى.
-
-## 1. التشخيص التفريقي
-2-4 حالات محتملة مرتّبة من الأعلى احتمالاً:
-| الحالة | الاسم الطبي | الارتباط بالأعراض | الاحتمالية |
-|--------|------------|-----------------|-----------|
-
-## 2. درجة الاستعجال
-🔴 طارئ / 🟡 موعد خلال 48 ساعة / 🟢 يمكن الانتظار أسبوع — مع مبرّر محدد.
-
-## 3. التخصص الطبي الأنسب
-الطبيب المناسب مع السبب، وما هي الفحوصات الأولية المتوقعة.
-
-## 4. الإجراءات الفورية في المنزل
-3-4 خطوات عملية يمكن تطبيقها الآن.
-
-## 5. علامات الخطر — راجع الطبيب فوراً إذا ظهرت:
-قائمة مختصرة بالأعراض التحذيرية التي تستدعي التدخل العاجل.
-
-## 6. مصادر طبية موثوقة للاطلاع (بالعربية)
-اذكر روابط مفيدة من: WebMD عربي | Mayo Clinic | Vidal.fr | ada.com | my.clevelandclinic.org/health
-
-⚠️ هذا تقييم استرشادي مبني على معلومات طبية موثوقة — لا يُغني عن استشارة الطبيب.`
-
+      // Use the dedicated DZ Health Agent endpoint instead of the generic chat pipeline.
       try {
-        const res = await fetch('/api/dz-agent-chat', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'health' })
+        const res = await fetch('/api/dz-agent/health', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symptoms, age, gender }),
         })
         const data = await res.json()
-        if (data.status === 'no_api_key' || !data.content) { setResult(NO_AI_MSG); setLoading(false); return }
-        setResult(data.content)
-      } catch { setResult('⚠️ خطأ في الاتصال.') }
-      finally { setLoading(false) }
 
+        if (data?.healthData) {
+          const h = data.healthData
+          const causes = Array.isArray(h.possible_causes) && h.possible_causes.length
+            ? h.possible_causes.map((x: string) => `- ${x}`).join('\n')
+            : '- لا توجد مطابقة موثوقة في قاعدة وكيل الصحة.'
+          const advice = Array.isArray(h.advice) && h.advice.length
+            ? h.advice.map((x: string) => `- ${x}`).join('\n')
+            : '- استشر طبيباً لتقييم الحالة.'
+          const urgency = h.triage_level === 'HIGH'
+            ? '🔴 **طارئ**'
+            : h.triage_level === 'MEDIUM'
+              ? '🟡 **يحتاج تقييماً طبياً قريباً**'
+              : '🟢 **غير طارئ حسب قواعد الوكيل الحالية**'
+          const sourceLine = h.source_record
+            ? `\n\n> 📚 **مصدر الوكيل:** DZ Health Agent — قاعدة المعرفة: ${h.source_record}`
+            : '\n\n> 📚 **المصدر:** DZ Health Agent — لا توجد مطابقة مباشرة في قاعدة المعرفة المحلية.'
+          const medication = h.medications_info
+            ? `\n\n### 💊 معلومات دوائية عامة\n${h.medications_info}`
+            : ''
+          const resultParts = [
+            '## 🩺 التقييم الصحي',
+            '',
+            `**التفسير:** ${h.interpretation || 'لا توجد معلومات كافية.'}`,
+            '',
+            '### درجة الاستعجال',
+            urgency,
+            '',
+            h.triage_reason ? `**السبب:** ${h.triage_reason}` : '',
+            h.triage_reason ? '' : '',
+            '### الأسباب المحتملة',
+            causes,
+            '',
+            '### ما يمكن فعله الآن',
+            advice,
+            medication,
+            h.emergency_note ? `\n> 🚨 **تنبيه:** ${h.emergency_note}` : '',
+            sourceLine,
+            '',
+            '> ⚠️ **تنبيه:** هذا تقييم استرشادي وليس تشخيصاً طبياً. لا تستخدم دواءً أو جرعة شخصية دون استشارة مختص.',
+          ].filter(Boolean).join('\n')
+          setResult(resultParts)
+        } else {
+          setResult('⚠️ لم يتمكن وكيل الصحة من إنتاج نتيجة موثوقة. يرجى المحاولة مرة أخرى.')
+        }
+      } catch {
+        setResult('⚠️ تعذّر الاتصال بوكيل الصحة المتخصص. يرجى المحاولة مرة أخرى.')
+      } finally {
+        setLoading(false)
+      }
     } else {
       // Doctor search — use real doctor search API
       const SPECIALTY_FR: Record<string, string> = {

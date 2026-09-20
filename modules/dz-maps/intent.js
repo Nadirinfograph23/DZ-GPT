@@ -181,6 +181,15 @@ const POI_TYPES = {
     ],
     osm: 'amenity=fire_station', icon: '🚒', nameAr: 'الحماية المدنية',
   },
+  facility: {
+    labels: [
+      'مرافق', 'مرفق', 'مرافق عامة', 'مرافق قريبة',
+      'facilities', 'public facilities', 'équipements publics', 'equipements publics',
+    ],
+    // Generic public-facing facilities for a broad "مرافق في المدينة" search.
+    osm: 'amenity~"hospital|clinic|doctors|pharmacy|school|university|college|bank|post_office|police|fire_station|townhall|public_building|bus_station|parking|library|place_of_worship|restaurant|cafe|fuel"',
+    icon: '🗺️', nameAr: 'مرافق وخدمات',
+  },
   mosque_named: {
     labels: [
       'مسجد الفرقان', 'مسجد النور', 'مسجد الرحمة', 'مسجد الإخلاص', 'مسجد الهدى',
@@ -486,6 +495,14 @@ export function isMapQuery(msg) {
   // Guard: skip if message has WEBSITE context — "موقع" / "سايت" / web tech keywords
   //        e.g. "موقع مطعم" = restaurant WEBSITE, NOT restaurant location on map
   const _hasWebCtx = /(?:موقع|صفحة|سايت|ويب|web|site|webpage|html|css|javascript|react|vue|تطبيق\s+(?:ويب|جوال|موبايل)|landing)/i.test(msg)
+  // Generic "مرافق" is intentionally stricter: it needs a city, a location
+  // preposition, or an explicit nearby/GPS phrase to avoid routing abstract
+  // discussions about public facilities to the map engine.
+  const poiKey = detectPoiType(msg)
+  if (hasPoi && poiKey === 'facility') {
+    return !NON_MAP_POI_MODIFIERS.test(msg) && !_hasWebCtx &&
+      (LOC_PREP_REGEX.test(msg) || hasGpsIntent(msg) || ALGERIA_CITIES_AR.some(city => msg.includes(city)))
+  }
   if (hasPoi && !NON_MAP_POI_MODIFIERS.test(msg) && !_hasWebCtx) return true
 
   return false

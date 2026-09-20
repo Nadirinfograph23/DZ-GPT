@@ -456,3 +456,19 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 2. «قلب» → الولاية.
 3. «عنابة» → النتائج.
 4. «مسجد الفرقان في عنابة» → OpenStreetMap/Leaflet.
+
+## سجل مهمة 2026-09-20 — إصلاح GitHub OAuth في DZ Agent
+
+### التنفيذ
+- إضافة مسار GitHub OAuth Worker-native قبل Express وrequest.json() لتجاوز مشكلة iconv-lite داخل Cloudflare Workers.
+- اعتراض GET /api/auth/github وGET /api/auth/github/callback وPOST /api/auth/github/logout.
+- استخدام OAuth state داخل HttpOnly/Secure/SameSite=Lax cookie.
+- تشفير access token عبر WebCrypto AES-GCM بصيغة متوافقة مع decrypt الموجود في routes/github.js.
+- الحفاظ على scope repo read:user وإعادة التوجيه بعد النجاح إلى /dz-agent/github?github=connected.
+
+### Commits
+- a86dec3273f500cf2aac12b4be92765a0f18c561 — إضافة Worker-native OAuth.
+- 98127eea4f299cb20f6c36cfb64e4ae5f66f0f2f — تشغيل OAuth قبل Express parsing.
+
+### الحالة
+الإصلاح موجود على release branch. آخر deployment السابق كان يفشل في خطوة Cloudflare Deploy، لذلك يلزم نجاح deployment ثم اختبار OAuth فعلياً قبل اعتباره منشوراً.

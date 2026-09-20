@@ -160,7 +160,7 @@ async function handleWorkerGitHubOAuth(request,env) {
 // ===== CHAT DIRECT (Worker-native, no server.js) =====
 async function fetchChatDirect(request, env = {}) {
   const requestUrl = new URL(request.url)
-  if (request.method === 'OPTIONS') {
+  const oauthResponse = await handleWorkerGitHubOAuth(request, env)\n  if (oauthResponse) return oauthResponse\n\n  if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
       headers: {

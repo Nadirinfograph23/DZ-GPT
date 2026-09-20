@@ -643,3 +643,39 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 
 ### الحالة
 التغييرات موجودة على الفرع `feat/doctor-table-engine-links`، وسيتم دمجها في `main` فقط بعد نجاح فحص البناء ثم انتظار نشر Cloudflare والتحقق من الموقع المباشر.
+
+
+## سجل مهمة 2026-09-20 — اعتماد آلية النشر الدائمة والتحقق من الموقع المباشر
+
+### القرار الدائم
+اعتماد المسار التالي لكل تحديث مستقبلي للمشروع:
+1. تنفيذ التعديل على فرع مستقل.
+2. فتح Pull Request نحو `main`.
+3. انتظار فحص `Validate Pull Request` ونجاح البناء قبل الدمج.
+4. دمج الـ PR في `main` فقط بعد اجتياز البناء.
+5. عند وصول commit إلى `main`، يشغّل `.github/workflows/deploy-cloudflare-worker.yml` تلقائياً.
+6. يقوم GitHub Actions ببناء التطبيق ثم نشر Cloudflare Worker.
+7. بعد النشر، يتحقق workflow آلياً من `https://dzagent.app/version.json` ويتأكد أن قيمة `commit` تطابق `GITHUB_SHA`؛ إذا لم تتطابق يفشل النشر ولا يُعتبر الموقع محدثاً.
+8. رسالة التحديث العلوية في الموقع تقرأ `version.json` وتعرض commit الرسالة المنشورة ووقت النشر.
+
+### سبب الاعتماد
+هذا المسار يفصل بين **التحقق قبل الدمج** و**النشر بعد الدمج**، ويمنع اعتبار تحديث GitHub منشوراً قبل نجاح build ونجاح تحقق الإنتاج. لا يتم وضع أي secrets داخل Git.
+
+### إصلاح تم أثناء الاعتماد
+تم اكتشاف أن آخر deployment run #252 وآخر PR validation run #8 فشلا في خطوة build بسبب خطأ TypeScript في `src/components/SiteAnnouncement.tsx`: كان تعريف `fetchAnn` مكرراً مرتين، ما أدى إلى الخطأ `TS1005: ')' expected`.
+تم إصلاح السطر المكرر في الفرع `fix/permanent-deploy-pipeline`.
+
+### رسالة التحديث التي ظهرت مؤخراً
+الرسالة المنشورة من commit الأخير كانت:
+> feat: standardize doctor results on shared table engine (#49)
+> feat: add doctor results table using existing table engine
+> feat: route doctor results through shared table engine
+> style: add doctor table action links
+> docs: log doctor table engine integration
+
+### Commits الخاصة بالآلية
+- `1ee20cf0ff82b125002d22024f034d084efae7db` — إصلاح خطأ build في رسالة التحديث.
+- `95cf610a8891e07cdce79a0d562b03d949807fc8` — إضافة تحقق إنتاجي إلزامي بعد نشر Cloudflare.
+
+### قاعدة دائمة
+لا أعتبر أي تحديث مكتملًا للموقع المباشر إلا بعد تحقق GitHub Actions من `version.json` ومطابقة commit المنشور مع commit الذي تم نشره. ويجب تسجيل كل عملية إصلاح/نشر لاحقة هنا مع التاريخ والـ commit والنتيجة.

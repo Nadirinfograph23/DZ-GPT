@@ -1,5 +1,5 @@
 {
-  "total_providers": 9,
+  "total_providers": 13,
   "primary_provider": "groq",
   "providers": [
     {
@@ -241,6 +241,94 @@
       "strengths": ["توليد صور مجاني", "نماذج مفتوحة المصدر"],
       "env_key": "HF_TOKEN",
       "primary_use": "image-generation"
+    },
+    {
+      "id": "llm7",
+      "name": "LLM7 Anonymous",
+      "enabled": true,
+      "priority": 9,
+      "type": "keyless-cloud-llm",
+      "models": ["default"],
+      "context_window": 32768,
+      "cost_level": "free",
+      "rate_limits": "مجهول: حد يومي وحد سرعة منخفض",
+      "reliability_score": 7,
+      "capabilities": {
+        "vision": false,
+        "reasoning": true,
+        "tool_calling": false,
+        "long_context": false,
+        "image_generation": false
+      },
+      "strengths": ["لا يحتاج مفتاحاً", "لا يحتاج تسجيل دخول", "اختيار نموذج مجاني تلقائياً"],
+      "env_key": null,
+      "requires_key": false
+    },
+    {
+      "id": "pollinations-chat",
+      "name": "Pollinations Anonymous Chat",
+      "enabled": true,
+      "priority": 10,
+      "type": "keyless-cloud-llm",
+      "models": ["openai"],
+      "context_window": 8192,
+      "cost_level": "free",
+      "rate_limits": "محدود حسب ضغط الخدمة وعنوان IP",
+      "reliability_score": 5,
+      "capabilities": {
+        "vision": false,
+        "reasoning": false,
+        "tool_calling": false,
+        "long_context": false,
+        "image_generation": false
+      },
+      "strengths": ["لا يحتاج مفتاحاً", "لا يحتاج تسجيل دخول", "احتياطي محادثة"],
+      "env_key": null,
+      "requires_key": false
+    },
+    {
+      "id": "pollinations-text",
+      "name": "Pollinations Anonymous Text",
+      "enabled": true,
+      "priority": 11,
+      "type": "keyless-cloud-llm",
+      "models": ["openai"],
+      "context_window": 4096,
+      "cost_level": "free",
+      "rate_limits": "محدود حسب ضغط الخدمة وعنوان IP",
+      "reliability_score": 4,
+      "capabilities": {
+        "vision": false,
+        "reasoning": false,
+        "tool_calling": false,
+        "long_context": false,
+        "image_generation": false
+      },
+      "strengths": ["مسار GET احتياطي", "لا يحتاج مفتاحاً", "لا يحتاج تسجيل دخول"],
+      "env_key": null,
+      "requires_key": false
+    },
+    {
+      "id": "ai-horde",
+      "name": "AI Horde Anonymous",
+      "enabled": true,
+      "priority": 12,
+      "type": "keyless-community-llm",
+      "models": ["KoboldCpp Hermes 3 Llama 3.1 8B"],
+      "context_window": 4096,
+      "cost_level": "free",
+      "rate_limits": "طابور مجتمعي — قد يتأخر عند الضغط",
+      "reliability_score": 5,
+      "capabilities": {
+        "vision": false,
+        "reasoning": true,
+        "tool_calling": false,
+        "long_context": false,
+        "image_generation": false
+      },
+      "strengths": ["لا يحتاج مفتاحاً", "لا يحتاج تسجيل دخول", "احتياط مجتمعي"],
+      "env_key": null,
+      "requires_key": false
     }
   ],
   "circuit_breaker": {

@@ -26,6 +26,7 @@
  *   systemHealthSnapshot   - () => object
  *   getProviderStatus      - () => object
  *   getRouterHealthSnapshot - () => object
+ *   getModelRotationSnapshot - () => object
  */
 import { Router } from 'express'
 import perfMonitor from '../lib/performance-monitor.js'
@@ -45,6 +46,7 @@ export function createHealthRouter(deps = {}) {
     systemHealthSnapshot,
     getProviderStatus,
     getRouterHealthSnapshot,
+    getModelRotationSnapshot,
   } = deps
 
   const router = Router()
@@ -203,7 +205,15 @@ export function createHealthRouter(deps = {}) {
         avgResponseMs: s.avgMs,
       }
     })
-    res.json({ total: all.length, active: stats.filter(s => s.status === 'active').length, keys: stats })
+    res.json({
+      total: all.length,
+      active: stats.filter(s => s.status === 'active').length,
+      keys: stats,
+      rotation: {
+        enabled: all.length > 0,
+        strategy: 'least-used then fastest, with cooldown fallback',
+      },
+    })
   })
 
   // ── System health ─────────────────────────────────────────────
@@ -220,6 +230,7 @@ export function createHealthRouter(deps = {}) {
         ok: true,
         providers: getProviderStatus ? getProviderStatus() : {},
         metrics: getRouterHealthSnapshot ? getRouterHealthSnapshot() : {},
+        rotation: getModelRotationSnapshot ? getModelRotationSnapshot() : null,
         ts: new Date().toISOString(),
       })
     } catch (err) { res.status(500).json({ ok: false, error: err.message }) }

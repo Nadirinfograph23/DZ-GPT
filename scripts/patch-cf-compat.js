@@ -101,6 +101,17 @@ for (const rel of [
   patchFile(rel, ICONV_OLD, ICONV_NEW, 'CF Workers: streams/extend-node unavailable')
 }
 
+// Express/body-parser 1.20.x can hoist iconv-lite 0.4.x to the root.
+// Its old API directly invokes require("./streams"), which Wrangler can
+// bundle as an object instead of a callable function. Patch the hoisted copy
+// too; otherwise Worker startup fails before any route handler runs.
+patchFile(
+  'node_modules/iconv-lite/lib/index.js',
+  ICONV_OLD,
+  ICONV_NEW,
+  'CF Workers: streams/extend-node unavailable'
+)
+
 // ─── 1c. Skip Node-only stream extensions inside Cloudflare Workers ───────────
 // Wrangler may replace browser-disabled `./streams` modules with an empty
 // CommonJS wrapper. Calling that wrapper is unsafe on some Worker runtimes,

@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "node:sqlite": path.resolve(__dirname, "./workers/stubs/node-sqlite.js"),
     },
     dedupe: ["react", "react-dom", "react-router-dom"],
   },
@@ -24,6 +25,14 @@ export default defineConfig({
       "Expires": "0",
     },
   },
+  ssr: {
+    external: [/^node:/, "undici"] as any,
+  },
+  build: {
+    rollupOptions: {
+      external: [/^node:/, "undici"] as any,
+    },
+  },
   optimizeDeps: {
     force: true,
     include: [
@@ -37,7 +46,7 @@ export default defineConfig({
       "@tanstack/react-table",
       "@tanstack/react-virtual",
     ],
-    exclude: [
+    exclude: ["undici", "node:sqlite", 
       "pdfjs-dist",
       "tesseract.js",
       "jszip",

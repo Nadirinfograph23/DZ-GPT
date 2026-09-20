@@ -1,23 +1,17 @@
-// deploy-trigger: 20260615-squad-fix
 import { callAIRouter } from '../lib/ai-router/index.js'
 import { lookupStaticFact } from '../lib/static-facts.js'
 
-// Vercel serverless entry point — routes /api/dz-agent-chat to standalone handler
-// and falls back to server.js for other routes.
-
-import { createRequire } from 'module'
-const require = createRequire(import.meta.url)
-
-// Standalone chat handler (no server.js needed)
+// Vercel Serverless Function — Chat (standalone, no server.js)
+// /api/dz-agent-chat
 const DZ_SYSTEM_PROMPT = `أنت DZ Agent — مساعد ذكي جزائري متعدد المهام.
 تحدث بالعربية الفصحى أو الجزائرية حسب سؤال المستخدم.
 أجب بشكل مفيد، دقيق، ومختصر.`
 
-async function handleChat(req, res) {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-  if (req.method === 'OPTIONS') return res.status(200).end('')
+  if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
@@ -54,30 +48,4 @@ async function handleChat(req, res) {
     console.error('[Chat] Error:', err)
     return res.status(500).json({ error: 'Server error', message: err.message })
   }
-}
-
-export default async function handler(req, res) {
-  const url = new URL(req.url || `http://localhost${req.url}`)
-  
-  // Route /api/dz-agent-chat to standalone handler
-  if (req.method === 'POST' && url.pathname === '/api/dz-agent-chat') {
-    return handleChat(req, res)
-  }
-  
-  // Fallback to server.js for all other routes
-  let app
-  try {
-    const { app: importedApp } = await import('../server.js')
-    app = importedApp
-  } catch (err) {
-    console.error('[Vercel] server.js import FAILED:', err?.message)
-    app = (_req, res) => {
-      res.status(500).json({
-        error: 'Server startup failed',
-        message: err?.message,
-        stack: err?.stack?.split('\n').slice(0, 15),
-      })
-    }
-  }
-  return app(req, res)
 }

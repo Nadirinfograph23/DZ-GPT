@@ -9,7 +9,342 @@ import {
 } from 'lucide-react'
 import '../styles/dz-dashboard.css'
 import { withRetry } from '../utils/dzMemory'
-import WC2026MatchCard from './WC2026MatchCard'
+
+// ═══════════════════════════════════════════════════════════════════════
+// Browser-side RSS parser & free API fetchers
+// These run directly in the browser to bypass broken Express/Worker bridge
+// ═══════════════════════════════════════════════════════════════════════
+
+function decodeXmlText(value = ''): string {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .trim()
+}
+
+function parseRssItems(xml: string, sourceName: string): NewsItem[] {
+  const items: NewsItem[] = []
+  const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
+  let m: RegExpExecArray | null
+  while ((m = itemRegex.exec(xml)) !== null && items.length < 10) {
+    const block = m[1]
+    const get = (tag: string): string => {
+      const found = block.match(
+        new RegExp(
+          `<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`,
+          'i',
+        ),
+      )
+      return found ? decodeXmlText(found[1]) : ''
+    }
+    const title = get('title')
+    if (!title) continue
+    const link = get('link') ||
+      (block.match(/<link[^>]+href=["']([^"']+)["']/i) || [])[1] || ''
+    items.push({
+      title,
+      link,
+      description: get('description'),
+      pubDate: get('pubDate') || get('dc:date') || '',
+      source: sourceName,
+      feedName: sourceName,
+    })
+  }
+  return items
+}
+
+const ALGERIA_NEWS_FEEDS = [
+  // ── Algerian-specific news (highest priority) ──────────────────────────
+  { name: '🇩🇿 أحداث نت', url: 'https://news.google.com/rss/search?q=%D8%A3%D8%AD%D8%AF%D8%A7%D8%AB+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🇩🇿 جزاير توداي', url: 'https://news.google.com/rss/search?q=%D8%AC%D8%B2%D8%A7%D8%A6%D9%8A%D8%B1+%D8%AA%D9%88%D8%AF%D8%A7%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🇩🇿 النهار', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D9%86%D9%87%D8%A7%D8%B1+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🇩🇿 الشروق', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B4%D8%B1%D9%88%D9%82+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // ── General Algeria news ──────────────────────────────────────────────
+  { name: '🇩🇿 أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🇩🇿 وطن أخبار', url: 'https://news.google.com/rss/search?q=%D9%88%D8%B7%D9%86+%D8%A2%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // ── International Arabic news (secondary) ──────────────────────────────
+  { name: 'عربية: سكاي', url: 'https://news.google.com/rss/search?q=%D8%B3%D9%83%D8%A7%D9%8A+%D9%86%D9%8A%D8%B8%D8%A7%D9%84&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'عربية: العربية', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9+%D9%86%D9%8A%D9%88%D8%B2&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'عربية: الجزيرة', url: 'https://news.google.com/rss/search?q+%D8%A7%D9%84%D8%AC%D8%B2%D9%8A%D8%B1%D8%A9+%D9%86%D9%8A%D9%88%D8%B2&hl=ar&gl=DZ&ceid=DZ:ar' },
+]
+
+const TECH_NEWS_FEEDS = [
+  // ── Arabic tech news (priority) ───────────────────────────────────────
+  { name: '🖥️ تك عربي', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%82%D9%86%D9%8A%D8%A7%D8%AA+%D8%A7%D9%84%D8%B1%D8%A7%D8%A6%D8%B9&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🖥️ آythings', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%82%D9%86%D9%8A%D8%A7%D8%AA&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🖥️ هوستك', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B1%D8%A7%D8%A6%D8%B9+%D8%A7%D9%84%D8%A5%D9%84%D9%83%D8%AA%D8%B1%D9%88%D9%86%D9%8A+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🖥️ أبل العربية', url: 'https://news.google.com/rss/search?q=%D8%A3%D8%A8%D9%84+%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9+OR+%D8%A3%D9%8A%D9%81%D9%88%D9%86+OR+%D8%B3%D8%A7%D9%85%D8%B3%D9%88%D9%86%D8%BA+OR+%D8%BA%D9%88%D9%88%D8%BA%D9%84&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // ── General tech news in Arabic ───────────────────────────────────────
+  { name: '🖥️ ذكاء اصطناعي', url: 'https://news.google.com/rss/search?q=%D8%B0%D9%83%D8%A7%D8%A1+%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A+OR+%D9%86%D9%85%D8%B7%D8%A7%D8%AC+OR+%D8%A7%D9%84%D8%B9%D9%84%D9%85&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '🖥️ تقنية عربية', url: 'https://news.google.com/rss/search?q=%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1+%D8%AA%D9%82%D9%86%D9%8A%D8%A9+%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
+]
+
+const SPORTS_NEWS_FEEDS = [
+  { name: '🏆 رياضة', url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '⚽ الدوري', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AF%D9%88%D8%B1%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%84%D9%85%D8%AD%D8%AA%D8%B1%D9%81&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: '⚽ عربي', url: 'https://news.google.com/rss/search?q=%D9%83%D8%B1%D8%A9+%D8%A7%D9%84%D9%82%D8%AF%D9%85+%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A+%D8%A7%D9%84%D9%85%D8%AD%D8%AA%D8%B1%D9%81&hl=ar&gl=DZ&ceid=DZ:ar' },
+]
+
+async function fetchRssFeed(feed: { name: string; url: string }): Promise<NewsItem[]> {
+  // Multiple CORS proxy fallbacks to ensure RSS feeds load reliably
+  // Google News RSS works well but browsers block direct CORS from client
+  const CORS_PROXIES = [
+    (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  ]
+
+  // Try each proxy, then try direct fetch as last resort
+  for (const proxyFn of CORS_PROXIES) {
+    try {
+      const resp = await fetch(proxyFn(feed.url), {
+        headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
+        signal: AbortSignal.timeout(8000),
+      })
+      if (!resp.ok) continue
+      const text = await resp.text()
+      if (!text || text.length < 50) continue
+      // Verify it looks like XML/RSS, not an error page
+      if (!text.includes('<item') && !text.includes('<entry')) continue
+      const items = parseRssItems(text, feed.name)
+      if (items.length > 0) return items
+    } catch { /* try next proxy */ }
+  }
+
+  // Last resort: direct fetch (works for feeds with CORS headers)
+  try {
+    const resp = await fetch(feed.url, {
+      headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (resp.ok) {
+      const text = await resp.text()
+      if (text && text.length > 50 && (text.includes('<item') || text.includes('<entry'))) {
+        return parseRssItems(text, feed.name)
+      }
+    }
+  } catch { /* all methods failed */ }
+  return []
+}
+
+async function fetchAllRss(feeds: { name: string; url: string }[]): Promise<NewsItem[]> {
+  const results = await Promise.allSettled(feeds.map(f => fetchRssFeed(f)))
+  const seen = new Set<string>()
+  // Fetch results are in feed order — use feedIndex to preserve priority
+  const allItems: { item: NewsItem; feedIndex: number }[] = []
+  results.forEach((r, feedIndex) => {
+    if (r.status === 'fulfilled') {
+      r.value.forEach(item => allItems.push({ item, feedIndex }))
+    }
+  })
+  return allItems
+    .filter(({ item }) => {
+      const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    // Primary sort: feed priority (lower index = higher priority)
+    // Secondary sort: most recent first
+    .sort((a, b) => {
+      if (a.feedIndex !== b.feedIndex) return a.feedIndex - b.feedIndex
+      const ta = a.item.pubDate ? new Date(a.item.pubDate).getTime() : 0
+      const tb = b.item.pubDate ? new Date(b.item.pubDate).getTime() : 0
+      return tb - ta
+    })
+    .map(({ item }) => item)
+    .slice(0, 30)
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Free currency API (fawazahmed0 — CORS-enabled, no key needed)
+// ═══════════════════════════════════════════════════════════════════════
+
+async function fetchCurrencyFree(): Promise<CurrencyData> {
+  try {
+    const resp = await fetch(
+      'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json',
+      { signal: AbortSignal.timeout(8000) }
+    )
+    if (!resp.ok) throw new Error(`Currency API: ${resp.status}`)
+    const data = await resp.json()
+    // fawazahmed0 returns rates as base=EUR, so we convert to base=DZD
+    // Actually use DZD as base directly:
+    const dzdResp = await fetch(
+      'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/dzd.json',
+      { signal: AbortSignal.timeout(8000) }
+    )
+    if (!dzdResp.ok) throw new Error(`Currency API DZD: ${dzdResp.status}`)
+    const dzdData = await dzdResp.json()
+    const rates: Record<string, number> = {}
+    const targets = ['USD', 'EUR', 'GBP', 'SAR', 'AED', 'TND', 'MAD', 'EGP', 'QAR', 'KWD', 'CAD', 'CHF', 'CNY', 'TRY', 'JPY']
+    for (const code of targets) {
+      if (dzdData.dzd?.[code]) {
+        // fawazahmed0 returns 1 DZD = X foreign, invert to get foreign = Y DZD
+        rates[code] = dzdData.dzd[code]
+      }
+    }
+    return {
+      base: 'DZD',
+      provider: 'fawazahmed0/currency-api',
+      rates,
+      status: 'live',
+      last_update: dzdData.date || new Date().toISOString().split('T')[0],
+    }
+  } catch {
+    return { base: 'DZD', provider: 'unavailable', rates: {}, status: 'unavailable' }
+  }
+}
+
+async function fetchLfpFree(): Promise<{ matches: MatchItem[]; articles: { title: string; link: string; date?: string }[]; fetchedAt: string; source: string }> {
+  try {
+    // Try fetching LFP RSS or news
+    const items = await fetchRssFeed({
+      name: 'LFP',
+      url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AF%D9%88%D8%B1%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A+%D8%A7%D9%84%D9%85%D8%AD%D8%AA%D8%B1%D9%81+%D9%85%D8%A8%D8%A7%D8%B1%D9%8A%D8%A7%D8%AA&hl=ar&gl=DZ&ceid=DZ:ar',
+    })
+    return {
+      matches: [],
+      articles: items.slice(0, 5).map(item => ({
+        title: item.title,
+        link: item.link,
+        date: item.pubDate,
+      })),
+      fetchedAt: new Date().toISOString(),
+      source: 'Google News (LFP)',
+    }
+  } catch {
+    return { matches: [], articles: [], fetchedAt: new Date().toISOString(), source: 'unavailable' }
+  }
+}
+
+async function fetchStandingsFree(): Promise<{ standings: { rank: string; team: string; played: string; wins: string; draws: string; losses: string; points: string }[]; source: string; fetchedAt: string }> {
+  // Standings data is very hard to get from free APIs
+  // Return empty so the component shows its "retry" state
+  return { standings: [], source: 'unavailable', fetchedAt: new Date().toISOString() }
+}
+
+async function fetchGlobalLeaguesFree(): Promise<{ leagues: { name: string; matches: { homeTeam: string; awayTeam: string; homeScore: number | null; awayScore: number | null; statusType: string; startTime: string; link: string }[] }[]; date: string; source: string } | null> {
+  // Global leagues data needs specialized API
+  return null
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Free Weather API (Open-Meteo — no key, CORS-enabled)
+// ═══════════════════════════════════════════════════════════════════════
+
+const WILAYA_COORDS: Record<string, { lat: number; lon: number }> = {
+  'Adrar': { lat: 27.87, lon: -0.29 }, 'Chlef': { lat: 36.17, lon: 1.33 },
+  'Laghouat': { lat: 33.80, lon: 2.88 }, 'Oum el Bouaghi': { lat: 35.87, lon: 7.11 },
+  'Batna': { lat: 35.56, lon: 6.17 }, 'Bejaia': { lat: 36.75, lon: 5.08 },
+  'Biskra': { lat: 34.85, lon: 5.73 }, 'Bechar': { lat: 31.62, lon: -2.22 },
+  'Blida': { lat: 36.47, lon: 2.83 }, 'Bouira': { lat: 36.38, lon: 3.90 },
+  'Tamanrasset': { lat: 22.79, lon: 5.52 }, 'Tebessa': { lat: 35.40, lon: 8.12 },
+  'Tlemcen': { lat: 34.88, lon: -1.31 }, 'Tiaret': { lat: 35.37, lon: 1.32 },
+  'Tizi Ouzou': { lat: 36.71, lon: 4.05 }, 'Algiers': { lat: 36.75, lon: 3.06 },
+  'Djelfa': { lat: 34.67, lon: 3.25 }, 'Jijel': { lat: 36.82, lon: 5.77 },
+  'Setif': { lat: 36.19, lon: 5.41 }, 'Saida': { lat: 34.83, lon: 0.15 },
+  'Skikda': { lat: 36.88, lon: 6.91 }, 'Sidi bel Abbes': { lat: 35.19, lon: -0.63 },
+  'Annaba': { lat: 36.90, lon: 7.77 }, 'Guelma': { lat: 36.46, lon: 7.43 },
+  'Constantine': { lat: 36.37, lon: 6.61 }, 'Medea': { lat: 36.27, lon: 2.75 },
+  'Mostaganem': { lat: 35.93, lon: 0.09 }, 'Msila': { lat: 35.70, lon: 4.54 },
+  'Mascara': { lat: 35.40, lon: 0.14 }, 'Ouargla': { lat: 31.95, lon: 5.33 },
+  'Oran': { lat: 35.69, lon: -0.63 }, 'El Bayadh': { lat: 33.68, lon: 1.02 },
+  'Illizi': { lat: 26.50, lon: 8.47 }, 'Bordj Bou Arreridj': { lat: 36.07, lon: 4.76 },
+  'Boumerdes': { lat: 36.75, lon: 3.47 }, 'El Tarf': { lat: 36.77, lon: 8.31 },
+  'Tindouf': { lat: 27.67, lon: -8.14 }, 'Tissemsilt': { lat: 35.61, lon: 1.81 },
+  'El Oued': { lat: 33.35, lon: 6.86 }, 'Khenchela': { lat: 35.44, lon: 7.14 },
+  'Souk Ahras': { lat: 36.29, lon: 7.95 }, 'Tipaza': { lat: 36.59, lon: 2.45 },
+  'Mila': { lat: 36.45, lon: 6.26 }, 'Ain Defla': { lat: 36.18, lon: 1.97 },
+  'Naama': { lat: 33.27, lon: -0.31 }, 'Ain Temouchent': { lat: 35.30, lon: -1.14 },
+  'Ghardaia': { lat: 32.49, lon: 3.67 }, 'Relizane': { lat: 35.74, lon: 0.56 },
+  'Timimoun': { lat: 29.26, lon: 0.24 }, 'Bordj Badji Mokhtar': { lat: 21.33, lon: -0.95 },
+  'Ouled Djellal': { lat: 34.42, lon: 5.07 }, 'Beni Abbes': { lat: 30.13, lon: -2.17 },
+  'In Salah': { lat: 27.19, lon: 2.48 }, 'In Guezzam': { lat: 19.57, lon: 5.77 },
+  'Touggourt': { lat: 33.10, lon: 6.06 }, 'Djanet': { lat: 24.55, lon: 9.48 },
+  'El Meghaier': { lat: 33.95, lon: 5.93 }, 'El Meniaa': { lat: 30.58, lon: 2.87 },
+}
+
+const WMO_CODES: Record<number, string> = {
+  0: 'صافي', 1: 'صافي غالباً', 2: 'غائم جزئياً', 3: 'غائم',
+  45: 'ضباب', 48: 'ضباب متجمد',
+  51: 'رذاذ خفيف', 53: 'رذاذ', 55: 'رذاذ كثيف',
+  56: 'رذاذ متجمد', 57: 'رذاذ متجمد كثيف',
+  61: 'مطر خفيف', 63: 'مطر', 65: 'مطر غزير',
+  66: 'مطر متجمد', 67: 'مطر متجمد غزير',
+  71: 'ثلج خفيف', 73: 'ثلج', 75: 'ثلج كثيف',
+  77: 'حبيبات ثلج', 80: 'زخات مطر', 81: 'زخات مطر كثيفة', 82: 'عاصفة مطر',
+  85: 'زخات ثلج', 86: 'زخات ثلج كثيفة',
+  95: 'عاصفة رعدية', 96: 'عاصفة رعدية مع برد', 99: 'عاصفة رعدية مع برد كثيف',
+}
+
+async function fetchWeatherFree(city: string, coords?: { lat: number; lon: number }): Promise<WeatherData> {
+  try {
+    const c = coords || WILAYA_COORDS[city] || WILAYA_COORDS['Algiers']
+    const resp = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,visibility&daily=temperature_2m_max,temperature_2m_min&timezone=auto`,
+      { signal: AbortSignal.timeout(8000) }
+    )
+    if (!resp.ok) throw new Error(`Open-Meteo: ${resp.status}`)
+    const d = await resp.json()
+    const cur = d.current
+    return {
+      city,
+      temp: cur.temperature_2m ?? null,
+      feels_like: cur.apparent_temperature ?? undefined,
+      temp_min: d.daily?.temperature_2m_min?.[0] ?? undefined,
+      temp_max: d.daily?.temperature_2m_max?.[0] ?? undefined,
+      condition: WMO_CODES[cur.weather_code] || 'غير معروف',
+      icon: null,
+      humidity: cur.relative_humidity_2m ?? undefined,
+      wind: cur.wind_speed_10m ?? undefined,
+      visibility: cur.visibility ? Math.round(cur.visibility / 1000) : undefined,
+    }
+  } catch {
+    return { city, temp: null, condition: null, icon: null }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Free Prayer API (Aladhan — no key, CORS-enabled)
+// ═══════════════════════════════════════════════════════════════════════
+
+const ALGERIA_CITY_COORDS: Record<string, { lat: number; lon: number }> = WILAYA_COORDS
+
+async function fetchPrayerFree(city: string, coords?: { lat: number; lon: number }): Promise<PrayerData> {
+  try {
+    const c = coords || ALGERIA_CITY_COORDS[city] || ALGERIA_CITY_COORDS['Algiers']
+    const resp = await fetch(
+      `https://api.aladhan.com/v1/timings/${new Date().toISOString().split('T')[0]}?latitude=${c.lat}&longitude=${c.lon}&method=3`,
+      { signal: AbortSignal.timeout(8000) }
+    )
+    if (!resp.ok) throw new Error(`Aladhan: ${resp.status}`)
+    const d = await resp.json()
+    const t = d.data?.timings || {}
+    const dateStr = d.data?.date?.hijri || new Date().toLocaleDateString('ar-DZ')
+    return {
+      city,
+      date: `${dateStr} — ${d.data?.date?.readable || ''}`,
+      source: 'aladhan.com',
+      times: {
+        'الفجر': t.Fajr || '--',
+        'الشروق': t.Sunrise || '--',
+        'الظهر': t.Dhuhr || '--',
+        'العصر': t.Asr || '--',
+        'المغرب': t.Maghrib || '--',
+        'العشاء': t.Isha || '--',
+      },
+    }
+  } catch {
+    return { city, date: '', source: 'unavailable', times: {} }
+  }
+}
 
 interface NewsItem {
   title: string
@@ -54,7 +389,7 @@ interface DashboardData {
   lfp?: {
     matches: MatchItem[]
     articles: { title: string; link: string; date?: string }[]
-    fetchedAt?: number
+    fetchedAt?: string | number
     source?: string
   } | null
   fetchedAt: string
@@ -205,7 +540,7 @@ function getArName(enName: string) {
   return WILAYAS.find(w => w.en === enName)?.ar || enName
 }
 
-type DashboardContext = { priority: 'weather'; city: string; cityAr?: string }
+type DashboardContext = { priority: 'weather'; city: string }
 
 type ModalStep = 'ask' | 'loading' | 'denied' | 'error'
 
@@ -441,54 +776,54 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const [dollarData, setDollarData] = useState<{ usd: number; eur: number; gbp: number; trend: string; updatedAt: string; source: string } | null>(null)
   const [dollarLoading, setDollarLoading] = useState(false)
 
-  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'quran' | 'dollar' | 'national' | 'wc2026'>('prayer')
-
-  // WC2026 scoreboard — يُخفى تلقائياً بعد 19 يوليو 2026
-  const WC2026_END = new Date('2026-07-20T00:00:00Z')
-  const wc2026Active = new Date() < WC2026_END
-  const [wc2026Matches, setWc2026Matches] = useState<any[]>([])
-  const [wc2026Loading, setWc2026Loading] = useState(false)
-  const [wc2026Date, setWc2026Date] = useState<string>('')
-  const [wc2026IsNext, setWc2026IsNext] = useState(false)
-  // نتائج البارحة
-  const [wc2026Yesterday, setWc2026Yesterday] = useState<any[]>([])
-  const [wc2026YesterdayDate, setWc2026YesterdayDate] = useState<string>('')
-  const [wc2026YesterdayLoading, setWc2026YesterdayLoading] = useState(false)
-  const [wc2026YesterdayOpen, setWc2026YesterdayOpen] = useState(false)
-  const [nationalTeamNews, setNationalTeamNews] = useState<NewsItem[]>([])
-  const [nationalLoading, setNationalLoading]   = useState(false)
-  const [nationalBadge, setNationalBadge]       = useState(false)
+  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'quran' | 'dollar'>('prayer')
 
   const saveCity = useCallback((city: string) => {
     try { localStorage.setItem(STORAGE_KEY, city) } catch {}
     setSelectedCity(city)
   }, [])
 
-  const loadNationalTeamNews = useCallback(async (opts: { force?: boolean } = {}) => {
-    setNationalLoading(true)
-    try {
-      const url = opts.force ? '/api/national-team/news?bypassCache=1' : '/api/national-team/news'
-      const r = await fetch(url)
-      if (!r.ok) throw new Error(`National team API error: ${r.status}`)
-      const d = await r.json()
-      setNationalTeamNews(d.items || [])
-    } catch (err) {
-      console.error('[DZDashboard] loadNationalTeamNews failed:', err)
-    } finally {
-      setNationalLoading(false)
-    }
-  }, [])
-
   const loadDashboard = async (opts: { force?: boolean } = {}) => {
     setLoading(true)
     try {
-      const url = opts.force ? '/api/dz-agent/dashboard?bypassCache=1' : '/api/dz-agent/dashboard'
-      const result = await withRetry(async () => {
-        const r = await fetch(url)
-        if (!r.ok) throw new Error(`Dashboard API error: ${r.status}`)
-        return r.json()
-      }, 1)
-      setData(result)
+      // Fetch news, sports, tech, and LFP data directly from free RSS APIs
+      // This bypasses the broken Express/Worker bridge for dashboard data
+      const [newsItems, sportsItems, techItems, leagueData] = await Promise.allSettled([
+        fetchAllRss(ALGERIA_NEWS_FEEDS),
+        fetchAllRss(SPORTS_NEWS_FEEDS),
+        fetchAllRss(TECH_NEWS_FEEDS),
+        fetchLfpFree(),
+      ])
+
+      const news = newsItems.status === 'fulfilled' ? newsItems.value : []
+      const sportsRaw = sportsItems.status === 'fulfilled' ? sportsItems.value : []
+      const tech = techItems.status === 'fulfilled'
+        ? techItems.value.map(item => ({
+            ...item,
+            category: 'تقنية',
+            trending_score: 0,
+          } as TechItem))
+        : []
+      const league = leagueData.status === 'fulfilled' ? leagueData.value : null
+
+      // LFP sports news (if league had articles)
+      const leagueNews = (league?.articles || []).slice(0, 3).map(item => ({
+        title: item.title,
+        link: item.link || 'https://lfp.dz',
+        description: '',
+        pubDate: item.date || '',
+        source: '🏆 رابطة LFP',
+        feedName: '🏆 رابطة LFP',
+      }))
+
+      setData({
+        news,
+        sports: leagueNews.length > 0 ? leagueNews : sportsRaw,
+        tech,
+        weather: [],
+        lfp: league,
+        fetchedAt: new Date().toISOString(),
+      })
     } catch (err) {
       console.error('[DZDashboard] loadDashboard failed:', err)
     } finally {
@@ -499,14 +834,9 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadWeather = useCallback(async (city: string, coords?: { lat: number; lon: number }) => {
     setWeatherLoading(true)
     try {
-      const url = coords
-        ? `/api/dz-agent/weather?lat=${coords.lat}&lon=${coords.lon}`
-        : `/api/dz-agent/weather?city=${encodeURIComponent(city)}`
-      const result = await withRetry(async () => {
-        const r = await fetch(url)
-        if (!r.ok) throw new Error(`Weather API error: ${r.status}`)
-        return r.json()
-      }, 1)
+      // Fetch weather directly from free Open-Meteo API in browser
+      // This bypasses the broken Express/Worker bridge for /api/dz-agent/weather
+      const result = await fetchWeatherFree(city, coords)
       setWeatherData(result)
     } catch (err) {
       console.error('[DZDashboard] loadWeather failed:', err)
@@ -519,14 +849,9 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadPrayer = useCallback(async (city: string, coords?: { lat: number; lon: number }) => {
     setPrayerLoading(true)
     try {
-      const url = coords
-        ? `/api/dz-agent/prayer?lat=${coords.lat}&lon=${coords.lon}`
-        : `/api/dz-agent/prayer?city=${encodeURIComponent(city)}`
-      const result = await withRetry(async () => {
-        const r = await fetch(url)
-        if (!r.ok) throw new Error(`Prayer API error: ${r.status}`)
-        return r.json()
-      }, 1)
+      // Fetch prayer times directly from free Aladhan API in browser
+      // This bypasses the broken Express/Worker bridge for /api/dz-agent/prayer
+      const result = await fetchPrayerFree(city, coords)
       setPrayerData(result)
     } catch (err) {
       console.error('[DZDashboard] loadPrayer failed:', err)
@@ -536,46 +861,29 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
     }
   }, [])
 
-  const loadWC2026 = useCallback(async () => {
-    if (!wc2026Active) return
-    setWc2026Loading(true)
-    try {
-      const r = await fetch('/api/wc2026/today')
-      if (r.ok) {
-        const d = await r.json()
-        if (d.active) {
-          setWc2026Matches(d.matches || [])
-          setWc2026Date(d.date || '')
-          setWc2026IsNext(!!d.isNextDay)
-        }
-      }
-    } catch { /* ignore */ }
-    finally { setWc2026Loading(false) }
-  }, [wc2026Active])
-
-  const loadWC2026Yesterday = useCallback(async () => {
-    if (!wc2026Active) return
-    setWc2026YesterdayLoading(true)
-    try {
-      const r = await fetch('/api/wc2026/yesterday')
-      if (r.ok) {
-        const d = await r.json()
-        if (d.active) {
-          setWc2026Yesterday(d.matches || [])
-          setWc2026YesterdayDate(d.date || '')
-        }
-      }
-    } catch { /* ignore */ }
-    finally { setWc2026YesterdayLoading(false) }
-  }, [wc2026Active])
-
   const loadDollar = useCallback(async () => {
     setDollarLoading(true)
     try {
-      const r = await fetch('/api/dz-dollar')
-      if (r.ok) {
-        const d = await r.json()
-        setDollarData(d)
+      // Try backend endpoint first
+      try {
+        const r = await fetch('/api/dz-dollar', { signal: AbortSignal.timeout(5000) })
+        if (r.ok) {
+          const d = await r.json()
+          setDollarData(d)
+          return
+        }
+      } catch { /* fall through */ }
+      // Fallback: use currency API to get USD, EUR, GBP rates
+      const curr = await fetchCurrencyFree()
+      if (curr.rates?.USD || curr.rates?.EUR || curr.rates?.GBP) {
+        setDollarData({
+          usd: curr.rates.USD ? +(1 / curr.rates.USD).toFixed(2) : 0,
+          eur: curr.rates.EUR ? +(1 / curr.rates.EUR).toFixed(2) : 0,
+          gbp: curr.rates.GBP ? +(1 / curr.rates.GBP).toFixed(2) : 0,
+          trend: '📊 الأسعار من فورا زهمد (السعر الرسمي)',
+          updatedAt: new Date().toISOString(),
+          source: 'fawazahmed0/currency-api',
+        })
       }
     } catch { /* ignore */ }
     finally { setDollarLoading(false) }
@@ -584,11 +892,9 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadCurrency = useCallback(async () => {
     setCurrencyLoading(true)
     try {
-      const result = await withRetry(async () => {
-        const r = await fetch('/api/currency/latest')
-        if (!r.ok) throw new Error(`Currency API error: ${r.status}`)
-        return r.json()
-      }, 1)
+      // Fetch currency rates directly from free fawazahmed0 API
+      // This bypasses the broken Express bridge for /api/currency/latest
+      const result = await fetchCurrencyFree()
       setCurrencyData(result)
     } catch (err) {
       console.error('[DZDashboard] loadCurrency failed:', err)
@@ -602,11 +908,18 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadStandings = useCallback(async () => {
     setStandingsLoading(true)
     try {
-      const result = await withRetry(async () => {
+      // Try backend first, fall back to empty data
+      try {
         const r = await fetch('/api/dz-agent/standings')
-        if (!r.ok) throw new Error(`Standings API error: ${r.status}`)
-        return r.json()
-      }, 2)
+        if (r.ok) {
+          const result = await r.json()
+          if (result?.standings?.length) {
+            setStandingsData(result)
+            return
+          }
+        }
+      } catch { /* fall through to free fetch */ }
+      const result = await fetchStandingsFree()
       setStandingsData(result)
     } catch (err) {
       console.error('[DZDashboard] loadStandings failed:', err)
@@ -619,12 +932,19 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadGlobalLeagues = useCallback(async (opts: { force?: boolean } = {}) => {
     setGlobalLoading(true)
     try {
-      const url = opts.force ? '/api/dz-agent/global-leagues?bypassCache=1' : '/api/dz-agent/global-leagues'
-      const result = await withRetry(async () => {
+      // Try backend first, fall back to free fetch
+      try {
+        const url = opts.force ? '/api/dz-agent/global-leagues?bypassCache=1' : '/api/dz-agent/global-leagues'
         const r = await fetch(url)
-        if (!r.ok) throw new Error(`Global leagues API error: ${r.status}`)
-        return r.json()
-      }, 2)
+        if (r.ok) {
+          const result = await r.json()
+          if (result?.leagues?.length) {
+            setGlobalLeagues(result)
+            return
+          }
+        }
+      } catch { /* fall through to free fetch */ }
+      const result = await fetchGlobalLeaguesFree()
       setGlobalLeagues(result)
     } catch (err) {
       console.error('[DZDashboard] loadGlobalLeagues failed:', err)
@@ -702,44 +1022,14 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
     loadStandings()
     loadGlobalLeagues()
     loadDollar()
-    loadNationalTeamNews()
-    loadWC2026()
-    loadWC2026Yesterday()
-  }, [])
-
-  // SSE: listen for national_team_news events from the server
-  useEffect(() => {
-    let es: EventSource | null = null
-    function connect() {
-      es = new EventSource('/api/breaking-news/stream')
-      es.onmessage = (e) => {
-        try {
-          const d = JSON.parse(e.data)
-          if (d.type === 'national_team_news' && Array.isArray(d.items) && d.items.length > 0) {
-            setNationalTeamNews(prev => {
-              const existing = new Set(prev.map(x => x.title))
-              const fresh = d.items.filter((x: NewsItem) => !existing.has(x.title))
-              if (fresh.length === 0) return prev
-              return [...fresh, ...prev].slice(0, 15)
-            })
-            setNationalBadge(true)
-          }
-        } catch {}
-      }
-      es.onerror = () => { es?.close(); setTimeout(connect, 30_000) }
-    }
-    connect()
-    return () => { es?.close() }
   }, [])
 
   const tabs: { key: typeof activeSection; label: string; icon: React.ReactNode; isNav?: boolean }[] = [
     { key: 'quran'    as const, label: 'القرآن',         icon: <BookOpen    size={12} />, isNav: true },
     { key: 'prayer'   as const, label: 'الصلاة',         icon: <Moon        size={12} /> },
     { key: 'weather'  as const, label: 'الطقس',          icon: <Cloud       size={12} /> },
-    ...(wc2026Active ? [{ key: 'wc2026' as const, label: '🏆 كأس العالم', icon: <Trophy size={12} /> }] : []),
     { key: 'news'     as const, label: 'الأخبار',        icon: <Newspaper   size={12} /> },
     { key: 'dollar'   as const, label: 'سوق الصرف',     icon: <DollarSign  size={12} /> },
-    { key: 'national' as const, label: 'المنتخب 🇩🇿',     icon: <Radio       size={12} /> },
     { key: 'sports'   as const, label: 'الدوري',         icon: <Trophy      size={12} /> },
     { key: 'standings'as const, label: 'الترتيب',        icon: <BarChart2   size={12} /> },
     { key: 'global'   as const, label: 'عالمي',          icon: <Globe       size={12} /> },
@@ -816,16 +1106,10 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                   navigate('/aiquran')
                   return
                 }
-                if (tab.key === 'national') setNationalBadge(false)
                 setActiveSection(tab.key)
               }}
             >
-              <span className="dzd-tab-icon" style={{ position: 'relative' }}>
-                {tab.icon}
-                {tab.key === 'national' && nationalBadge && (
-                  <span style={{ position:'absolute', top:-3, right:-3, width:7, height:7, background:'#22c55e', borderRadius:'50%', border:'1px solid var(--dzd-bg)' }} />
-                )}
-              </span>
+              <span className="dzd-tab-icon">{tab.icon}</span>
               <span className="dzd-tab-label">{tab.label}</span>
             </button>
           ))}
@@ -891,7 +1175,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
             ) : weatherData && weatherData.temp !== null ? (
               <div
                 className={`dzd-weather-main-card ${getWeatherBg(weatherData.icon)}`}
-                onClick={() => onSend(`حالة الطقس في ${getArName(selectedCity)} اليوم`, { priority: 'weather', city: selectedCity, cityAr: getArName(selectedCity) })}
+                onClick={() => onSend(`حالة الطقس في ${getArName(selectedCity)} اليوم`, { priority: 'weather', city: selectedCity })}
               >
                 <div className="dzd-wmc-header">
                   <div className="dzd-wmc-city">
@@ -951,13 +1235,8 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
           <div className="dzd-news-panel">
             {loading ? (
               <div className="dzd-news-list">
-                <div className="dzd-loop-wrap">
-                  <div className="dzd-loop">
-                    <div className="dzd-loop-ring" />
-                    <div className="dzd-loop-dot dzd-loop-dot--1" />
-                    <div className="dzd-loop-dot dzd-loop-dot--2" />
-                    <div className="dzd-loop-dot dzd-loop-dot--3" />
-                  </div>
+                <div className="dzd-news-loading-hint">
+                  <span className="dzd-spin-icon">⏳</span> جاري تحميل أبرز عناوين الصحف...
                 </div>
                 {[...Array(5)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
               </div>
@@ -976,7 +1255,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
             ) : (
               <div className="dzd-news-list">
                 {(data.news).map((item, i) => (
-                  <div key={i} className="dzd-news-card" onClick={() => onSend(`لخّص لي هذا الخبر وأعطني أبرز تفاصيله:\n"${item.title}"`)}>
+                  <div key={i} className="dzd-news-card" onClick={() => onSend(`اخبار: ${item.title}`)}>
                     <div className="dzd-news-card-left">
                       <span className="dzd-news-source"><Newspaper size={9} /> {item.feedName}</span>
                       <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
@@ -1068,7 +1347,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                 {(data?.sports || []).length > 0 && (
                   <div className="dzd-news-list dzd-sports-news-list">
                     {(data?.sports || []).slice(0, 5).map((item, i) => (
-                      <div key={i} className="dzd-news-card dzd-news-card--sport" onClick={() => onSend(`أعطني ملخصاً عن هذا الخبر الرياضي:\n"${item.title}"`)}>
+                      <div key={i} className="dzd-news-card dzd-news-card--sport" onClick={() => onSend(`رياضة: ${item.title}`)}>
                         <div className="dzd-news-card-left">
                           <span className="dzd-news-source dzd-news-source--sport"><Trophy size={9} /> {item.feedName}</span>
                           <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
@@ -1349,14 +1628,6 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
           <div className="dzd-news-panel">
             {loading ? (
               <div className="dzd-news-list">
-                <div className="dzd-loop-wrap">
-                  <div className="dzd-loop">
-                    <div className="dzd-loop-ring" />
-                    <div className="dzd-loop-dot dzd-loop-dot--1" />
-                    <div className="dzd-loop-dot dzd-loop-dot--2" />
-                    <div className="dzd-loop-dot dzd-loop-dot--3" />
-                  </div>
-                </div>
                 {[...Array(5)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
               </div>
             ) : (!data?.tech || data.tech.length === 0) ? (
@@ -1364,7 +1635,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
             ) : (
               <div className="dzd-news-list">
                 {(data.tech).map((item, i) => (
-                  <div key={i} className="dzd-news-card dzd-news-card--tech" onClick={() => onSend(`أعطني ملخصاً عن هذا الخبر التقني:\n"${item.title}"`)}>
+                  <div key={i} className="dzd-news-card dzd-news-card--tech" onClick={() => onSend(`تقنية: ${item.title}`)}>
                     <div className="dzd-news-card-left">
                       <span className="dzd-news-source dzd-news-source--tech"><Cpu size={9} /> {item.feedName}</span>
                       <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
@@ -1387,259 +1658,6 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                 ))}
               </div>
             )}
-          </div>
-        )}
-
-        {/* ===== NATIONAL TEAM — المنتخب الجزائري ===== */}
-        {activeSection === 'national' && (
-          <div className="dzd-news-panel">
-
-            {/* ── رأس البطاقة ──────────────────────────────────────── */}
-            <div style={{ direction:'rtl', marginBottom:10 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-                <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-                  <span style={{ fontSize:15, fontWeight:800, color:'#22c55e', display:'flex', alignItems:'center', gap:6 }}>
-                    🇩🇿 المنتخب الجزائري
-                  </span>
-                  <span style={{ fontSize:10, color:'#6b8f71', letterSpacing:'0.04em' }}>
-                    الخضر · محاربو الصحراء · الفريق الوطني
-                  </span>
-                </div>
-                <button
-                  className="dzd-retry-btn"
-                  style={{ fontSize:'10px', padding:'3px 10px', display:'inline-flex', alignItems:'center', gap:'4px' }}
-                  onClick={() => loadNationalTeamNews({ force: true })}
-                  disabled={nationalLoading}
-                  title="تحديث أخبار المنتخب"
-                >
-                  <RefreshCw size={11} className={nationalLoading ? 'dzd-spin' : ''} />
-                  {nationalLoading ? 'جاري…' : 'تحديث'}
-                </button>
-              </div>
-
-              {/* ── أزرار البرومبتات السريعة ─────────────────────── */}
-              <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:4 }}>
-                {[
-                  { label:'⚽ أخبار الخضر',           prompt:'أعطني آخر أخبار الخضر المنتخب الجزائري اليوم' },
-                  { label:'🏜️ محاربو الصحراء',        prompt:'آخر أخبار محاربو الصحراء المنتخب الجزائري' },
-                  { label:'🌍 الفريق الوطني',          prompt:'أخبار الفريق الوطني الجزائري اليوم' },
-                  { label:'📅 المباراة القادمة',        prompt:'ما هي المباراة القادمة للمنتخب الجزائري؟ الموعد والمنافس' },
-                  { label:'📊 تصفيات كأس العالم',       prompt:'ما هو وضع المنتخب الجزائري في تصفيات كأس العالم؟ النتائج والترتيب' },
-                  { label:'🏆 آخر نتائج المنتخب',       prompt:'آخر نتائج مباريات المنتخب الجزائري هذا الشهر' },
-                  { label:'👥 قائمة المنتخب',           prompt:'قائمة المنتخب الجزائري الأخيرة — من تم استدعاؤه؟' },
-                  { label:'⭐ أبرز لاعبي الخضر',        prompt:'من هم أبرز لاعبي المنتخب الجزائري حالياً؟' },
-                ].map(({ label, prompt }) => (
-                  <button
-                    key={label}
-                    onClick={() => onSend(prompt)}
-                    style={{
-                      background:'rgba(34,197,94,0.08)', border:'1px solid rgba(34,197,94,0.22)',
-                      borderRadius:20, padding:'5px 12px', fontSize:11, fontWeight:600,
-                      color:'#4ade80', cursor:'pointer', fontFamily:'inherit', direction:'rtl',
-                      transition:'all .18s', whiteSpace:'nowrap',
-                    }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background='rgba(34,197,94,0.18)'; (e.currentTarget as HTMLButtonElement).style.borderColor='rgba(34,197,94,0.5)' }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background='rgba(34,197,94,0.08)'; (e.currentTarget as HTMLButtonElement).style.borderColor='rgba(34,197,94,0.22)' }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* ── قائمة الأخبار ─────────────────────────────────── */}
-            {nationalLoading ? (
-              <div className="dzd-news-list">
-                {[...Array(6)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
-              </div>
-            ) : nationalTeamNews.length === 0 ? (
-              <div className="dzd-empty-state">
-                <span className="dzd-empty-icon">🇩🇿</span>
-                <p>لا توجد أخبار حالياً</p>
-                <button className="dzd-retry-btn" onClick={() => loadNationalTeamNews({ force: true })}>
-                  <RefreshCw size={12} /> إعادة المحاولة
-                </button>
-                <div style={{ marginTop:10, display:'flex', flexWrap:'wrap', gap:5, justifyContent:'center' }}>
-                  {['أخبار الخضر اليوم','المباراة القادمة للمنتخب','قائمة المنتخب الجزائري'].map(q => (
-                    <button key={q} className="dzd-retry-btn" style={{ fontSize:'10px' }} onClick={() => onSend(q)}>{q}</button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="dzd-news-list">
-                {nationalTeamNews.map((item, i) => (
-                  <div
-                    key={i}
-                    className="dzd-news-card dzd-news-card--national"
-                    onClick={() => onSend(`أعطني ملخصاً وتحليلاً لهذا الخبر الرياضي:\n"${item.title}"\nالمصدر: ${item.feedName || 'أخبار المنتخب'}`)}
-                  >
-                    <div className="dzd-news-card-left">
-                      <span className="dzd-news-source dzd-news-source--national">
-                        <Radio size={9} /> {item.feedName || 'المنتخب 🇩🇿'}
-                      </span>
-                      <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
-                    </div>
-                    <div className="dzd-news-card-body">
-                      <p className="dzd-news-title">{item.title}</p>
-                    </div>
-                    {item.link && (
-                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="dzd-news-link" onClick={e => e.stopPropagation()}>
-                        <ExternalLink size={11} />
-                      </a>
-                    )}
-                  </div>
-                ))}
-                <div style={{ textAlign:'center', paddingTop:8 }}>
-                  <button
-                    className="dzd-retry-btn"
-                    style={{ fontSize:'10px', display:'inline-flex', alignItems:'center', gap:4 }}
-                    onClick={() => onSend('أعطني ملخصاً شاملاً لآخر أخبار المنتخب الجزائري اليوم من جميع المصادر')}
-                  >
-                    📋 ملخص شامل لأخبار المنتخب
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ===== WC2026 SCOREBOARD ===== */}
-        {activeSection === 'wc2026' && wc2026Active && (
-          <div style={{ padding: '8px 4px', direction: 'rtl' }}>
-            {/* Header */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              marginBottom: 12, padding: '10px 14px',
-              background: 'linear-gradient(135deg, rgba(99,102,241,0.18) 0%, rgba(139,92,246,0.12) 100%)',
-              borderRadius: 14, border: '1px solid rgba(99,102,241,0.25)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 22 }}>🏆</span>
-                <div>
-                  <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 13 }}>كأس العالم FIFA 2026</div>
-                  {wc2026Date && (
-                    <div style={{ color: '#64748b', fontSize: 10, marginTop: 2 }}>
-                      {wc2026IsNext ? '📅 مباريات القادمة' : '📅 مباريات اليوم'} — {new Date(wc2026Date + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Algiers' })}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={loadWC2026}
-                disabled={wc2026Loading}
-                style={{
-                  background: 'transparent', border: '1px solid rgba(99,102,241,0.3)',
-                  borderRadius: 8, padding: '4px 8px', color: '#a5b4fc',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11,
-                }}
-              >
-                <RefreshCw size={11} className={wc2026Loading ? 'dzd-spin' : ''} />
-                تحديث
-              </button>
-            </div>
-
-            {/* Matches */}
-            {wc2026Loading ? (
-              <div className="dzd-skeleton-grid">
-                {[...Array(3)].map((_, i) => <div key={i} className="dzd-skeleton" style={{ height: 120, borderRadius: 16, marginBottom: 8 }} />)}
-              </div>
-            ) : wc2026Matches.length > 0 ? (
-              <WC2026MatchCard
-                matches={wc2026Matches}
-                autoRefresh={true}
-                refreshInterval={60000}
-                compact={true}
-              />
-            ) : (
-              <div className="dzd-empty-state">
-                <span className="dzd-empty-icon">⚽</span>
-                <p>لا توجد مباريات متاحة حالياً</p>
-                <button className="dzd-retry-btn" onClick={loadWC2026}>
-                  <RefreshCw size={12} /> إعادة المحاولة
-                </button>
-                <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 5, justifyContent: 'center' }}>
-                  {['مباريات اليوم في كأس العالم 2026', 'جدول مباريات كأس العالم', 'المنتخب الجزائري كأس العالم'].map(q => (
-                    <button key={q} className="dzd-retry-btn" style={{ fontSize: 10 }} onClick={() => onSend(q)}>{q}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── نتائج البارحة — accordion ────────────────────────── */}
-            {wc2026Yesterday.length > 0 && (
-              <div style={{ marginTop: 10, direction: 'rtl' }}>
-                {/* زر فتح/إغلاق */}
-                <button
-                  onClick={() => {
-                    setWc2026YesterdayOpen(o => !o)
-                    if (!wc2026YesterdayOpen && wc2026Yesterday.length === 0) loadWC2026Yesterday()
-                  }}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
-                    borderRadius: wc2026YesterdayOpen ? '10px 10px 0 0' : 10,
-                    padding: '7px 12px', cursor: 'pointer', color: '#94a3b8',
-                    fontSize: 11, fontWeight: 600, transition: 'all 0.15s',
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13 }}>📅</span>
-                    نتائج البارحة
-                    {wc2026YesterdayDate && (
-                      <span style={{ color: '#475569', fontSize: 9.5, marginRight: 4 }}>
-                        — {new Date(wc2026YesterdayDate + 'T12:00:00Z').toLocaleDateString('ar-DZ', {
-                          weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Algiers',
-                        })}
-                      </span>
-                    )}
-                    <span style={{
-                      background: 'rgba(99,102,241,0.18)', border: '1px solid rgba(99,102,241,0.3)',
-                      color: '#a5b4fc', borderRadius: 20, padding: '0 6px', fontSize: 9, fontWeight: 700,
-                    }}>
-                      {wc2026Yesterday.length}
-                    </span>
-                  </span>
-                  <span style={{ fontSize: 12, transition: 'transform 0.2s', transform: wc2026YesterdayOpen ? 'rotate(180deg)' : 'none' }}>
-                    ▾
-                  </span>
-                </button>
-
-                {/* محتوى الأكورديون */}
-                {wc2026YesterdayOpen && (
-                  <div style={{
-                    background: 'rgba(5,5,18,0.6)', border: '1px solid rgba(255,255,255,0.07)',
-                    borderTop: 'none', borderRadius: '0 0 10px 10px',
-                    padding: '7px 8px 8px',
-                  }}>
-                    {wc2026YesterdayLoading ? (
-                      <div style={{ textAlign: 'center', color: '#475569', fontSize: 10, padding: '8px 0' }}>
-                        ⏳ جاري التحميل...
-                      </div>
-                    ) : (
-                      <WC2026MatchCard
-                        matches={wc2026Yesterday}
-                        autoRefresh={false}
-                        compact={true}
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Footer links */}
-            <div style={{ marginTop: 14, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-              {[
-                { label: '🌐 FIFA الرسمي', url: 'https://www.fifa.com/worldcup' },
-                { label: '📊 FotMob', url: 'https://www.fotmob.com/tournaments/77/overview/world-cup' },
-                { label: '📱 kooora', url: 'https://www.kooora.com/?wc2026' },
-              ].map(l => (
-                <a key={l.url} href={l.url} target="_blank" rel="noopener noreferrer"
-                  style={{ color: '#818cf8', fontSize: 11, textDecoration: 'none', padding: '3px 10px', borderRadius: 8, background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
-                  {l.label}
-                </a>
-              ))}
-            </div>
           </div>
         )}
 

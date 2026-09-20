@@ -605,3 +605,13 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - Added a persistent production build indicator at the top of the app showing version, GitHub Actions build number, and short commit SHA.
 - Build metadata is injected automatically during the Cloudflare deployment workflow using `VITE_APP_VERSION`, `VITE_BUILD_ID`, `VITE_COMMIT_SHA`, and `VITE_BUILD_TIME`.
 - This allows the live site to be compared directly with the GitHub deployment commit instead of relying on browser cache or assumptions.
+
+
+## 2026-09-20 — Harden automatic production deployment after PR merge
+- Verified the latest Cloudflare deployment run completed successfully (GitHub Actions run #238 / run ID 35520741495) with both the application build and Wrangler deploy succeeding.
+- Identified the repository's actual default branch as `devin/1774405518-init-dz-gpt`, while production deployment previously watched only `main`. This meant a PR merged into the repository's default branch could update source without triggering production deployment.
+- Updated `.github/workflows/deploy-cloudflare-worker.yml` to deploy on pushes to both `main` and `devin/1774405518-init-dz-gpt`, so a merged PR to either production source branch automatically starts the deployment.
+- Added exact Worker build identity variables (`VITE_APP_VERSION`, `VITE_BUILD_ID`, `VITE_COMMIT_SHA`) to the Wrangler deployment so `/api/version` can report the actual deployed commit/build.
+- Added a post-deploy smoke test against `https://dzagent.app/api/version`. The deployment job now fails if the live domain is not serving the exact commit and GitHub Actions build number that were just deployed.
+- Added `.github/workflows/validate-pr.yml` for PRs targeting either production source branch. It installs dependencies, builds the application, and runs Wrangler dry-run validation before merge.
+- Commits on this deployment-hardening branch: 6e0221226c78078dd5241e0cead1248e425face9, 91cbaa6a70a3413bb803bbc318f2ebbbf8a134da, 4c4b0ab762a5c421cd108b6fb0913159b711147e.

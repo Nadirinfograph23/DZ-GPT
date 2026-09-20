@@ -472,3 +472,10 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 
 ### الحالة
 الإصلاح موجود على release branch. آخر deployment السابق كان يفشل في خطوة Cloudflare Deploy، لذلك يلزم نجاح deployment ثم اختبار OAuth فعلياً قبل اعتباره منشوراً.
+
+## سجل مهمة 2026-09-20 — إصلاح خطأ بناء OAuth في Worker
+- فشل نشر Cloudflare في run 35499547641 أثناء Wrangler بسبب خطأ نحوي في `workers/entry.js:163`.
+- السبب: إدراج الحرف النصي `\\n` داخل JavaScript عند إضافة استدعاء GitHub OAuth قبل Express.
+- تم تصحيح السطر ليصبح JavaScript صالحاً وإزالة التسلسل النصي غير الصحيح.
+- commit: 25a37ad052187dea82b3c96ca9323ab21c5d649b.
+- يجب انتظار نجاح Workflow التالي قبل اعتبار إصلاح OAuth منشوراً على الإنتاج.

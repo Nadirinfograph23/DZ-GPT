@@ -246,6 +246,13 @@ function detectOCRLang(text: string): OcrLang | null {
 }
 
 // ===== COMPONENT =====
+const BUILD_INFO = {
+  version: import.meta.env.VITE_APP_VERSION || 'dev',
+  build: import.meta.env.VITE_BUILD_ID || 'local',
+  commit: import.meta.env.VITE_COMMIT_SHA || 'unknown',
+  deployedAt: import.meta.env.VITE_BUILD_TIME || 'unknown',
+}
+
 function App() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -948,6 +955,14 @@ function App() {
 
       {/* ===== MAIN ===== */}
       <div className="main">
+        {/* Production build indicator */}
+        <div className="production-build-bar" title={`Commit: ${BUILD_INFO.commit}`}>
+          <span className="production-build-dot" />
+          <span>DZ Agent v{BUILD_INFO.version}</span>
+          <span>• Build {BUILD_INFO.build}</span>
+          <span className="production-build-commit">• {BUILD_INFO.commit.slice(0, 7)}</span>
+        </div>
+
         {/* Header */}
         <header className="header">
           <div className="header-left">

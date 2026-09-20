@@ -21,14 +21,14 @@ const POLL_INTERVAL = 30_000  // 30s — احتياطي فقط، SSE هو الم
 // visible at the top until the visitor dismisses it; live admin broadcasts
 // can still replace it through the existing SSE/API paths.
 const DEFAULT_ANNOUNCEMENT: Announcement = {
-  id: 'dzagent-update-20260920-keyless-router',
-  text: 'تم تحديث DZ Agent: تحسين الاتصال بـ GitHub، توحيد موجّه الذكاء الاصطناعي، وإضافة تدوير تلقائي لمزودات مجانية بلا تسجيل.',
+  id: 'dzagent-update-bootstrap',
+  text: 'جارٍ تحميل آخر تحديث منشور من المستودع…',
   link: null,
   linkText: null,
   timestamp: Date.now(),
   from: 'DZ Agent',
-  title: 'تحديث جديد في DZ Agent',
-  badge: 'NEW',
+  title: 'آخر تحديث',
+  badge: 'LIVE',
   type: 'update',
 }
 
@@ -71,18 +71,43 @@ export default function SiteAnnouncement() {
 
   const fetchAnn = useCallback(async () => {
     try {
+      const res = await fetch('/api/site-announceme  const fetchAnn = useCallback(async () => {
+    // مصدر الحقيقة للإصدار المنشور: version.json يُولَّد داخل CI قبل build.
+    try {
+      const res = await fetch(`/version.json?_=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store', Pragma: 'no-cache' },
+      })
+      if (res.ok) {
+        const v = await res.json()
+        if (v?.deployedAt && (v?.commit || v?.commitShort)) {
+          const commit = String(v.commitShort || v.commit).slice(0, 8)
+          const message = String(v.message || 'تم نشر تحديث جديد في DZ Agent.').trim()
+          showAnn({
+            id: `deploy-${v.commit || commit}`,
+            text: message,
+            link: null,
+            linkText: null,
+            timestamp: Date.parse(v.deployedAt) || Date.now(),
+            from: 'DZ Agent',
+            title: '🚀 آخر تحديث منشور',
+            badge: commit,
+            type: 'update',
+          })
+          return
+        }
+      }
+    } catch {}
+
+    // Fallback للإعلانات اليدوية الحالية.
+    try {
       const res = await fetch('/api/site-announcement', { cache: 'no-store' })
       if (!res.ok) return
       const data = await res.json()
       const a: Announcement | null = data.announcement
-       if (!a) return
-      showAnn(a)
+      if (a) showAnn(a)
     } catch {}
-  }, [showAnn])
-
-  // ── Polling احتياطي ────────────────────────────────────────────────────────
-  useEffect(() => {
-    fetchAnn()
+  }, [showAnn]) fetchAnn()
     const id = setInterval(fetchAnn, POLL_INTERVAL)
     return () => clearInterval(id)
   }, [fetchAnn])

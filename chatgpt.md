@@ -479,3 +479,118 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - تم تصحيح السطر ليصبح JavaScript صالحاً وإزالة التسلسل النصي غير الصحيح.
 - commit: 25a37ad052187dea82b3c96ca9323ab21c5d649b.
 - يجب انتظار نجاح Workflow التالي قبل اعتبار إصلاح OAuth منشوراً على الإنتاج.
+
+
+## سجل مهمة 2026-09-20 — استرجاع عرض نتائج البحث عن الطبيب في جدول
+
+### المطلوب
+إرجاع نتائج Doctor Search إلى العرض الجدولي السابق، بدلاً من السماح بالتبديل إلى البطاقات داخل لوحة النتائج.
+
+### التنفيذ
+- تم تثبيت DoctorResultsPanel على العرض الجدولي TableView.
+- أزيل مفتاح التبديل بين الجدول والبطاقات من واجهة نتائج الأطباء.
+- تم الحفاظ على بيانات الطبيب الحالية: الاسم، العنوان والخريطة، الهاتف، التخصص، القرب ومؤشرات التطابق والمصادر.
+- لم يتم تغيير محرك البحث أو مصادر الأطباء.
+
+### Commit
+- a1aabc94e6ba7850e32b82115d0f9ecbfce25589 — fix: restore doctor results table view
+
+### الحالة
+تم تنفيذ التعديل على فرع الإصدار devin/1774405518-init-dz-gpt. يجب نشر الفرع/دمجه ثم اختبار بحث طبيب فعلياً للتأكد من ظهور النتائج في جدول على الإنتاج.
+
+### قاعدة دائمة
+نتائج Doctor Search في واجهة DZ Agent يجب أن تظهر افتراضياً وبشكل ثابت في جدول واضح وقابل للتمرير، مع الحفاظ على بيانات الاتصال والخريطة والمصادر.
+
+
+## سجل مهمة 2026-09-20 — التعرف على طلب الطبيب الكامل (التخصص + المكان)
+
+### المطلوب
+عند الضغط على «ابحث عن طبيب»، يطلب DZ Agent التخصص ثم المكان. وعند إدخال طلب كامل مباشرة مثل «طبيب أسنان في عنابة» يجب أن يتعرف عليه كطلب Doctor Search منظم بدلاً من تمريره إلى المسار الطبي العام.
+
+### التنفيذ
+- توسيع `lib/intent.js` للتعرف على صيغ عربية كاملة للتخصص + المدينة، مثل «طبيب أسنان في عنابة» و«طبيب قلب باتنة».
+- إضافة دعم للصيغ الفرنسية مثل «dentiste à Annaba» و«cardiologue à Oran».
+- إبقاء مسار Doctor Search الحالي ومصادره وواجهة الجدول دون تغيير.
+- عند التعرف على النية، يستمر الطلب في مسار البحث المنظم الذي يعيد بيانات الأطباء في الجدول، مع العنوان القابل للفتح في Google Maps والهاتف والمصادر.
+
+### Commit
+- `aa57a7d80583ad2753bb4573c328baa0283c8fb1` — `fix: detect complete doctor specialty and city queries`
+
+### الحالة
+تم تحديث كاشف النية على فرع الإصدار. يلزم نشر/دمج الفرع ثم اختبار:
+1. «ابحث عن طبيب» → يطلب التخصص.
+2. «أسنان» → يطلب المكان.
+3. «عنابة» → يعرض الجدول.
+4. «طبيب أسنان في عنابة» → يتعرف مباشرة على الطلب الكامل ويعرض مسار Doctor Search.
+
+
+## تصحيح مهمة 2026-09-20 — استرجاع الإجابات الثابتة الأصلية لبحث الطبيب
+
+تم التحقق من الكود التاريخي في `server.js` داخل commit `72a289e9095bdb05ffb6241753f8bd456b922e79`، واتضح أن المطلوب ليس فقط كشف صيغة «طبيب أسنان في عنابة»، بل استرجاع **الإجابات الثابتة الأصلية** لمسار Doctor Search.
+
+### السلوك المستعاد
+- «أريد طبيب» / الضغط على «ابحث عن طبيب» → رسالة ثابتة تطلب التخصص وتعرض أمثلة للتخصصات والولايات.
+- ذكر التخصص فقط → رسالة ثابتة تطلب الولاية/المدينة.
+- ذكر التخصص + المدينة مثل «طبيب أسنان في عنابة» → تشغيل البحث المنظم مباشرة.
+- ذكر المدينة بعد اختيار التخصص → استخدام سياق المحادثة السابق واستخراج التخصص ثم تشغيل البحث.
+- النتائج النهائية تستخدم `lib/doctorSearch.js` و`formatResults` وتظهر في الجدول مع العنوان القابل للفتح على Google Maps والهاتف والمصادر.
+
+### Commits
+- `88e1bdf88760c471e414984bc2ccb051237f1c05` — استعادة منطق الإجابات الثابتة وبناء Doctor Search Worker-native.
+- `e8334024a299b8a8e8566782deba7e3f5872d277` — توجيه مسار المحادثة إلى الإجابات الثابتة قبل Static Knowledge وLive Research وAI.
+
+### الحالة
+تمت استعادة الخاصية من الكود التاريخي بدلاً من الاكتفاء بإضافة regex للتعرف على الطلب الكامل. يلزم الآن اختبار Worker بعد النشر بهذه الحالات: «أريد طبيب»، «أسنان»، «عنابة»، و«طبيب أسنان في عنابة».
+
+
+## 2026-09-20 — Restore original Doctor table + DZ Maps
+
+- Inspected historical doctor-search implementation, especially commit 72a289e9095bdb05ffb6241753f8bd456b922e79.
+- Restored the original four-column doctor table in the UI: اسم الطبيب | الاختصاص | العنوان | الهاتف.
+- Kept the address cell clickable and opening Google Maps using precise coordinates when available, with a search fallback otherwise.
+- Restored Worker-side DZ Maps interception so place queries such as "مسجد في عنابة" use the existing OpenStreetMap/Leaflet map engine instead of falling through to AI.
+- Preserved the existing deterministic doctor fixed-answer flow and live multi-source doctor search.
+- Commits: 4f72e50d5ae8dceef41e865100356830e24e3ab5, d5118ebed66fe46dd0b42d30c252c8ff7a5aa0a3.
+
+
+## 2026-09-20 — Deep historical restore of doctor sources/table
+
+- Re-inspected repository history instead of relying only on the current branch.
+- Historical commit 8de18e9957a928cccced2f510f009c7eb1e8634c contained the upgraded Algerian doctor directory aggregator with 10 sources: SahaDoc, Algerie-Docto, Addalile, SALIM-DZ, PJ-DZ, Docteur360, Sihhatech, Machrou3, Beesiha, and Altibbi.
+- Restored that historical source aggregation into lib/doctorSearch.js while keeping the mandatory Markdown table output and clickable Google Maps/tel links.
+- Restored the historical DoctorResultsPanel from commit 186f52d710dbb3216a4e12aa717913f98bca143f, including source badges/links.
+- Added UI labels for SALIM-DZ and Altibbi.
+- Commits: a73267e69894dcfc730a2923b8816594dcf7127d, ff751bd86d7bde6a1a7b75d012d6822a12213b8d, 4856aa08414a6810589ad3c7e60d476080cebae6, 7b3857d22cc4ed0c0326474c5c4dabf7fb3565bd.
+
+
+## 2026-09-20 — Restore direct “ابحث عن طبيب” conversation flow
+- Confirmed the Worker already contains the restored deterministic Doctor Search state machine: clicking the doctor entry should begin with “أريد طبيب”, then ask for specialty and wilaya, and a complete query such as “طبيب أسنان في عنابة” goes directly to doctor search.
+- Confirmed the Worker calls handleWorkerDoctorSearch(...) before the AI fallback.
+- Fixed src/components/DZDashboard.tsx so clicking the dashboard “نحوس على طبيب؟” entry immediately sends `أريد طبيب` instead of first forcing the GPS popup. This restores the intended original conversational flow; GPS remains optional through the existing GPS path.
+- Commit: f502f09be36047f14059bce5231ca546863b0f11.
+
+
+## 2026-09-20 — Verify historical doctor table + DZ Maps/OpenStreetMap flow
+- Inspected historical Doctor Search implementations and confirmed the intended UI is the RTL ordered table from commit 186f52d710dbb3216a4e12aa717913f98bca143f: number, doctor, address/phone, specialty, and sources, with the address opening Google Maps.
+- Confirmed commit 72a289e9095bdb05ffb6241753f8bd456b922e79 explicitly restored table-only doctor results, while 68269df5d3e0de02e65e367b9a46cfbb9bb39532 added RTL table/name search and Machrou3.
+- Inspected historical DZ Place Search commit 21b910d63f767aa95799d34413bb5d901353432c: OpenStreetMap Nominatim place search, 58 wilayas, 12 POI types, and Leaflet mini-map. Current Worker also intercepts place queries through modules/dz-maps before AI, restoring queries such as “مسجد في عنابة”.
+- Corrected the Worker doctor result metadata from 8 to the restored 10-source directory set.
+- Latest code fix: 85be7226bece8582b2be6b7d7cf7077773305c6eb.
+
+
+## 2026-09-20 — Restore historical doctor table source links
+- Restored the historical doctor-table behavior: structured RTL table with doctor name, address, phone, specialty, and source information.
+- Kept the ten-source Algerian doctor aggregation and merge/dedup logic already present in lib/doctorSearch.js.
+- Restored clickable source badges in DoctorResultsPanel using the merged sourceUrls data, so each listed source can open its corresponding doctor/directory page.
+- Address links continue to use Google Maps URLs with coordinates when available, otherwise an encoded doctor/city search; Google documents that these universal Maps URLs open the Google Maps app on Android when installed, or the browser otherwise. 
+- Updated the doctor source-list documentation comment to include all ten restored sources.
+- Commits: f5b170c61ddc821fa211abadd6322fb3ff82d490 and feb1327733606e123e1771cf036b1ab811ffe755.
+
+
+## 2026-09-20 — Fix GitHub OAuth routing in Cloudflare Worker
+- Found the remaining OAuth integration issue: the Worker-native GitHub OAuth handler existed, but `/api/auth/github`, its callback, and logout were not routed to it from the top-level Worker fetch path; they could fall through to the Express bridge.
+- Routed all three GitHub OAuth endpoints through the Worker-native handler before the Express bridge.
+- Fixed the OAuth callback to emit two separate `Set-Cookie` headers instead of joining them with a comma, preserving both the OAuth-state cleanup cookie and encrypted GitHub token cookie correctly.
+- Commit: 7d5517b33265d9411df0f399b5334a21b47a576a.
+
+- 2026-09-20 — Production deployment fix: updated `.github/workflows/deploy-cloudflare-worker.yml` so the Cloudflare Worker deploy runs on both the release branch and `main`. The previous workflow only watched the release branch, so merging the PR into `main` could leave the live site on an older Worker build. Commit: `0a44a6b8fec640e1bfb685ec7b5582ef036e4b59`.

@@ -12,6 +12,7 @@ export interface DoctorResult {
   phone?: string
   profileUrl?: string
   sources?: string[]
+  sourceUrls?: string[]
   directoryLink?: boolean
   distanceKm?: number
   lat?: number
@@ -107,7 +108,7 @@ function matchLabel(score: number): { label: string; cls: string } | null {
 
 const SOURCE_LABELS: Record<string, string> = {
   sahadoc: 'Sahadoc', addalile: 'Addalile', 'pj-dz': 'PJ-DZ',
-  'algerie-docto': 'Algerie-Docto', docteur360: 'Docteur360',
+  'algerie-docto': 'Algerie-Docto', docteur360: 'Docteur360', 'salim-dz': 'SALIM-DZ', altibbi: 'Altibbi',
   sihhatech: 'Sihhatech', machrou3: 'Machrou3', beesiha: 'Beesiha',
 }
 
@@ -188,6 +189,7 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
             <th className="dr-th dr-th--name">الطبيب</th>
             <th className="dr-th dr-th--contact">📍 العنوان &amp; 📞 الهاتف</th>
             <th className="dr-th dr-th--spec">التخصص</th>
+            <th className="dr-th dr-th--sources">المصادر</th>
           </tr>
         </thead>
         <tbody>
@@ -248,6 +250,35 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
                     ? <span className="dr-spec-cell">{getSpecEmoji(specAr)} {specAr}</span>
                     : <span className="dr-cell-muted">—</span>
                   }
+                </td>
+                <td className="dr-td dr-td--sources">
+                  {doc.sources && doc.sources.length > 0 ? (
+                    <div className="dr-source-list">
+                      {doc.sources.map((s, sourceIndex) => {
+                        const sourceUrl = doc.sourceUrls?.[sourceIndex] || (doc.profileUrl && sourceIndex === 0 ? doc.profileUrl : '')
+                        return sourceUrl ? (
+                          <a
+                            key={s}
+                            className="dr-source-badge dr-source-badge--link"
+                            href={sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={'فتح مصدر ' + (SOURCE_LABELS[s] || s)}
+                          >
+                            {SOURCE_LABELS[s] || s}
+                          </a>
+                        ) : (
+                          <span key={s} className="dr-source-badge">{SOURCE_LABELS[s] || s}</span>
+                        )
+                      })}
+                    </div>
+                  ) : doc.profileUrl && !doc.directoryLink ? (
+                    <a className="dr-source-profile" href={doc.profileUrl} target="_blank" rel="noopener noreferrer" title="فتح مصدر الطبيب">
+                      <Globe size={11} /> المصدر
+                    </a>
+                  ) : (
+                    <span className="dr-cell-muted">—</span>
+                  )}
                 </td>
               </tr>
             )
@@ -364,7 +395,6 @@ function CardView({ doctors, specLabel, cityLabel, showScore }: {
 
 export default function DoctorResultsPanel({ doctors, dirs = [], meta }: Props) {
   const [showDirs, setShowDirs] = useState(false)
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table')
   const isNameSearch = !!meta.byName
   const specEmoji = isNameSearch ? '🔎' : getSpecEmoji(meta.speciality.ar)
   const withPhone = doctors.filter(d => d.phone).length
@@ -390,24 +420,7 @@ export default function DoctorResultsPanel({ doctors, dirs = [], meta }: Props) 
             {meta.cached && <span className="dr-panel-cached">⚡ من الذاكرة</span>}
           </div>
 
-          {doctors.length > 0 && (
-            <div className="dr-view-toggle">
-              <button
-                className={`dr-view-btn${viewMode === 'table' ? ' dr-view-btn--active' : ''}`}
-                onClick={() => setViewMode('table')}
-                title="عرض جدول"
-              >
-                <Table2 size={14} />
-              </button>
-              <button
-                className={`dr-view-btn${viewMode === 'cards' ? ' dr-view-btn--active' : ''}`}
-                onClick={() => setViewMode('cards')}
-                title="عرض بطاقات"
-              >
-                <LayoutGrid size={14} />
-              </button>
-            </div>
-          )}
+
         </div>
 
         {doctors.length > 0 && (
@@ -445,10 +458,12 @@ export default function DoctorResultsPanel({ doctors, dirs = [], meta }: Props) 
               <strong>ملاحظة:</strong> اضغط على <span className="dr-tip-highlight"><MapPin size={12} className="dr-tip-inline-icon" /> العنوان</span> لمعرفة تفاصيل أكثر عن الطبيب وموقعه على الخريطة
             </span>
           </div>
-          {viewMode === 'table'
-            ? <TableView doctors={doctors} specLabel={isNameSearch ? '' : meta.speciality.ar} cityLabel={meta.city.ar} showScore={isNameSearch} />
-            : <CardView doctors={doctors} specLabel={isNameSearch ? '' : meta.speciality.ar} cityLabel={meta.city.ar} showScore={isNameSearch} />
-          }
+          <TableView
+            doctors={doctors}
+            specLabel={isNameSearch ? '' : meta.speciality.ar}
+            cityLabel={meta.city.ar}
+            showScore={isNameSearch}
+          />
         </>
       )}
 

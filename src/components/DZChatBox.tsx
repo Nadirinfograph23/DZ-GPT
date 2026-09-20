@@ -396,7 +396,7 @@ const _DZ_PHASES: Record<string, string[]> = {
 }
 function _detectPhaseCategory(msg: string): keyof typeof _DZ_PHASES {
   const t = msg.toLowerCase()
-  if (/أخبار|خبر|مستجدات|عاجل|اليوم.*الجزائر|الجزائر.*اليوم|ذكاء\s*اصطناعي.*\b(?:أخبار|أسبوع|جديد)|أخبار.*(?:تقنية|تكنولوجيا|ذكاء|AI)/i.test(t)) return 'news'
+  if (/أخبار|خبر|مستجدات|عاجل|اليوم.*الجزائر|الجزائر.*اليوم/.test(t)) return 'news'
   if (/سعر|صرف|دولار|يورو|دينار|عملة|ثمن.*دولار|قداش.*دولار|صرف.*اليوم/.test(t)) return 'currency'
   if (/مباراة|مباريات|كرة|دوري|فريق|ماتش|نتيجة.*مبار|ترتيب.*دوري/.test(t)) return 'sports'
   if (/طقس|حرارة|أمطار|جو.*اليوم|تساقط|رياح/.test(t)) return 'weather'
@@ -3937,7 +3937,9 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
       : `📍 ${s(meta.locationName) || 'الجزائر'}`
 
   // Google Maps embed URL (primary) or legacy Leaflet HTML
-  const gmapsUrl = meta.gmapsUrl ? String(meta.gmapsUrl) : null
+  // The server's legacy field is named gmapsUrl, but map embeds are
+  // OpenStreetMap export URLs. Keep accepting the old field for compatibility.
+  const mapEmbedUrl = meta.gmapsUrl ? String(meta.gmapsUrl) : null
 
   // External links
   const locationFr  = s(meta.locationFr || meta.locationName || '')
@@ -3976,16 +3978,16 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
           )}
         </div>
         <div className="dz-map-card-controls">
-          <span className="dz-map-badge dz-map-badge--subtle">Google Maps</span>
+          <span className="dz-map-badge dz-map-badge--subtle">OpenStreetMap</span>
           <span className="dz-map-collapse-btn">{expanded ? '▲' : '▼'}</span>
         </div>
       </div>
 
       {expanded && (
         <div className="dz-map-iframe-wrap">
-          {gmapsUrl ? (
+          {mapEmbedUrl ? (
             <iframe
-              src={gmapsUrl}
+              src={mapEmbedUrl}
               width="100%"
               height="380"
               style={{ border: 'none', display: 'block' }}
@@ -4006,8 +4008,8 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
       )}
 
       <div className="dz-map-card-actions">
-        <a className="dz-map-action-btn dz-map-action-btn--gmaps" href={gmapsOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
-          <MapPin size={11} /> فتح في Google Maps
+        <a className="dz-map-action-btn dz-map-action-btn--osm" href={osmOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+          <MapPin size={11} /> فتح في OpenStreetMap
         </a>
         {!isRoute && (lat && lng || locationFr) && (
           <a
@@ -4026,12 +4028,12 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
             🚗 إنشاء مسار
           </a>
         )}
-        <a className="dz-map-action-btn dz-map-action-btn--osm" href={osmOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
-          🗺️ OpenStreetMap
+        <a className="dz-map-action-btn dz-map-action-btn--gmaps" href={gmapsOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+          Google Maps
         </a>
       </div>
       <div className="dz-map-card-footer">
-        Google Maps Embed · © <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> · مجاني 🇩🇿
+        OpenStreetMap · © <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · مجاني 🇩🇿
       </div>
     </div>
   )
@@ -7263,9 +7265,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
 
     // كشف الأخبار
     const _isNewsQ = !_isWeatherQ && !_isSportsQ && !_isPersonQ && (
-      /أخبار|خبر|مستجدات|عاجل|آخر\s+الأحداث|أحدث\s+الأخبار|أخبار.*(?:تقنية|تكنولوجيا|ذكاء)/.test(_t) ||
-      /اليوم.*الجزائر|الجزائر.*اليوم|الجزائر.*اليوم/.test(_t) ||
-      /ذكاء\s*اصطناعي.*\b(?:أخبار|أسبوع|جديد|مستجدات)\b/i.test(_t)
+      /أخبار|خبر|مستجدات|عاجل|آخر\s+الأحداث|أحدث\s+الأخبار/.test(_t) ||
+      /اليوم.*الجزائر|الجزائر.*اليوم|الجزائر.*اليوم/.test(_t)
     )
 
     if (_isWeatherQ) {
@@ -9273,7 +9274,7 @@ ${rows}
                             // (setState is async — ref ensures sendMessage reads the latest value)
                             activeYouTubeVideoRef.current = videoData
                             setActiveYouTubeVideo(videoData)
-                            sendMessage(`ناقش معي موضوع هذا الفيديو على يوتيوب: "${ytResult.title}" — ${ytResult.url}`)
+                            sendMessage(`ناقش معي موضوع هذا الفيديو: "${ytResult.title}"`)
                           }}
                         />
                       )}

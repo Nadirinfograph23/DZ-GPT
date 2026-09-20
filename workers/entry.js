@@ -134,6 +134,116 @@ function parseWorkerRss(xml, source) {
 
 
 
+// ── Deterministic Doctor Search flow (restored from the original fixed responses) ──
+const WORKER_DOCTOR_SPECIALTIES = [
+  { ar: 'أسنان', search: 'dentiste', label: 'طبيب أسنان', emoji: '🦷' },
+  { ar: 'اسنان', search: 'dentiste', label: 'طبيب أسنان', emoji: '🦷' },
+  { ar: 'قلب', search: 'cardiologue', label: 'طبيب قلب', emoji: '🫀' },
+  { ar: 'عظام', search: 'orthopédiste', label: 'طبيب عظام', emoji: '🦴' },
+  { ar: 'أطفال', search: 'pédiatre', label: 'طبيب أطفال', emoji: '👶' },
+  { ar: 'اطفال', search: 'pédiatre', label: 'طبيب أطفال', emoji: '👶' },
+  { ar: 'عيون', search: 'ophtalmologue', label: 'طبيب عيون', emoji: '👁️' },
+  { ar: 'جلدية', search: 'dermatologue', label: 'طبيب جلدية', emoji: '🌿' },
+  { ar: 'نفسي', search: 'psychiatre', label: 'طبيب نفسي', emoji: '🧠' },
+  { ar: 'نساء', search: 'gynécologue', label: 'طبيب نساء', emoji: '👩‍⚕️' },
+  { ar: 'توليد', search: 'gynécologue', label: 'طبيب نساء وتوليد', emoji: '👩‍⚕️' },
+  { ar: 'عام', search: 'généraliste', label: 'طبيب عام', emoji: '🩺' },
+  { ar: 'أعصاب', search: 'neurologue', label: 'طبيب أعصاب', emoji: '🧬' },
+  { ar: 'اعصاب', search: 'neurologue', label: 'طبيب أعصاب', emoji: '🧬' },
+  { ar: 'جراح', search: 'chirurgien', label: 'جراح', emoji: '🔪' },
+  { ar: 'مسالك', search: 'urologue', label: 'طبيب مسالك', emoji: '💧' },
+  { ar: 'جلد', search: 'dermatologue', label: 'طبيب جلدية', emoji: '🌿' },
+  { ar: 'رئة', search: 'pneumologue', label: 'طبيب رئة', emoji: '🫁' },
+  { ar: 'هضمي', search: 'gastro-entérologue', label: 'طبيب جهاز هضمي', emoji: '🩺' },
+  { ar: 'كلى', search: 'néphrologue', label: 'طبيب كلى', emoji: '🩺' },
+  { ar: 'غدد', search: 'endocrinologue', label: 'طبيب غدد', emoji: '🩺' },
+  { ar: 'أشعة', search: 'radiologue', label: 'طبيب أشعة', emoji: '📡' },
+  { ar: 'اشعة', search: 'radiologue', label: 'طبيب أشعة', emoji: '📡' },
+  { ar: 'أورام', search: 'oncologue', label: 'طبيب أورام', emoji: '🩺' },
+  { ar: 'اورام', search: 'oncologue', label: 'طبيب أورام', emoji: '🩺' },
+];
+const WORKER_DOCTOR_CITIES = [
+  ['الجزائر العاصمة','Alger'],['الجزائر','Alger'],['عنابة','Annaba'],['وهران','Oran'],
+  ['قسنطينة','Constantine'],['سطيف','Setif'],['باتنة','Batna'],['تلمسان','Tlemcen'],
+  ['بجاية','Bejaia'],['تيزي وزو','Tizi Ouzou'],['ورقلة','Ouargla'],['مستغانم','Mostaganem'],
+  ['سكيكدة','Skikda'],['المدية','Medea'],['برج بوعريريج','Bordj Bou Arreridj'],
+  ['بسكرة','Biskra'],['قالمة','Guelma'],['بومرداس','Boumerdes'],['البليدة','Blida'],
+  ['جيجل','Jijel'],['الشلف','Chlef'],['تيارت','Tiaret'],['الجلفة','Djelfa'],
+  ['المسيلة','Msila'],['معسكر','Mascara'],['غليزان','Relizane'],['الوادي','El Oued'],
+  ['خنشلة','Khenchela'],['سوق أهراس','Souk Ahras'],['تبسة','Tebessa'],['ميلة','Mila'],
+];
+
+function workerFindDoctorSpeciality(text='') {
+  const q = normalizeWorkerQuery(text);
+  return WORKER_DOCTOR_SPECIALTIES.find(s => q.includes(normalizeWorkerQuery(s.ar)) ||
+    q.includes(normalizeWorkerQuery(s.label))) || null;
+}
+function workerFindDoctorCity(text='') {
+  const q = normalizeWorkerQuery(text);
+  const found = WORKER_DOCTOR_CITIES.find(([ar]) => q.includes(normalizeWorkerQuery(ar)));
+  if (found) return { ar: found[0], fr: found[1] };
+  const latin = WORKER_DOCTOR_CITIES.find(([,fr]) => q.includes(normalizeWorkerQuery(fr)));
+  return latin ? { ar: latin[0], fr: latin[1] } : null;
+}
+function workerIsDoctorRequest(text='') {
+  const q = normalizeWorkerQuery(text);
+  return /ابحث عن طبيب|اريد طبيب|أريد طبيب|نحوس على طبيب|دور طبيب|طبيب متخصص|طبيب في|دكتور في|طبيبة في|dentiste|cardiologue|pediatre|pédiatre|dermatologue|ophtalmologue|urologue|neurologue|gynécologue|gynecologue/i.test(q)
+    || !!workerFindDoctorSpeciality(text);
+}
+function workerDoctorFixedResponse(speciality=null) {
+  if (!speciality) return [
+    '🩺 **نحوس على طبيب؟ راني جايك!**','',
+    '**واشنو التخصص اللي تحتاجه؟**','',
+    '🦷 `طبيب أسنان` · 🫀 `طبيب قلب` · 🦴 `طبيب عظام` · 👶 `طبيب أطفال`',
+    '👁️ `طبيب عيون` · 🌿 `طبيب جلدية` · 🧠 `طبيب نفسي` · 👩‍⚕️ `طبيب نساء`',
+    '🩺 `طبيب عام` · 🧬 `طبيب أعصاب` · 🔪 `جراح` · 💧 `طبيب مسالك`','',
+    '**وفي أي ولاية؟**','',
+    '`عنابة` · `الجزائر` · `وهران` · `قسنطينة` · `سطيف`',
+    '`تيزي وزو` · `ورقلة` · `باتنة` · `بجاية` · `بسكرة`','',
+    '💡 _مثال: اكتب مباشرة_ **"طبيب أسنان في عنابة"** _أو_ **"دكتور قلب في وهران"**','',
+    '_يمكنك أيضاً البحث باسم الطبيب مباشرة: **دكتور محمد بن علي** أو **Dr Ahmed Annaba**_'
+  ].join('\\n');
+  return [
+    `🩺 فاهم — تحتاج **${speciality.label}**.`,'','**في أي ولاية؟**','',
+    '`عنابة` · `الجزائر العاصمة` · `وهران` · `قسنطينة` · `سطيف`',
+    '`تيزي وزو` · `ورقلة` · `باتنة` · `بجاية` · `بسكرة`',
+    '`سكيكدة` · `قالمة` · `بومرداس` · `البليدة` · `تلمسان`','',
+    `_مثال: اكتب **"${speciality.label} في سطيف"**_`
+  ].join('\\n');
+}
+
+async function handleWorkerDoctorSearch(messages, lastUser, userLocation=null) {
+  const doctorRequested = workerIsDoctorRequest(lastUser) ||
+    messages.some(m => m?.role === 'assistant' && /نحوس على طبيب|واشنو التخصص|في أي ولاية/.test(String(m.content||'')));
+  if (!doctorRequested) return null;
+
+  const speciality = workerFindDoctorSpeciality(lastUser) ||
+    [...messages].reverse().map(m => m?.content || '').map(workerFindDoctorSpeciality).find(Boolean) || null;
+  const city = workerFindDoctorCity(lastUser) ||
+    [...messages].reverse().map(m => m?.content || '').map(workerFindDoctorCity).find(Boolean) || null;
+
+  // Keep the original fixed conversational answers.
+  if (!speciality && !city) return { content: workerDoctorFixedResponse(), model: 'static-doctor' };
+  if (!speciality) return { content: '🩺 **وضّح لي التخصص اللي تحتاجه:**\\n\\n🦷 `طبيب أسنان` · 🫀 `طبيب قلب` · 🦴 `طبيب عظام` · 👶 `طبيب أطفال`\\n👁️ `طبيب عيون` · 🌿 `طبيب جلدية` · 🧠 `طبيب نفسي` · 👩‍⚕️ `طبيب نساء`\\n\\n_مثال: **"أسنان في عنابة"** أو **"عظام في وهران"**_', model: 'static-doctor' };
+  if (!city) return { content: workerDoctorFixedResponse(speciality), model: 'static-doctor' };
+
+  try {
+    const { searchDoctors, formatResults } = await import('../lib/doctorSearch.js');
+    const result = await searchDoctors({ speciality: speciality.search, city: city.fr, userLocation });
+    return {
+      content: formatResults(result.results, speciality.label, city.ar, {
+        hasGps: !!userLocation, sourceCount: 10
+      }),
+      model: 'doctor-search',
+      doctorSearch: true,
+      sources: result.results.flatMap(d => d.sourceUrls || []).filter(Boolean)
+    };
+  } catch (e) {
+    console.warn('[Worker:DoctorSearch] search failed:', e?.message || e);
+    return { content: workerDoctorFixedResponse(speciality) + '\\n\\n⚠️ تعذر الوصول إلى مصادر الأطباء حالياً، حاول مرة أخرى.', model: 'static-doctor' };
+  }
+}
+
 async function callResearchRouter(messages, payload) {
   injectEnv(payload?._env || {})
   const { callAIRouter } = await import('../lib/ai-router/index.js')
@@ -153,7 +263,7 @@ async function workerEncryptOAuthToken(token,env) { const key=await workerOAuthK
 async function handleWorkerGitHubOAuth(request,env) {
   const url=new URL(request.url)
   if(url.pathname==='/api/auth/github'&&request.method==='GET'){ const id=env.GITHUB_CLIENT_ID, secret=env.GITHUB_CLIENT_SECRET, redirect=env.GITHUB_REDIRECT_URI||url.origin+'/api/auth/github/callback'; if(!id||!secret)return new Response(JSON.stringify({ok:false,error:'GitHub OAuth is not configured.'}),{status:503,headers:{'content-type':'application/json'}}); const state=workerB64(crypto.getRandomValues(new Uint8Array(24))); const u=new URL('https://github.com/login/oauth/authorize'); u.searchParams.set('client_id',id); u.searchParams.set('redirect_uri',redirect); u.searchParams.set('scope','repo read:user'); u.searchParams.set('state',state); return new Response(null,{status:302,headers:{Location:u.toString(),'Set-Cookie':workerCookie(WORKER_OAUTH_STATE_COOKIE,state,{maxAge:600,path:'/api/auth/github',httpOnly:true,secure:true,sameSite:'Lax'})}}) }
-  if(url.pathname==='/api/auth/github/callback'&&request.method==='GET'){ const code=url.searchParams.get('code'),state=url.searchParams.get('state'),saved=workerCookieMap(request)[WORKER_OAUTH_STATE_COOKIE]||'',clear=workerCookie(WORKER_OAUTH_STATE_COOKIE,'',{maxAge:0,path:'/api/auth/github',httpOnly:true,secure:true,sameSite:'Lax'}); if(!code||!state||!saved||state!==saved)return new Response('GitHub OAuth: invalid or expired authorization state.',{status:400,headers:{'Set-Cookie':clear}}); const id=env.GITHUB_CLIENT_ID,secret=env.GITHUB_CLIENT_SECRET,redirect=env.GITHUB_REDIRECT_URI||url.origin+'/api/auth/github/callback'; try { const r=await fetch('https://github.com/login/oauth/access_token',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({client_id:id,client_secret:secret,code,redirect_uri:redirect})}); const d=await r.json().catch(()=>({})); if(!r.ok||!d.access_token)return new Response('GitHub OAuth failed: '+(d.error_description||d.error||'token exchange failed'),{status:502,headers:{'Set-Cookie':clear}}); const enc=await workerEncryptOAuthToken(d.access_token,env); return new Response(null,{status:302,headers:{Location:'/dz-agent/github?github=connected','Set-Cookie':[clear,workerCookie(WORKER_OAUTH_TOKEN_COOKIE,enc,{maxAge:2592000,path:'/',httpOnly:true,secure:true,sameSite:'Lax'})].join(', ')}}) } catch(e){console.error('[Worker:github/oauth]',e?.message||e); return new Response('GitHub OAuth failed. Please try again.',{status:500,headers:{'Set-Cookie':clear}})} }
+  if(url.pathname==='/api/auth/github/callback'&&request.method==='GET'){ const code=url.searchParams.get('code'),state=url.searchParams.get('state'),saved=workerCookieMap(request)[WORKER_OAUTH_STATE_COOKIE]||'',clear=workerCookie(WORKER_OAUTH_STATE_COOKIE,'',{maxAge:0,path:'/api/auth/github',httpOnly:true,secure:true,sameSite:'Lax'}); if(!code||!state||!saved||state!==saved)return new Response('GitHub OAuth: invalid or expired authorization state.',{status:400,headers:{'Set-Cookie':clear}}); const id=env.GITHUB_CLIENT_ID,secret=env.GITHUB_CLIENT_SECRET,redirect=env.GITHUB_REDIRECT_URI||url.origin+'/api/auth/github/callback'; try { const r=await fetch('https://github.com/login/oauth/access_token',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({client_id:id,client_secret:secret,code,redirect_uri:redirect})}); const d=await r.json().catch(()=>({})); if(!r.ok||!d.access_token)return new Response('GitHub OAuth failed: '+(d.error_description||d.error||'token exchange failed'),{status:502,headers:{'Set-Cookie':clear}}); const enc=await workerEncryptOAuthToken(d.access_token,env); const headers=new Headers({Location:'/dz-agent/github?github=connected'}); headers.append('Set-Cookie',clear); headers.append('Set-Cookie',workerCookie(WORKER_OAUTH_TOKEN_COOKIE,enc,{maxAge:2592000,path:'/',httpOnly:true,secure:true,sameSite:'Lax'})); return new Response(null,{status:302,headers}) } catch(e){console.error('[Worker:github/oauth]',e?.message||e); return new Response('GitHub OAuth failed. Please try again.',{status:500,headers:{'Set-Cookie':clear}})} }
   if(url.pathname==='/api/auth/github/logout'&&request.method==='POST')return new Response(JSON.stringify({ok:true}),{headers:{'content-type':'application/json','Set-Cookie':workerCookie(WORKER_OAUTH_TOKEN_COOKIE,'',{maxAge:0,path:'/',httpOnly:true,secure:true,sameSite:'Lax'})}})
   return null
 }
@@ -292,6 +402,47 @@ async function fetchChatDirect(request, env = {}) {
       } catch (e) {
         console.warn('[Worker:Chat] News fetch failed:', e.message)
       }
+    }
+
+    // ── Restored DZ Maps / OpenStreetMap place search ─────────────────────
+    // Preserve the original POI flow (e.g. "مسجد في عنابة") before AI so
+    // place queries return the real OpenStreetMap/Leaflet map and POI list.
+    try {
+      const { handleMapQuery } = await import('../modules/dz-maps/index.js')
+      const mapResult = await handleMapQuery(lastUser, payload?.userLocation || null)
+      if (mapResult) {
+        return new Response(JSON.stringify({
+          content: mapResult.content,
+          isMap: !!mapResult.isMap,
+          mapHtml: mapResult.mapHtml || null,
+          mapMeta: mapResult.mapMeta || null,
+          mode: 'dz-maps',
+        }), { headers: {
+          'content-type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        }})
+      }
+    } catch (e) {
+      console.warn('[Worker:Maps] place/map interception failed:', e?.message || e)
+    }
+
+    // ── Restored deterministic Doctor Search fixed-answer flow ─────────────
+    // Must run before static knowledge / live research / AI so the original
+    // specialty → city conversation and structured doctor table are preserved.
+    try {
+      const doctorResponse = await handleWorkerDoctorSearch(messages, lastUser, payload?.userLocation || null)
+      if (doctorResponse) {
+        return new Response(JSON.stringify(doctorResponse), { headers: {
+          'content-type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        }})
+      }
+    } catch (e) {
+      console.warn('[Worker:Chat] Doctor search interception failed:', e?.message || e)
     }
 
     // ── Static knowledge fast-path — إجابة فورية صحيحة بدون أي مزوّد ────────
@@ -1208,7 +1359,7 @@ export default {
     // ── API routes → Express ───────────────────────────────────────────────
     try {
       // Direct Worker-native routes (no server.js needed)
-      if (url.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
+      // GitHub OAuth must be handled by the Worker-native implementation before the Express bridge.\n      // This keeps /api/auth/github and its callback on the same Cloudflare runtime that owns the encrypted OAuth cookie.\n      if (url.pathname === '/api/auth/github' || url.pathname === '/api/auth/github/callback' || url.pathname === '/api/auth/github/logout') {\n        return fetchChatDirect(request, env)\n      }\n\n      if (url.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
         return fetchWeatherDirect(request)
       }
       if (url.pathname === '/api/dz-agent/prayer' && request.method === 'GET') {

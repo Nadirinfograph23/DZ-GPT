@@ -552,10 +552,11 @@ function DoctorSearchCard({ onSend, onDoctorGpsReady }: {
   const [modalStep, setModalStep] = useState<ModalStep>('ask')
   const [loadingMsg, setLoadingMsg] = useState('')
 
+  // Original Doctor Search behavior: clicking the dashboard entry immediately
+  // sends the doctor-search intent so DZ Agent can ask for specialty + wilaya.
+  // GPS remains available through the dedicated optional GPS flow.
   const openPopup = () => {
-    setModalStep('ask')
-    setLoadingMsg('')
-    setShowPopup(true)
+    onSend('أريد طبيب')
   }
 
   const closePopup = () => {

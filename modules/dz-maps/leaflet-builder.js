@@ -7,6 +7,7 @@
 import { POI_TYPES } from './intent.js'
 
 export const POI_EN_SEARCH = {
+  facility:    'public facilities services',
   hospital:    'hospital clinic',
   mosque:      'mosque masjid',
   restaurant:  'restaurant',

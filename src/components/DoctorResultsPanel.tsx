@@ -190,11 +190,10 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
       <table className="dr-table" dir="rtl">
         <thead>
           <tr>
-            <th className="dr-th dr-th--num">#</th>
             <th className="dr-th dr-th--name">الطبيب</th>
-            <th className="dr-th dr-th--spec">التخصص</th>
+            <th className="dr-th dr-th--spec">الاختصاص</th>
+            <th className="dr-th dr-th--phone">📞 رقم الهاتف</th>
             <th className="dr-th dr-th--address">📍 العنوان</th>
-            <th className="dr-th dr-th--phone">📞 الهاتف</th>
           </tr>
         </thead>
         <tbody>
@@ -209,7 +208,6 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
 
             return (
               <tr key={i} className="dr-tr">
-                <td className="dr-td dr-td--num">{i + 1}</td>
                 <td className="dr-td dr-td--name">
                   <div className="dr-name-cell">
                     <span className="dr-name-avatar">{gender === 'f' ? '👩‍⚕️' : '👨‍⚕️'}</span>
@@ -224,14 +222,19 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
                     ? <span className="dr-spec-cell">{getSpecEmoji(specAr)} {specAr}</span>
                     : <span className="dr-cell-muted">—</span>}
                 </td>
-                <td className="dr-td dr-td--address">
-                  <div className="dr-contact-cell">
-                    <AddressCell name={displayName} address={addrAr} city={cityAr} lat={doc.lat} lng={doc.lng} />
-                    {typeof doc.distanceKm === 'number' && <span className="dr-distance-badge">~{doc.distanceKm} كم</span>}
-                  </div>
-                </td>
                 <td className="dr-td dr-td--phone">
-                  {doc.phone ? <PhoneCell phone={doc.phone} /> : <span className="dr-cell-muted">—</span>}
+                  {doc.phone
+                    ? <a className="dr-phone-link" href={telUrl(doc.phone)} title="اتصال مباشر">
+                        <Phone size={12} />
+                        <span>{formatPhone(doc.phone)}</span>
+                      </a>
+                    : <span className="dr-cell-muted">غير متوفر</span>}
+                </td>
+                <td className="dr-td dr-td--address">
+                  <AddressCell name={displayName} address={addrAr} city={cityAr} lat={doc.lat} lng={doc.lng} />
+                  {typeof doc.distanceKm === 'number' && (
+                    <span className="dr-distance-badge">~{doc.distanceKm} كم</span>
+                  )}
                 </td>
               </tr>
             )
@@ -408,7 +411,7 @@ export default function DoctorResultsPanel({ doctors, dirs = [], meta }: Props) 
           <div className="dr-tip-banner">
             <span className="dr-tip-banner-icon">💡</span>
             <span className="dr-tip-banner-text">
-              <strong>ملاحظة:</strong> اضغط على <span className="dr-tip-highlight"><MapPin size={12} className="dr-tip-inline-icon" /> العنوان</span> لمعرفة تفاصيل أكثر عن الطبيب وموقعه على الخريطة
+              <strong>ملاحظة:</strong> اضغط على <span className="dr-tip-highlight"><MapPin size={12} className="dr-tip-inline-icon" /> العنوان</span> لفتح موقع الطبيب مباشرة في Google Maps
             </span>
           </div>
           <TableView
@@ -441,7 +444,7 @@ export default function DoctorResultsPanel({ doctors, dirs = [], meta }: Props) 
       )}
 
       <div className="dr-panel-footer">
-        اضغط 📍 للخريطة · اضغط 📞 للاتصال المباشر
+        اضغط 📞 للاتصال المباشر · اضغط 📍 العنوان لفتح Google Maps
         {!meta.hasGps && <span> · أرسل موقعك لترتيب النتائج حسب القرب</span>}
       </div>
     </div>

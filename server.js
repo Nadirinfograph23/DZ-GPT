@@ -13134,6 +13134,103 @@ function pruneDiskSessions() {
 }
 setInterval(pruneDiskSessions, 6 * 60 * 60 * 1000) // every 6h
 
+// ===== DZ HEALTH TOOL — SOURCE-GROUNDED ENDPOINT =====
+// Dedicated endpoint for /tools → وكيل الصحة.
+// It uses the same dz-health-agent module (intent detection, Algerian KB,
+// emergency rules and structured parser) instead of the generic chat pipeline.
+app.post('/api/dz-agent/health', aiLimiter, async (req, res) => {
+  const query = String(req.body?.query || req.body?.symptoms || '').trim().slice(0, 2000)
+  const age = String(req.body?.age || '').trim().slice(0, 3)
+  const gender = String(req.body?.gender || '').trim().slice(0, 12)
+
+  if (!query) return res.status(400).json({ ok: false, error: 'symptoms required' })
+
+  try {
+    const intent = detectHealthIntent(query)
+
+    if (intent.isEmergency) {
+      const emergency = buildKBFallbackResponse(intent.symptoms, intent.hasDrugQuestion, query)
+      return res.json({
+        ok: true,
+        richType: 'health-analysis',
+        healthData: {
+          ...emergency,
+          triage_level: 'HIGH',
+          emergency_note: '🚨 هذه الأعراض قد تكون طارئة. اتصل بالإسعاف/الحماية المدنية أو توجه إلى أقرب مصلحة استعجالات.',
+          source: 'dz-health-agent',
+          source_type: 'local-health-agent',
+        },
+        model: 'dz-health-agent/emergency-guard',
+      })
+    }
+
+    const sys = buildHealthSystemPrompt(intent.symptoms, intent.hasDrugQuestion, false) + `
+    
+مصدر المعرفة المسموح:
+- وكيل الصحة الداخلي DZ Health Agent: قاعدة DZ_HEALTH_KB وقواعد السلامة الموجودة في lib/dz-health-agent.js.
+- لا تنسب معلومة إلى مصدر لم يتم تزويدك بمحتواه.
+- لا تخترع نسب انتشار، أسماء أدوية، جرعات، تشخيصات أو فحوصات.
+- إذا لم تكن المعلومة موجودة في السياق، قل صراحةً: "لا أملك مصدراً كافياً لهذه المعلومة".
+- لا تعطِ جرعة شخصية ولا وصفة.
+بيانات المستخدم: الجنس=${gender || 'غير محدد'}، العمر=${age || 'غير محدد'}.
+`
+
+    const kb = getRelatedDZKnowledge(intent.symptoms)
+    const kbContext = kb
+      ? `
+المعلومة المطابقة من قاعدة وكيل الصحة:
+الاسم: ${kb.name}
+الانتشار المسجل: ${kb.prevalence}
+الأعراض المطابقة: ${kb.symptoms.join('، ')}
+الإرشادات المسجلة: ${kb.advice}
+الأدوية المسجلة كمعلومات عامة: ${kb.drugs.join('، ')}
+مستوى الفرز المسجل: ${kb.triage}
+`
+      : 'لا توجد مطابقة مباشرة في قاعدة المعرفة المحلية؛ لا تستنتج مرضاً محدداً من الذاكرة.'
+
+    const msgs = [
+      { role: 'system', content: sys + '\n' + kbContext },
+      { role: 'user', content: query },
+    ]
+
+    let raw = null
+    let model = null
+    try {
+      const g = await callGroqWithFallback({
+        model: 'llama-3.3-70b-versatile',
+        messages: msgs,
+        max_tokens: 1400,
+        temperature: 0.1,
+      })
+      if (g?.content) { raw = g.content; model = g.model || 'groq:llama-3.3-70b-versatile' }
+    } catch (e) { console.warn('[DZHealthTool] Groq failed:', e.message) }
+
+    const parsed = raw
+      ? parseHealthResponse(raw, query, intent.symptoms)
+      : buildKBFallbackResponse(intent.symptoms, intent.hasDrugQuestion, query)
+
+    parsed.source = 'dz-health-agent'
+    parsed.source_type = kb ? 'dz-health-agent-kb + constrained-llm' : 'dz-health-agent-kb'
+    parsed.source_record = kb ? kb.name : null
+    parsed.user_context = { age: age || null, gender: gender || null }
+
+    return res.json({
+      ok: true,
+      richType: 'health-analysis',
+      healthData: parsed,
+      model: model || 'dz-health-agent/kb-fallback',
+    })
+  } catch (err) {
+    console.error('[DZHealthTool] ❌', err.message)
+    return res.status(200).json({
+      ok: true,
+      richType: 'health-analysis',
+      healthData: buildKBFallbackResponse([], false, query),
+      model: 'dz-health-agent/error-fallback',
+    })
+  }
+})
+
 // ===== DZ AGENT API ROUTE =====
 app.post('/api/dz-agent-chat', async (req, res) => {
   const _agentSessionId = sanitizeString(req.body.sessionId || '', 64) || null

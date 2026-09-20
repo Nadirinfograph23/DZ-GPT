@@ -594,3 +594,8 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - Commit: 7d5517b33265d9411df0f399b5334a21b47a576a.
 
 - 2026-09-20 — Production deployment fix: updated `.github/workflows/deploy-cloudflare-worker.yml` so the Cloudflare Worker deploy runs on both the release branch and `main`. The previous workflow only watched the release branch, so merging the PR into `main` could leave the live site on an older Worker build. Commit: `0a44a6b8fec640e1bfb685ec7b5582ef036e4b59`.
+
+## 2026-09-20 — Production deployment failure fixed
+- GitHub Actions run `35510371216` reached the Cloudflare deploy step but failed because `workers/entry.js` contained literal `\\n` escape sequences inside the GitHub OAuth route block, causing Wrangler to parse `if` after a malformed `try` and report `Expected "finally" but found "if"` at line 1365.
+- Corrected the OAuth route block to use real JavaScript line breaks in commit `5d2dcd38f70d4865dd6af16e4cb08b1708db8906`.
+- The application build itself succeeded; the failure was specifically at Worker bundling/deploy.

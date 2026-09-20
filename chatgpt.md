@@ -422,3 +422,37 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - DZ Agent: يطلب الولاية.
 - المستخدم: «باتنة»
 - DZ Agent: يبحث عن أطباء القلب في باتنة ويعرض النتائج والمصادر.
+
+
+## سجل مهمة 2026-09-20 — استرجاع Doctor Search وDZ Maps في مسار Worker المباشر
+
+### المشكلة
+كان منطق Doctor Search وDZ Maps موجوداً في المشروع، بما في ذلك:
+- `lib/doctorSearch.js`
+- `modules/dz-maps/`
+- استمرارية البحث متعددة المراحل في المسار القديم
+
+لكن `/api/dz-agent-chat` في Cloudflare Worker كان يمر عبر `fetchChatDirect` مباشرة، وبالتالي كان يتجاوز هذه الوظائف قبل الوصول إلى AI Router.
+
+### التنفيذ
+- ربط `fetchChatDirect` بمسار Doctor Search قبل Static Knowledge وLive Research.
+- استرجاع الحوار متعدد المراحل:
+  - «أريد طبيب» → طلب التخصص.
+  - «قلب» → طلب الولاية/المدينة.
+  - «عنابة» → تشغيل `searchDoctors()` وإرجاع النتائج من المصادر الحالية.
+- الحفاظ على عداد المصادر الحالي: 7.
+- عدم توليد أسماء أطباء من النموذج؛ النتائج تأتي من `lib/doctorSearch.js`.
+- ربط `fetchChatDirect` بمحرك `modules/dz-maps/index.js`.
+- استرجاع البحث عن المرافق والأماكن مع خريطة OpenStreetMap/Leaflet والبيانات الموثقة من Nominatim/Overpass.
+- مثال مستهدف: «مسجد الفرقان في عنابة» → البحث عن المكان وعرض الخريطة والنتائج وروابط OpenStreetMap.
+- لم يتم تغيير مسار الإجابات الثابتة أو Live Research؛ أدوات Doctor Search وMaps تسبقها فقط عند اكتشاف النية المناسبة.
+
+### Commit
+- `91a7ee9d1ac8b2942a017033789392fcd805959e` — ربط Doctor Search وDZ Maps بمسار Worker المباشر.
+
+### الحالة
+تمت إعادة توصيل الوظائف الموجودة فعلياً في المشروع بمسار المحادثة الذي يستخدمه Cloudflare Worker. يلزم الآن اختبار deployment فعلياً، خصوصاً تشغيل `cheerio`/مصادر Doctor Search داخل Worker، ثم اختبار:
+1. «أريد طبيب» → التخصص.
+2. «قلب» → الولاية.
+3. «عنابة» → النتائج.
+4. «مسجد الفرقان في عنابة» → OpenStreetMap/Leaflet.

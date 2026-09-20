@@ -172,6 +172,54 @@ const app = express()
 const distDir = path.resolve(__dirname, 'dist')
 const indexHtmlPath = path.resolve(distDir, 'index.html')
 
+// Vercel's ESM bundler can miscompile express.json()'s body-parser/raw-body
+// dependency (require_streams is not a function). Keep JSON parsing local and
+// compatible with both Node's request stream and Vercel's pre-parsed body.
+function jsonBodyParser(options = {}) {
+  const limitText = String(options.limit || '1mb').toLowerCase()
+  const match = limitText.match(/^(\d+(?:\.\d+)?)\s*(kb|mb|gb|b)?$/)
+  const multiplier = { b: 1, kb: 1024, mb: 1024 * 1024, gb: 1024 * 1024 * 1024 }[match?.[2] || 'b'] || 1
+  const limit = match ? Number(match[1]) * multiplier : 1024 * 1024
+
+  return (req, res, next) => {
+    if (req.body !== undefined || !['POST', 'PUT', 'PATCH'].includes(req.method)) return next()
+    const contentType = String(req.headers['content-type'] || '').toLowerCase()
+    if (!contentType.includes('application/json')) return next()
+
+    let raw = ''
+    let size = 0
+    let settled = false
+    const fail = (status, message) => {
+      if (settled) return
+      settled = true
+      res.status(status).json({ error: message })
+    }
+    req.setEncoding('utf8')
+    req.on('data', chunk => {
+      if (settled) return
+      size += Buffer.byteLength(chunk)
+      if (size > limit) {
+        req.removeAllListeners('data')
+        fail(413, 'Request body too large')
+        req.resume()
+        return
+      }
+      raw += chunk
+    })
+    req.on('end', () => {
+      if (settled) return
+      try {
+        req.body = raw.trim() ? JSON.parse(raw) : {}
+        settled = true
+        next()
+      } catch {
+        fail(400, 'Invalid JSON body')
+      }
+    })
+    req.on('error', () => fail(400, 'Unable to read request body'))
+  }
+}
+
 // ===== SECURITY HEADERS =====
 app.use(helmet({
   contentSecurityPolicy: {
@@ -261,7 +309,7 @@ if (!isProd) {
 }
 
 // ===== BODY SIZE LIMIT =====
-app.use(express.json({ limit: '1mb' }))
+app.use(jsonBodyParser({ limit: '1mb' }))
 
 // ===== RATE LIMITERS =====
 const aiLimiter = rateLimit({
@@ -24190,7 +24238,7 @@ app.post('/api/tools/image-analyze', async (req, res) => {
 // ── Image Processing Tools ─────────────────────────────────────────────────
 
 // POST /api/tools/img-remove-bg — حذف خلفية الصورة (BFS flood-fill)
-app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req, res) => {
+app.post('/api/tools/img-remove-bg', jsonBodyParser({ limit: '25mb' }), async (req, res) => {
   const { imageBase64 } = req.body
   if (!imageBase64) return res.status(400).json({ error: 'imageBase64 مطلوب' })
   const b64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
@@ -24279,7 +24327,7 @@ app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req
 })
 
 // POST /api/tools/img-upscale — AI upscaling via HF Swin2SR, fallback to sharp Lanczos
-app.post('/api/tools/img-upscale', express.json({ limit: '25mb' }), async (req, res) => {
+app.post('/api/tools/img-upscale', jsonBodyParser({ limit: '25mb' }), async (req, res) => {
   const { imageBase64, scale: scaleStr = '4' } = req.body
   if (!imageBase64) return res.status(400).json({ error: 'imageBase64 مطلوب' })
   const b64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
@@ -24330,7 +24378,7 @@ app.post('/api/tools/img-upscale', express.json({ limit: '25mb' }), async (req, 
 })
 
 // POST /api/tools/img-inpaint — Object removal: Python skimage (local) → HF SD2 (Vercel fallback)
-app.post('/api/tools/img-inpaint', express.json({ limit: '30mb' }), async (req, res) => {
+app.post('/api/tools/img-inpaint', jsonBodyParser({ limit: '30mb' }), async (req, res) => {
   const { imageBase64, maskBase64 } = req.body
   if (!imageBase64 || !maskBase64) return res.status(400).json({ error: 'imageBase64 و maskBase64 مطلوبان' })
   const imgB64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
@@ -24566,7 +24614,7 @@ async function translateImgPrompt(rawPrompt) {
 }
 
 // POST /api/tools/img-gen — Text-to-Image with Arabic→English translation + Pollinations FLUX
-app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) => {
+app.post('/api/tools/img-gen', jsonBodyParser({ limit: '5mb' }), async (req, res) => {
   const { prompt, negativePrompt, width = 1024, height = 1024, model: reqModel } = req.body
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt مطلوب' })
 
@@ -24666,7 +24714,7 @@ async function hordeSubmitImg2Img(imgB64, prompt, negPrompt, strength) {
 // POST /api/tools/img2img — True Image-to-Image via Stable Horde (open-source, free, community GPU)
 // Architecture: server submits → polls Stable Horde (72s max, within Vercel 90s maxDuration)
 // Fallback: Pollinations direct URL (prompt-based, instant)
-app.post('/api/tools/img2img', express.json({ limit: '30mb' }), async (req, res) => {
+app.post('/api/tools/img2img', jsonBodyParser({ limit: '30mb' }), async (req, res) => {
   const { imageBase64, prompt, negativePrompt, strength = 0.75 } = req.body
   if (!imageBase64 || !prompt?.trim()) return res.status(400).json({ error: 'imageBase64 و prompt مطلوبان' })
 
@@ -24705,7 +24753,7 @@ app.post('/api/tools/img2img', express.json({ limit: '30mb' }), async (req, res)
 // Strategy: return 4 direct Pollinations URLs with different cinematic styles for smooth Ken Burns
 // animation. Response is INSTANT (no downloading). Browser loads frames directly.
 // If HF_TOKEN set, also tries real video generation via AnimateDiff / ZeroScope.
-app.post('/api/tools/video-gen', express.json({ limit: '30mb' }), async (req, res) => {
+app.post('/api/tools/video-gen', jsonBodyParser({ limit: '30mb' }), async (req, res) => {
   const { prompt } = req.body
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt مطلوب' })
 
@@ -25155,7 +25203,7 @@ app.post('/api/tools/screenshot', async (req, res) => {
 // POST /api/chatimg/relay — تدوير IP عبر Vercel
 // كل invocation تأتي من IP مختلف → حصة ضيف imgcreatorai.io جديدة
 // يُستدعى تلقائياً من lib/chatimg-engine.js عند نفاد الحصة المحلية
-app.post('/api/chatimg/relay', express.json({ limit: '2mb' }), async (req, res) => {
+app.post('/api/chatimg/relay', jsonBodyParser({ limit: '2mb' }), async (req, res) => {
   if (req.headers['x-dz-relay'] !== '1') {
     return res.status(403).json({ ok: false, error: 'forbidden' })
   }
@@ -25205,7 +25253,7 @@ app.get('/api/chatimg/credits', (_req, res) => {
 })
 
 // POST /api/chatimg/enhance-prompt — تحسين البرومبت بالذكاء الاصطناعي
-app.post('/api/chatimg/enhance-prompt', express.json({ limit: '1mb' }), async (req, res) => {
+app.post('/api/chatimg/enhance-prompt', jsonBodyParser({ limit: '1mb' }), async (req, res) => {
   const { prompt } = req.body
   if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
   try {
@@ -25218,7 +25266,7 @@ app.post('/api/chatimg/enhance-prompt', express.json({ limit: '1mb' }), async (r
 })
 
 // POST /api/chatimg/generate — text-to-image via chatimg.ai style
-app.post('/api/chatimg/generate', express.json({ limit: '2mb' }), async (req, res) => {
+app.post('/api/chatimg/generate', jsonBodyParser({ limit: '2mb' }), async (req, res) => {
   const { prompt, model = 'auto', width = 768, height = 768 } = req.body
   if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
   const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'anon'
@@ -25332,7 +25380,7 @@ if (isMain) {
   // (DZ Tools image routes are registered above export{app} — available on Vercel too)
 
   // TEMP deploy endpoint — used by agent to push files via server process.env
-  app.post('/api/_agent_deploy', express.json(), async (req, res) => {
+  app.post('/api/_agent_deploy', jsonBodyParser(), async (req, res) => {
     const { files, commit_msg, repo, branch, vercel_project_id } = req.body;
     const GH = process.env.GITHUB_TOKEN;
     const VC = process.env.VERCEL_TOKEN;
@@ -25491,7 +25539,7 @@ app.get('/api/tools/books', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 // POST /api/tools/presentation — AI-powered slide generator (free)
 // ═══════════════════════════════════════════════════════════════════
-app.post('/api/tools/presentation', express.json(), async (req, res) => {
+app.post('/api/tools/presentation', jsonBodyParser(), async (req, res) => {
   const { topic, lang = 'ar', slideCount = 6 } = req.body || {}
   if (!topic) return res.status(400).json({ error: 'topic required' })
   const count = Math.min(Math.max(Number(slideCount) || 6, 3), 12)
@@ -25531,7 +25579,7 @@ function saveWbProjects(projects) {
   fs.writeFileSync(WB_PROJECTS_FILE, JSON.stringify(projects, null, 2))
 }
 
-app.post('/api/wb/save', express.json({ limit: '2mb' }), (req, res) => {
+app.post('/api/wb/save', jsonBodyParser({ limit: '2mb' }), (req, res) => {
   try {
     const { title, html, css, js, type, icon } = req.body
     if (!html) return res.status(400).json({ error: 'html required' })
@@ -25583,7 +25631,7 @@ function appendAnalyticEvent(event) {
   } catch {}
 }
 
-app.post('/api/analytics/track', express.json(), (req, res) => {
+app.post('/api/analytics/track', jsonBodyParser(), (req, res) => {
   const { event, page, data: evData } = req.body || {}
   if (!event) return res.status(400).json({ error: 'event required' })
   appendAnalyticEvent({ event, page, data: evData, ts: Date.now() })
@@ -25768,7 +25816,7 @@ app.get('/api/dz-agent-v4/video/models', (req, res) => {
 })
 
 // POST /api/dz-agent-v4/img2img — Image-to-Image bridge
-app.post('/api/dz-agent-v4/img2img', express.json({ limit: '30mb' }), async (req, res) => {
+app.post('/api/dz-agent-v4/img2img', jsonBodyParser({ limit: '30mb' }), async (req, res) => {
   const { prompt, imageUrl: inputUrl, imageBase64: inputB64 } = req.body
   if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
 
@@ -25818,7 +25866,7 @@ app.post('/api/dz-agent-v4/img2img', express.json({ limit: '30mb' }), async (req
 })
 
 // POST /api/dz-agent-v4/video — Text-to-Video v2 (multi-model + per-IP quota)
-app.post('/api/dz-agent-v4/video', express.json({ limit: '5mb' }), async (req, res) => {
+app.post('/api/dz-agent-v4/video', jsonBodyParser({ limit: '5mb' }), async (req, res) => {
   const { prompt, width = 576, height = 320, model: preferredId } = req.body
   if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
 
@@ -25868,7 +25916,7 @@ app.post('/api/dz-agent-v4/video', express.json({ limit: '5mb' }), async (req, r
 })
 
 // POST /api/dz-agent-v4/img2video — Image-to-Video v2
-app.post('/api/dz-agent-v4/img2video', express.json({ limit: '30mb' }), async (req, res) => {
+app.post('/api/dz-agent-v4/img2video', jsonBodyParser({ limit: '30mb' }), async (req, res) => {
   const { imageUrl: inputUrl, prompt = 'animate smoothly', model: preferredId } = req.body
   if (!inputUrl) return res.status(400).json({ ok: false, error: 'imageUrl مطلوب' })
 

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - devin/1774405518-init-dz-gpt
   workflow_dispatch:
 
 concurrency:
@@ -31,7 +32,7 @@ jobs:
           cache: npm
 
       - name: Use public npm tarballs in CI
-        run: sed -i 's#http://package-firewall\.replit\.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+        run: sed -i 's#http://package-firewall\\.replit\\.local/npm/#https://registry.npmjs.org/#g' package-lock.json
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
@@ -51,4 +52,29 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.toml
+          command: >-
+            deploy --config wrangler.toml
+            --var VITE_APP_VERSION:2026.09.20
+            --var VITE_BUILD_ID:${{ github.run_number }}
+            --var VITE_COMMIT_SHA:${{ github.sha }}
+
+      - name: Verify production deployment
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_BUILD: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            BODY="$(curl -fsS --max-time 20 https://dzagent.app/api/version || true)"
+            echo "$BODY"
+            if echo "$BODY" | grep -F '"status":"ok"' >/dev/null \
+              && echo "$BODY" | grep -F "\"commit\":\"$EXPECTED_COMMIT\"" >/dev/null \
+              && echo "$BODY" | grep -F "\"build\":\"$EXPECTED_BUILD\"" >/dev/null; then
+              echo "Production deployment verified: commit $EXPECTED_COMMIT, build $EXPECTED_BUILD"
+              exit 0
+            fi
+            echo "Production is not serving this deployment yet (attempt $attempt/5)."
+            sleep 10
+          done
+          echo "Production verification failed: dzagent.app is not serving the deployed commit."
+          exit 1

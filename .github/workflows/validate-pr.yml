@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - devin/1774405518-init-dz-gpt
 
 permissions:
   contents: read
@@ -23,10 +24,17 @@ jobs:
           cache: npm
 
       - name: Use public npm tarballs in CI
-        run: sed -i 's#http://package-firewall\.replit\.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+        run: sed -i 's#http://package-firewall\\.replit\\.local/npm/#https://registry.npmjs.org/#g' package-lock.json
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+
+      - name: Set CI build metadata
+        run: |
+          echo "VITE_APP_VERSION=2026.09.20" >> "$GITHUB_ENV"
+          echo "VITE_BUILD_ID=pr-${{ github.event.pull_request.number }}" >> "$GITHUB_ENV"
+          echo "VITE_COMMIT_SHA=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"
+          echo "VITE_BUILD_TIME=ci" >> "$GITHUB_ENV"
 
       - name: Build application assets
         run: npm run build

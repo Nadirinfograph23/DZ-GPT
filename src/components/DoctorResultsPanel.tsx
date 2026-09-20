@@ -68,10 +68,15 @@ function formatPhone(phone: string) {
   return phone
 }
 
-function mapsUrl(name: string, city: string, lat?: number, lng?: number) {
+function mapsUrl(name: string, city: string, address?: string, lat?: number, lng?: number) {
+  // Target the selected doctor's actual source address, not only the city
+  // or a generic geocoded point. Google Maps will open the app when available.
+  const addressQuery = [name, address, city, 'Algérie'].filter(Boolean).join(', ')
+  if (addressQuery) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressQuery)}`
+  }
   if (lat && lng) return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
-  const q = encodeURIComponent([name, city, 'Algérie'].filter(Boolean).join(', '))
-  return `https://www.google.com/maps/search/?api=1&query=${q}`
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([name, city, 'Algérie'].filter(Boolean).join(', '))}`
 }
 
 function telUrl(phone: string) {
@@ -162,7 +167,7 @@ function AddressCell({ name, address, city, lat, lng }: { name: string; address:
   return (
     <a
       className="dr-addr-link"
-      href={mapsUrl(name, city, lat, lng)}
+      href={mapsUrl(name, city, address, lat, lng)}
       target="_blank"
       rel="noopener noreferrer"
       title="فتح في Google Maps"
@@ -331,7 +336,7 @@ function CardView({ doctors, specLabel, cityLabel, showScore }: {
               {(addrAr || cityAr) && (
                 <a
                   className="dr-card-row dr-card-row--link"
-                  href={mapsUrl(displayName, cityAr, doc.lat, doc.lng)}
+                  href={mapsUrl(displayName, cityAr, addrAr, doc.lat, doc.lng)}
                   target="_blank"
                   rel="noopener noreferrer"
                 >

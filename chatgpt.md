@@ -568,3 +568,11 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - Confirmed the Worker calls handleWorkerDoctorSearch(...) before the AI fallback.
 - Fixed src/components/DZDashboard.tsx so clicking the dashboard “نحوس على طبيب؟” entry immediately sends `أريد طبيب` instead of first forcing the GPS popup. This restores the intended original conversational flow; GPS remains optional through the existing GPS path.
 - Commit: f502f09be36047f14059bce5231ca546863b0f11.
+
+
+## 2026-09-20 — Verify historical doctor table + DZ Maps/OpenStreetMap flow
+- Inspected historical Doctor Search implementations and confirmed the intended UI is the RTL ordered table from commit 186f52d710dbb3216a4e12aa717913f98bca143f: number, doctor, address/phone, specialty, and sources, with the address opening Google Maps.
+- Confirmed commit 72a289e9095bdb05ffb6241753f8bd456b922e79 explicitly restored table-only doctor results, while 68269df5d3e0de02e65e367b9a46cfbb9bb39532 added RTL table/name search and Machrou3.
+- Inspected historical DZ Place Search commit 21b910d63f767aa95799d34413bb5d901353432c: OpenStreetMap Nominatim place search, 58 wilayas, 12 POI types, and Leaflet mini-map. Current Worker also intercepts place queries through modules/dz-maps before AI, restoring queries such as “مسجد في عنابة”.
+- Corrected the Worker doctor result metadata from 8 to the restored 10-source directory set.
+- Latest code fix: 85be7226bece8582b2be6b7d7cf7077773305c6eb.

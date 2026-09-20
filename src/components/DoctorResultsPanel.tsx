@@ -12,6 +12,7 @@ export interface DoctorResult {
   phone?: string
   profileUrl?: string
   sources?: string[]
+  sourceUrls?: string[]
   directoryLink?: boolean
   distanceKm?: number
   lat?: number
@@ -253,9 +254,23 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
                 <td className="dr-td dr-td--sources">
                   {doc.sources && doc.sources.length > 0 ? (
                     <div className="dr-source-list">
-                      {doc.sources.map(s => (
-                        <span key={s} className="dr-source-badge">{SOURCE_LABELS[s] || s}</span>
-                      ))}
+                      {doc.sources.map((s, sourceIndex) => {
+                        const sourceUrl = doc.sourceUrls?.[sourceIndex] || (doc.profileUrl && sourceIndex === 0 ? doc.profileUrl : '')
+                        return sourceUrl ? (
+                          <a
+                            key={s}
+                            className="dr-source-badge dr-source-badge--link"
+                            href={sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={'فتح مصدر ' + (SOURCE_LABELS[s] || s)}
+                          >
+                            {SOURCE_LABELS[s] || s}
+                          </a>
+                        ) : (
+                          <span key={s} className="dr-source-badge">{SOURCE_LABELS[s] || s}</span>
+                        )
+                      })}
                     </div>
                   ) : doc.profileUrl && !doc.directoryLink ? (
                     <a className="dr-source-profile" href={doc.profileUrl} target="_blank" rel="noopener noreferrer" title="فتح مصدر الطبيب">

@@ -62,6 +62,7 @@ export default function DZAgentGitHub() {
   const [error, setError]         = useState<string | null>(null)
   const [showDetails, setShowDetails] = useState<Record<string, boolean>>({})
   const [githubStatus, setGithubStatus] = useState<{ ok: boolean; login?: string; avatar?: string } | null>(null)
+  const [githubConnecting, setGithubConnecting] = useState(false)
   const [history, setHistory]     = useState<TaskHistory[]>(() => {
     try { return JSON.parse(localStorage.getItem('dz-agent-gh-history') || '[]') } catch { return [] }
   })
@@ -82,11 +83,30 @@ export default function DZAgentGitHub() {
   const abortRef     = useRef<AbortController | null>(null)
   const editAbortRef = useRef<AbortController | null>(null)
 
-  useEffect(() => {
-    fetch('/api/dz-agent/github/agent-status')
-      .then(r => r.json())
-      .then(d => setGithubStatus(d))
-      .catch(() => setGithubStatus({ ok: false }))
+  const refreshGithubStatus = useCallback(async () => {
+    setGithubConnecting(true)
+    try {
+      const r = await fetch('/api/dz-agent/github/agent-status', { cache: 'no-store' })
+      const d = await r.json()
+      setGithubStatus(d)
+      return d
+    } catch {
+      const d = { ok: false }
+      setGithubStatus(d)
+      return d
+    } finally { setGithubConnecting(false) }
+  }, [])
+
+  useEffect(() => { refreshGithubStatus() }, [refreshGithubStatus])
+
+  const persistTask = useCallback(async (taskText: string, taskId: string, status = 'started') => {
+    try {
+      const r = await fetch('/api/dz-agent/github/task-log', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task: taskText, taskId, status }),
+      })
+      return await r.json().catch(() => ({ saved: false }))
+    } catch { return { saved: false } }
   }, [])
 
   useEffect(() => {
@@ -122,6 +142,7 @@ export default function DZAgentGitHub() {
     const taskId = Date.now().toString()
     abortRef.current = new AbortController()
     const taskResult: TaskResult = {}
+    void persistTask(task.trim(), taskId, 'started')
 
     try {
       const res = await fetch('/api/dz-agent/github/agent-build', {
@@ -190,7 +211,7 @@ export default function DZAgentGitHub() {
     } finally {
       setIsRunning(false)
     }
-  }, [task, repoName, isRunning, updateStep, addDetail])
+  }, [task, repoName, isRunning, updateStep, addDetail, persistTask])
 
   const handleEdit = useCallback(async () => {
     if (!editRequest.trim() || isEditing || !currentRepo) return
@@ -274,13 +295,21 @@ export default function DZAgentGitHub() {
           </div>
         </div>
 
-        <div className={`dzgh-status-badge ${githubStatus?.ok ? 'dzgh-status-badge--connected' : 'dzgh-status-badge--disconnected'}`}>
+        <button
+          type="button"
+          className={'dzgh-status-badge ' + (githubStatus?.ok ? 'dzgh-status-badge--connected' : 'dzgh-status-badge--disconnected')}
+          onClick={refreshGithubStatus}
+          disabled={githubConnecting}
+          title="فحص اتصال GitHub"
+        >
           <div className="dzgh-status-dot" />
-          {githubStatus?.ok
-            ? <span>EXECUTION MODE — @{githubStatus.login}</span>
-            : <span>GitHub غير متصل</span>
+          {githubConnecting
+            ? <><Loader2 size={12} className="dzgh-spin" /> جاري التحقق...</>
+            : githubStatus?.ok
+              ? <><Github size={12} /> GitHub متصل — @{githubStatus.login}</>
+              : <><AlertCircle size={12} /> اتصال GitHub غير متاح — اضغط للفحص</>
           }
-        </div>
+        </button>
 
         <button
           className="dzgh-new-btn"

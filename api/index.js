@@ -1,5 +1,6 @@
 // deploy-trigger: 20260615-squad-fix
 import { callAIRouter } from '../lib/ai-router/index.js'
+import { lookupStaticFact } from '../lib/static-facts.js'
 
 // Vercel serverless entry point — routes /api/dz-agent-chat to standalone handler
 // and falls back to server.js for other routes.
@@ -26,6 +27,11 @@ async function handleChat(req, res) {
 
     const lastUser = [...messages].reverse().find(m => m?.role === 'user')?.content?.trim() || ''
     const lower = lastUser.toLowerCase()
+
+    const staticAnswer = lookupStaticFact(lastUser)
+    if (staticAnswer) {
+      return res.status(200).json({ content: staticAnswer, model: 'static-fact', _static: true })
+    }
 
     // Static guards
     if (/ما هي قدراتك|ما يمكنك|ماذا يمكنك/.test(lower)) {

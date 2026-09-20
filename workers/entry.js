@@ -287,7 +287,38 @@ async function fetchChatDirect(request, env = {}) {
       console.warn('[Worker:Chat] lookupStaticFact failed:', e.message)
     }
 
-    // ── AI PROVIDER FALLBACK CHAIN ──────────────────────────────────────
+    // ── SHARED AI ROUTER — single source of truth for provider fallback ──
+    // The direct Worker route used to bypass lib/ai-router and only try
+    // Pollinations. That caused ordinary questions to fail whenever
+    // Pollinations was unavailable, even when Groq/Gemini/OpenRouter keys
+    // were configured. Reuse the same capability-aware router as server.js.
+    try {
+      injectEnv(env)
+      const { callAIRouter } = await import('../lib/ai-router/index.js')
+      const routerResult = await callAIRouter(
+        [
+          { role: 'system', content: 'أنت DZ Agent — مساعد ذكاء اصطناعي جزائري متعدد المهام. أجب بالعربية الفصحى أو الجزائرية حسب لغة المستخدم، ويمكنك استخدام الفرنسية أو الإنجليزية عند الحاجة. كن دقيقاً ومفيداً ومباشراً.' },
+          ...messages,
+        ],
+        {
+          max_tokens: Math.min(Number(payload?.max_tokens) || 2000, 8192),
+          taskHint: payload?.taskHint || 'general',
+        }
+      )
+      if (routerResult?.content && routerResult.model !== 'last-resort') {
+        return new Response(JSON.stringify({
+          content: routerResult.content.trim(),
+          model: routerResult.model,
+          provider: routerResult.model?.split(':')[0] || 'ai-router',
+          requestId: routerResult.requestId,
+          taskHint: routerResult.taskHint,
+        }), { headers: corsHeaders })
+      }
+    } catch (e) {
+      console.warn('[Worker:Chat] Shared AI router failed; continuing to keyless fallbacks:', e?.message)
+    }
+
+        // ── AI PROVIDER FALLBACK CHAIN ──────────────────────────────────────
     // Try multiple free AI providers. Each one has a timeout and if it
     // fails we move to the next. The last resort is a keyword-based
     // Arabic helper so users never see a blank error.

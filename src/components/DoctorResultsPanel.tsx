@@ -192,9 +192,9 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
           <tr>
             <th className="dr-th dr-th--num">#</th>
             <th className="dr-th dr-th--name">الطبيب</th>
-            <th className="dr-th dr-th--contact">📍 العنوان &amp; 📞 الهاتف</th>
             <th className="dr-th dr-th--spec">التخصص</th>
-            <th className="dr-th dr-th--sources">المصادر</th>
+            <th className="dr-th dr-th--address">📍 العنوان</th>
+            <th className="dr-th dr-th--phone">📞 الهاتف</th>
           </tr>
         </thead>
         <tbody>
@@ -232,7 +232,13 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
                     </div>
                   </div>
                 </td>
-                <td className="dr-td dr-td--contact">
+                <td className="dr-td dr-td--spec">
+                  {specAr
+                    ? <span className="dr-spec-cell">{getSpecEmoji(specAr)} {specAr}</span>
+                    : <span className="dr-cell-muted">—</span>
+                  }
+                </td>
+                <td className="dr-td dr-td--address">
                   <div className="dr-contact-cell">
                     <AddressCell
                       name={displayName}
@@ -244,45 +250,13 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
                     {typeof doc.distanceKm === 'number' && (
                       <span className="dr-distance-badge">~{doc.distanceKm} كم</span>
                     )}
-                    {doc.phone
-                      ? <PhoneCell phone={doc.phone} />
-                      : <span className="dr-cell-muted">—</span>
-                    }
                   </div>
                 </td>
-                <td className="dr-td dr-td--spec">
-                  {specAr
-                    ? <span className="dr-spec-cell">{getSpecEmoji(specAr)} {specAr}</span>
-                    : <span className="dr-cell-muted">—</span>
-                  }
+                <td className="dr-td dr-td--phone">
+                  {doc.phone ? <PhoneCell phone={doc.phone} /> : <span className="dr-cell-muted">—</span>}
                 </td>
-                <td className="dr-td dr-td--sources">
-                  {doc.sources && doc.sources.length > 0 ? (
-                    <div className="dr-source-list">
-                      {doc.sources.map((s, sourceIndex) => {
-                        const sourceUrl = doc.sourceUrls?.[sourceIndex] || (doc.profileUrl && sourceIndex === 0 ? doc.profileUrl : '')
-                        return sourceUrl ? (
-                          <a
-                            key={s}
-                            className="dr-source-badge dr-source-badge--link"
-                            href={sourceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={'فتح مصدر ' + (SOURCE_LABELS[s] || s)}
-                          >
-                            {SOURCE_LABELS[s] || s}
-                          </a>
-                        ) : (
-                          <span key={s} className="dr-source-badge">{SOURCE_LABELS[s] || s}</span>
-                        )
-                      })}
-                    </div>
-                  ) : doc.profileUrl && !doc.directoryLink ? (
-                    <a className="dr-source-profile" href={doc.profileUrl} target="_blank" rel="noopener noreferrer" title="فتح مصدر الطبيب">
-                      <Globe size={11} /> المصدر
-                    </a>
-                  ) : (
-                    <span className="dr-cell-muted">—</span>
+                <td className="dr-td dr-td--sources" style={{display:'none'}}>
+                  null
                   )}
                 </td>
               </tr>

@@ -541,3 +541,13 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 
 ### الحالة
 تمت استعادة الخاصية من الكود التاريخي بدلاً من الاكتفاء بإضافة regex للتعرف على الطلب الكامل. يلزم الآن اختبار Worker بعد النشر بهذه الحالات: «أريد طبيب»، «أسنان»، «عنابة»، و«طبيب أسنان في عنابة».
+
+
+## 2026-09-20 — Restore original Doctor table + DZ Maps
+
+- Inspected historical doctor-search implementation, especially commit 72a289e9095bdb05ffb6241753f8bd456b922e79.
+- Restored the original four-column doctor table in the UI: اسم الطبيب | الاختصاص | العنوان | الهاتف.
+- Kept the address cell clickable and opening Google Maps using precise coordinates when available, with a search fallback otherwise.
+- Restored Worker-side DZ Maps interception so place queries such as "مسجد في عنابة" use the existing OpenStreetMap/Leaflet map engine instead of falling through to AI.
+- Preserved the existing deterministic doctor fixed-answer flow and live multi-source doctor search.
+- Commits: 4f72e50d5ae8dceef41e865100356830e24e3ab5, d5118ebed66fe46dd0b42d30c252c8ff7a5aa0a3.

@@ -585,3 +585,10 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - Address links continue to use Google Maps URLs with coordinates when available, otherwise an encoded doctor/city search; Google documents that these universal Maps URLs open the Google Maps app on Android when installed, or the browser otherwise. 
 - Updated the doctor source-list documentation comment to include all ten restored sources.
 - Commits: f5b170c61ddc821fa211abadd6322fb3ff82d490 and feb1327733606e123e1771cf036b1ab811ffe755.
+
+
+## 2026-09-20 — Fix GitHub OAuth routing in Cloudflare Worker
+- Found the remaining OAuth integration issue: the Worker-native GitHub OAuth handler existed, but `/api/auth/github`, its callback, and logout were not routed to it from the top-level Worker fetch path; they could fall through to the Express bridge.
+- Routed all three GitHub OAuth endpoints through the Worker-native handler before the Express bridge.
+- Fixed the OAuth callback to emit two separate `Set-Cookie` headers instead of joining them with a comma, preserving both the OAuth-state cleanup cookie and encrypted GitHub token cookie correctly.
+- Commit: 7d5517b33265d9411df0f399b5334a21b47a576a.

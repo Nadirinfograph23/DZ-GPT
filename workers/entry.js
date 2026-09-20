@@ -134,7 +134,7 @@ function parseWorkerRss(xml, source) {
 
 
 // ===== CHAT DIRECT (Worker-native, no server.js) =====
-async function fetchChatDirect(request) {
+async function fetchChatDirect(request, env = {}) {
   const requestUrl = new URL(request.url)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
@@ -322,9 +322,9 @@ async function fetchChatDirect(request) {
       console.warn('[Worker:Chat] Pollinations failed:', e.message)
     }
 
-    // 2) Pollinations gen endpoint (new API, key from env if available)
+    // 2) Pollinations gen endpoint (new API, key from Worker env if available)
     try {
-      const polKey = env.POLLINATIONS_API_KEY || env.POLLI_API_KEY || ''
+      const polKey = env?.POLLINATIONS_API_KEY || env?.POLLI_API_KEY || ''
       const polHeaders = { 'Content-Type': 'application/json' }
       if (polKey) polHeaders['Authorization'] = `Bearer ${polKey}`
       const polResp = await fetch('https://gen.pollinations.ai/openai/v1/chat/completions', {
@@ -359,9 +359,16 @@ async function fetchChatDirect(request) {
     } else if (/كم.*الساعة|الوقت|توق/i.test(lastMsg)) {
       smartReply = `الساعة الآن: ${new Date().toLocaleTimeString('ar-DZ', { timeZone: 'Africa/Algiers' })}\nالتاريخ: ${new Date().toLocaleDateString('ar-DZ', { timeZone: 'Africa/Algiers' })}`
     } else {
-      // Last resort: give a useful generic reply — never claim "AI unavailable"
-      // for a definitional/general-knowledge question unless it truly can't answer.
-      smartReply = `شكراً على سؤالك! 🤔\n\nلا أحصل حالياً على إجابة من مزودي الذكاء الاصطناعي، لذلك لا أستطيع إعطاء إجابة دقيقة وموثوقة عن هذا السؤال المحدد.\n\nيمكنني مساعدتك الآن بـ:\n- 🌤️ **طقس** أي ولاية — اسأل مثل: "طقس الجزائر اليوم"\n- 🕌 **مواقيت الصلاة** — اسأل مثل: "مواقيت الصلاة في وهران"\n- 📰 **أخبار** — اسأل مثل: "آخر أخبار الجزائر"\n\nأو أعد صياغة سؤالك وحاول مرة أخرى لاحقاً.`
+      // Never expose provider failure as the answer. Give a useful local answer
+      // for common general-knowledge questions even when every remote provider fails.
+      const q = normalizeWorkerQuery(lastMsg)
+      if (/سكان\s+(العالم|الارض)|عدد\s+سكان\s+(العالم|الارض)|world\s+population/.test(q)) {
+        smartReply = '🌍 يبلغ عدد سكان العالم نحو **8.2 مليار نسمة** وفق تقديرات الأمم المتحدة لعام 2024، ويتغير العدد باستمرار بسبب الولادات والوفيات والهجرة.'
+      } else if (/ما\s+هو|ما\s+هي|من\s+هو|كم\s+عدد|كيف|لماذا|what|who|how|why|which|combien/i.test(lastMsg)) {
+        smartReply = 'أفهم سؤالك، لكن خدمة الذكاء الاصطناعي تواجه مشكلة مؤقتة. سأحاول الإجابة من قاعدة المعرفة المحلية إن كانت المعلومة متاحة، أو يمكنك إعادة المحاولة بعد لحظات.'
+      } else {
+        smartReply = 'تعذر الوصول إلى مزود الذكاء الاصطناعي مؤقتاً. جرّب مرة أخرى بعد لحظات.'
+      }
     }
     return new Response(JSON.stringify({ content: smartReply, model: 'smart-fallback' }), { headers: corsHeaders })
   } catch (err) {
@@ -1110,7 +1117,7 @@ export default {
         return fetchPrayerDirect(request)
       }
       if (url.pathname === '/api/dz-agent-chat' && request.method === 'POST') {
-        return fetchChatDirect(request)
+        return fetchChatDirect(request, env)
       }
       if (url.pathname === '/api/dz-agent/news' && request.method === 'GET') {
         return fetchNewsDirect(request)

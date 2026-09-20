@@ -1365,6 +1365,22 @@ export default {
         return fetchChatDirect(request, env)
       }
 
+      if (url.pathname === '/api/version' && request.method === 'GET') {
+        return new Response(JSON.stringify({
+          app: 'DZ Agent',
+          version: '2026.09.20',
+          build: env?.VITE_BUILD_ID || 'unknown',
+          commit: env?.VITE_COMMIT_SHA || 'unknown',
+          deployedAt: env?.VITE_BUILD_TIME || 'unknown',
+          status: 'ok',
+        }), {
+          status: 200,
+          headers: {
+            'content-type': 'application/json; charset=utf-8',
+            'cache-control': 'no-store, no-cache, must-revalidate',
+          },
+        })
+      }
       if (url.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
         return fetchWeatherDirect(request)
       }

@@ -206,3 +206,11 @@ User
 
 ### ملاحظة GitHub
 المصادقة الحالية تعتمد على token موجود في بيئة الخادم. GitHub توصي باستخدام GitHub Apps عندما يكون ذلك مناسباً لأنها توفر صلاحيات أدق وtokens قصيرة العمر؛ OAuth apps تستخدم OAuth 2.0 أيضاً. citeturn0search0turn0search7
+
+
+## سجل تحديث 2026-09-20 — ترقية رسالة التحديث العلوية
+- تم تطوير `src/components/SiteAnnouncement.tsx`.
+- أصبحت رسالة التحديث تعرض عنواناً، شارة NEW، الزمن النسبي، مؤشر حالة حي، وأيقونة حديثة، مع الحفاظ على SSE وAPI الحاليين.
+- تم تطوير `src/styles/site-announcement.css` بتصميم premium، shimmer خفيف، responsive mobile، ودعم `prefers-reduced-motion`.
+- Commits: `e9dc278d82cef68f9400b696bd3e21d504728764`, `41de06f7b446a168b9efc999c4722215dfaed4a2`.
+- قاعدة دائمة: أي تعديل لاحق على رسالة/بانر التحديث يجب تسجيله هنا قبل اعتبار المهمة مكتملة.

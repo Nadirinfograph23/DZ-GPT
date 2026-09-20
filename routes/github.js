@@ -33,6 +33,7 @@
  *   githubLimiter - express rate-limit middleware
  */
 import { Router } from 'express'
+import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import {
   isValidGithubRepo,
   isValidGithubPath,
@@ -88,14 +89,47 @@ async function initRepoWithReadme(token, repo, branch = 'main') {
 }
 
 // ── Router factory ────────────────────────────────────────────
+const OAUTH_TOKEN_COOKIE='dz_github_token'; const OAUTH_STATE_COOKIE='dz_github_oauth_state'
+function parseCookies(req){const raw=req.headers?.cookie||'';return Object.fromEntries(raw.split(';').map(v=>v.trim()).filter(Boolean).map(v=>{const i=v.indexOf('=');return i<0?[v,'']:[decodeURIComponent(v.slice(0,i)),decodeURIComponent(v.slice(i+1))]}))}
+function oauthCookieSecret(){const s=process.env.GITHUB_OAUTH_COOKIE_SECRET||process.env.GITHUB_CLIENT_SECRET||'';return s?createHash('sha256').update(s).digest():null}
+function encryptOAuthToken(t){const k=oauthCookieSecret();if(!k)throw new Error('OAuth cookie secret missing');const iv=randomBytes(12),c=createCipheriv('aes-256-gcm',k,iv),e=Buffer.concat([c.update(t,'utf8'),c.final()]);return Buffer.concat([iv,c.getAuthTag(),e]).toString('base64url')}
+function decryptOAuthToken(v){try{const k=oauthCookieSecret(),r=Buffer.from(v||'','base64url');if(!k||r.length<29)return '';const d=createDecipheriv('aes-256-gcm',k,r.subarray(0,12));d.setAuthTag(r.subarray(12,28));return Buffer.concat([d.update(r.subarray(28)),d.final()]).toString('utf8')}catch{return ''}}
+function makeCookie(n,v,o={}){const a=[n+'='+encodeURIComponent(v)];if(o.maxAge!=null)a.push('Max-Age='+Math.max(0,Math.floor(o.maxAge)));if(o.path)a.push('Path='+o.path);if(o.httpOnly)a.push('HttpOnly');if(o.secure)a.push('Secure');if(o.sameSite)a.push('SameSite='+o.sameSite);return a.join('; ')}
+function requestOrigin(req){const configured=process.env.GITHUB_REDIRECT_URI;if(configured)return configured.replace(/\/$/,'');const proto=req.headers?.['x-forwarded-proto']?.split(',')[0]?.trim()||req.protocol||'https';const host=req.headers?.['x-forwarded-host']?.split(',')[0]?.trim()||req.get('host');return host?proto+'://'+host+'/api/auth/github/callback':''}
+function oauthTokenFromRequest(req){return decryptOAuthToken(parseCookies(req)[OAUTH_TOKEN_COOKIE]||'')}
+
 export function createGitHubRouter(deps = {}) {
   const { githubLimiter = (_req, _res, next) => next() } = deps
   const router = Router()
 
+  router.get('/auth/github',(req,res)=>{
+    const clientId=process.env.GITHUB_CLIENT_ID, redirectUri=requestOrigin(req);
+    if(!clientId||!redirectUri)return res.status(503).json({ok:false,error:'GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.'});
+    const state=randomBytes(24).toString('hex');
+    res.setHeader('Set-Cookie',makeCookie(OAUTH_STATE_COOKIE,state,{maxAge:600,path:'/api/auth/github',httpOnly:true,secure:true,sameSite:'Lax'}));
+    const p=new URLSearchParams({client_id:clientId,redirect_uri:redirectUri,scope:'repo read:user',state});
+    res.redirect('https://github.com/login/oauth/authorize?'+p.toString())
+  });
+  router.get('/auth/github/callback',async(req,res)=>{
+    const {code,state}=req.query||{}, saved=parseCookies(req)[OAUTH_STATE_COOKIE]||'', clear=makeCookie(OAUTH_STATE_COOKIE,'',{maxAge:0,path:'/api/auth/github',httpOnly:true,secure:true,sameSite:'Lax'});
+    if(!code||typeof code!=='string'){res.setHeader('Set-Cookie',clear);return res.status(400).send('GitHub OAuth: missing authorization code.')}
+    if(!state||typeof state!=='string'||!saved||saved.length!==state.length||!timingSafeEqual(Buffer.from(saved),Buffer.from(state))){res.setHeader('Set-Cookie',clear);return res.status(400).send('GitHub OAuth: invalid or expired state.')}
+    const clientId=process.env.GITHUB_CLIENT_ID, clientSecret=process.env.GITHUB_CLIENT_SECRET, redirectUri=requestOrigin(req);
+    if(!clientId||!clientSecret||!redirectUri){res.setHeader('Set-Cookie',clear);return res.status(503).send('GitHub OAuth is not configured on the server.')}
+    try{
+      const tr=await fetch('https://github.com/login/oauth/access_token',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({client_id:clientId,client_secret:clientSecret,code,redirect_uri:redirectUri,state}),signal:AbortSignal.timeout(10000)});
+      const td=await tr.json().catch(()=>({}));
+      if(!tr.ok||!td.access_token){res.setHeader('Set-Cookie',clear);return res.status(502).send('GitHub OAuth failed: '+(td.error_description||td.error||'token exchange failed'))}
+      const tc=makeCookie(OAUTH_TOKEN_COOKIE,encryptOAuthToken(td.access_token),{maxAge:2592000,path:'/',httpOnly:true,secure:true,sameSite:'Lax'});
+      res.setHeader('Set-Cookie',[clear,tc]);return res.redirect('/dz-agent/github?github=connected')
+    }catch(err){console.error('[github/oauth/callback]',err.message);res.setHeader('Set-Cookie',clear);return res.status(500).send('GitHub OAuth failed. Please try again.')}
+  });
+  router.post('/auth/github/logout',(req,res)=>{res.setHeader('Set-Cookie',makeCookie(OAUTH_TOKEN_COOKIE,'',{maxAge:0,path:'/',httpOnly:true,secure:true,sameSite:'Lax'}));res.json({ok:true})});
+  router.use((req,_res,next)=>{const token=oauthTokenFromRequest(req);if(token){req.githubOAuthToken=token;if(req.body&&typeof req.body==='object'&&!req.body.token)req.body.token=token}next()});
   // ── POST /dz-agent/github/task-log ──────────────────────────
   // Always persist DZ Agent tasks into chatgpt.md when GitHub credentials are available.
   router.post('/dz-agent/github/task-log', githubLimiter, async (req, res) => {
-    const token = resolveGitHubToken(req.body?.token || '')
+    const token = req.githubOAuthToken || resolveGitHubToken(req.body?.token || '')
     const task = sanitizeString(req.body?.task || '', 4000)
     const status = sanitizeString(req.body?.status || 'started', 40)
     const taskId = sanitizeString(req.body?.taskId || String(Date.now()), 100)
@@ -159,8 +193,8 @@ export function createGitHubRouter(deps = {}) {
   })
 
   // ── GET /dz-agent/github/agent-status ───────────────────────
-  router.get('/dz-agent/github/agent-status', async (_req, res) => {
-    const tok = resolveGitHubToken()
+  router.get('/dz-agent/github/agent-status', async (req, res) => {
+    const tok = req.githubOAuthToken || resolveGitHubToken()
     if (!tok) return res.json({ ok: false, error: 'لا يوجد GITHUB_PERSONAL_ACCESS_TOKEN أو GITHUB_TOKEN', configured: false })
     try {
       const hdr = ghHeaders(tok)
@@ -178,7 +212,7 @@ export function createGitHubRouter(deps = {}) {
         login: user.login,
         name: user.name,
         avatar: user.avatar_url,
-        tokenSource: process.env.GITHUB_PERSONAL_ACCESS_TOKEN ? 'GITHUB_PERSONAL_ACCESS_TOKEN' : 'GITHUB_TOKEN',
+        tokenSource: req.githubOAuthToken ? 'github-oauth-cookie' : (process.env.GITHUB_PERSONAL_ACCESS_TOKEN ? 'GITHUB_PERSONAL_ACCESS_TOKEN' : 'GITHUB_TOKEN'),
         scopes: scopes.split(',').map(s => s.trim()).filter(Boolean),
         rateLimit: rate.rate,
       })

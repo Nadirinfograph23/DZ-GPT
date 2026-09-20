@@ -133,6 +133,16 @@ function parseWorkerRss(xml, source) {
 
 
 
+
+async function callResearchRouter(messages, payload) {
+  injectEnv(payload?._env || {})
+  const { callAIRouter } = await import('../lib/ai-router/index.js')
+  return callAIRouter(messages, {
+    max_tokens: Math.min(Number(payload?.max_tokens) || 2200, 8192),
+    taskHint: 'retrieval',
+  })
+}
+
 // ===== CHAT DIRECT (Worker-native, no server.js) =====
 async function fetchChatDirect(request, env = {}) {
   const requestUrl = new URL(request.url)
@@ -285,6 +295,46 @@ async function fetchChatDirect(request, env = {}) {
       }
     } catch (e) {
       console.warn('[Worker:Chat] lookupStaticFact failed:', e.message)
+    }
+
+    // ── LIVE RESEARCH BRAIN — only after static knowledge ──────────────────
+    // Existing fixed/static answers above are intentionally untouched.
+    // Time-sensitive, explicit-search, and current-information questions are
+    // researched live via free SearXNG public instances + Google News RSS +
+    // Wikipedia, then grounded by the existing AI Router.
+    try {
+      const { liveResearch } = await import('../lib/worker-live-search.js')
+      const research = await liveResearch(lastUser, env, { maxResults: 8 })
+      if (research?.context) {
+        const researchMessages = [
+          {
+            role: 'system',
+            content: [
+              'أنت DZ Agent. أجب عن سؤال المستخدم اعتماداً على سياق البحث الحي المرفق.',
+              'للمعلومات المتغيرة استخدم المصادر الموجودة في [LIVE_WEB_RESEARCH] فقط.',
+              'لا تخترع مصدراً أو رابطاً. اذكر المصادر المهمة في نهاية الإجابة بروابطها.',
+              'إذا كانت المصادر متعارضة، وضّح التعارض والتاريخ بدلاً من التخمين.',
+              'لا تغيّر أسلوب DZ Agent أو الإجابات الثابتة؛ هذا المسار مخصص فقط للأسئلة التي تحتاج بحثاً حياً.',
+            ].join('\\n'),
+          },
+          { role: 'user', content: lastUser },
+          { role: 'system', content: research.context },
+        ]
+        const researchResult = await callResearchRouter(researchMessages, { ...payload, _env: env })
+        if (researchResult?.content && researchResult.model !== 'last-resort') {
+          return new Response(JSON.stringify({
+            content: researchResult.content.trim(),
+            model: researchResult.model,
+            provider: researchResult.model?.split(':')[0] || 'ai-router',
+            requestId: researchResult.requestId,
+            taskHint: 'retrieval',
+            liveResearch: true,
+            sources: research.sources,
+          }), { headers: corsHeaders })
+        }
+      }
+    } catch (e) {
+      console.warn('[Worker:Chat] Live research failed; continuing normal AI path:', e?.message)
     }
 
     // ── SHARED AI ROUTER — single source of truth for provider fallback ──

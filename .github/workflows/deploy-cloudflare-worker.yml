@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - devin/1774405518-init-dz-gpt
+      - main
   workflow_dispatch:
 
 concurrency:

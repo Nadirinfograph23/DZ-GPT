@@ -40,9 +40,9 @@ jobs:
       - name: Set production build metadata
         run: |
           echo "VITE_APP_VERSION=2026.09.20" >> "$GITHUB_ENV"
-          echo "VITE_BUILD_ID=\${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
-          echo "VITE_COMMIT_SHA=\${GITHUB_SHA}" >> "$GITHUB_ENV"
-          echo "VITE_BUILD_TIME=\$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> "$GITHUB_ENV"
+          echo "VITE_BUILD_ID=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "VITE_COMMIT_SHA=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "VITE_BUILD_TIME=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> "$GITHUB_ENV"
 
       - name: Build application assets
         run: npm run build

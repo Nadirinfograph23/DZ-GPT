@@ -456,3 +456,26 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 2. «قلب» → الولاية.
 3. «عنابة» → النتائج.
 4. «مسجد الفرقان في عنابة» → OpenStreetMap/Leaflet.
+
+## سجل مهمة 2026-09-20 — إصلاح GitHub OAuth في DZ Agent
+
+### التنفيذ
+- إضافة مسار GitHub OAuth Worker-native قبل Express وrequest.json() لتجاوز مشكلة iconv-lite داخل Cloudflare Workers.
+- اعتراض GET /api/auth/github وGET /api/auth/github/callback وPOST /api/auth/github/logout.
+- استخدام OAuth state داخل HttpOnly/Secure/SameSite=Lax cookie.
+- تشفير access token عبر WebCrypto AES-GCM بصيغة متوافقة مع decrypt الموجود في routes/github.js.
+- الحفاظ على scope repo read:user وإعادة التوجيه بعد النجاح إلى /dz-agent/github?github=connected.
+
+### Commits
+- a86dec3273f500cf2aac12b4be92765a0f18c561 — إضافة Worker-native OAuth.
+- 98127eea4f299cb20f6c36cfb64e4ae5f66f0f2f — تشغيل OAuth قبل Express parsing.
+
+### الحالة
+الإصلاح موجود على release branch. آخر deployment السابق كان يفشل في خطوة Cloudflare Deploy، لذلك يلزم نجاح deployment ثم اختبار OAuth فعلياً قبل اعتباره منشوراً.
+
+## سجل مهمة 2026-09-20 — إصلاح خطأ بناء OAuth في Worker
+- فشل نشر Cloudflare في run 35499547641 أثناء Wrangler بسبب خطأ نحوي في `workers/entry.js:163`.
+- السبب: إدراج الحرف النصي `\\n` داخل JavaScript عند إضافة استدعاء GitHub OAuth قبل Express.
+- تم تصحيح السطر ليصبح JavaScript صالحاً وإزالة التسلسل النصي غير الصحيح.
+- commit: 25a37ad052187dea82b3c96ca9323ab21c5d649b.
+- يجب انتظار نجاح Workflow التالي قبل اعتبار إصلاح OAuth منشوراً على الإنتاج.

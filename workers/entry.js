@@ -143,9 +143,26 @@ async function callResearchRouter(messages, payload) {
   })
 }
 
+const WORKER_OAUTH_TOKEN_COOKIE = 'dz_github_token'
+const WORKER_OAUTH_STATE_COOKIE = 'dz_github_oauth_state'
+function workerB64(bytes) { let s=''; for (const b of bytes) s+=String.fromCharCode(b); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'') }
+function workerCookieMap(request) { const raw=request.headers.get('Cookie')||''; return Object.fromEntries(raw.split(';').map(v=>v.trim()).filter(Boolean).map(v=>{const i=v.indexOf('='); return i<0?[v,'']:[decodeURIComponent(v.slice(0,i)),decodeURIComponent(v.slice(i+1))]})) }
+function workerCookie(name,value,o={}) { const a=[name+'='+encodeURIComponent(value),'Path='+(o.path||'/')]; if(o.maxAge!=null)a.push('Max-Age='+Math.max(0,Math.floor(o.maxAge))); if(o.httpOnly)a.push('HttpOnly'); if(o.secure)a.push('Secure'); if(o.sameSite)a.push('SameSite='+o.sameSite); return a.join('; ') }
+async function workerOAuthKey(env) { const secret=env.GITHUB_OAUTH_COOKIE_SECRET||env.GITHUB_CLIENT_SECRET||''; if(!secret)return null; const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(secret)); return crypto.subtle.importKey('raw',hash,{name:'AES-GCM'},false,['encrypt']) }
+async function workerEncryptOAuthToken(token,env) { const key=await workerOAuthKey(env); if(!key)throw new Error('OAuth cookie secret missing'); const iv=crypto.getRandomValues(new Uint8Array(12)); const enc=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(token))); const tag=enc.slice(-16), body=enc.slice(0,-16), packed=new Uint8Array(28+body.length); packed.set(iv,0); packed.set(tag,12); packed.set(body,28); return workerB64(packed) }
+async function handleWorkerGitHubOAuth(request,env) {
+  const url=new URL(request.url)
+  if(url.pathname==='/api/auth/github'&&request.method==='GET'){ const id=env.GITHUB_CLIENT_ID, secret=env.GITHUB_CLIENT_SECRET, redirect=env.GITHUB_REDIRECT_URI||url.origin+'/api/auth/github/callback'; if(!id||!secret)return new Response(JSON.stringify({ok:false,error:'GitHub OAuth is not configured.'}),{status:503,headers:{'content-type':'application/json'}}); const state=workerB64(crypto.getRandomValues(new Uint8Array(24))); const u=new URL('https://github.com/login/oauth/authorize'); u.searchParams.set('client_id',id); u.searchParams.set('redirect_uri',redirect); u.searchParams.set('scope','repo read:user'); u.searchParams.set('state',state); return new Response(null,{status:302,headers:{Location:u.toString(),'Set-Cookie':workerCookie(WORKER_OAUTH_STATE_COOKIE,state,{maxAge:600,path:'/api/auth/github',httpOnly:true,secure:true,sameSite:'Lax'})}}) }
+  if(url.pathname==='/api/auth/github/callback'&&request.method==='GET'){ const code=url.searchParams.get('code'),state=url.searchParams.get('state'),saved=workerCookieMap(request)[WORKER_OAUTH_STATE_COOKIE]||'',clear=workerCookie(WORKER_OAUTH_STATE_COOKIE,'',{maxAge:0,path:'/api/auth/github',httpOnly:true,secure:true,sameSite:'Lax'}); if(!code||!state||!saved||state!==saved)return new Response('GitHub OAuth: invalid or expired authorization state.',{status:400,headers:{'Set-Cookie':clear}}); const id=env.GITHUB_CLIENT_ID,secret=env.GITHUB_CLIENT_SECRET,redirect=env.GITHUB_REDIRECT_URI||url.origin+'/api/auth/github/callback'; try { const r=await fetch('https://github.com/login/oauth/access_token',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({client_id:id,client_secret:secret,code,redirect_uri:redirect})}); const d=await r.json().catch(()=>({})); if(!r.ok||!d.access_token)return new Response('GitHub OAuth failed: '+(d.error_description||d.error||'token exchange failed'),{status:502,headers:{'Set-Cookie':clear}}); const enc=await workerEncryptOAuthToken(d.access_token,env); return new Response(null,{status:302,headers:{Location:'/dz-agent/github?github=connected','Set-Cookie':[clear,workerCookie(WORKER_OAUTH_TOKEN_COOKIE,enc,{maxAge:2592000,path:'/',httpOnly:true,secure:true,sameSite:'Lax'})].join(', ')}}) } catch(e){console.error('[Worker:github/oauth]',e?.message||e); return new Response('GitHub OAuth failed. Please try again.',{status:500,headers:{'Set-Cookie':clear}})} }
+  if(url.pathname==='/api/auth/github/logout'&&request.method==='POST')return new Response(JSON.stringify({ok:true}),{headers:{'content-type':'application/json','Set-Cookie':workerCookie(WORKER_OAUTH_TOKEN_COOKIE,'',{maxAge:0,path:'/',httpOnly:true,secure:true,sameSite:'Lax'})}})
+  return null
+}
 // ===== CHAT DIRECT (Worker-native, no server.js) =====
 async function fetchChatDirect(request, env = {}) {
   const requestUrl = new URL(request.url)
+  const oauthResponse = await handleWorkerGitHubOAuth(request, env)
+  if (oauthResponse) return oauthResponse
+
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,

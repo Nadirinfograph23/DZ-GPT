@@ -188,6 +188,7 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
             <th className="dr-th dr-th--name">الطبيب</th>
             <th className="dr-th dr-th--contact">📍 العنوان &amp; 📞 الهاتف</th>
             <th className="dr-th dr-th--spec">التخصص</th>
+            <th className="dr-th dr-th--sources">المصادر</th>
           </tr>
         </thead>
         <tbody>
@@ -248,6 +249,21 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
                     ? <span className="dr-spec-cell">{getSpecEmoji(specAr)} {specAr}</span>
                     : <span className="dr-cell-muted">—</span>
                   }
+                </td>
+                <td className="dr-td dr-td--sources">
+                  {doc.sources && doc.sources.length > 0 ? (
+                    <div className="dr-source-list">
+                      {doc.sources.map(s => (
+                        <span key={s} className="dr-source-badge">{SOURCE_LABELS[s] || s}</span>
+                      ))}
+                    </div>
+                  ) : doc.profileUrl && !doc.directoryLink ? (
+                    <a className="dr-source-profile" href={doc.profileUrl} target="_blank" rel="noopener noreferrer" title="فتح مصدر الطبيب">
+                      <Globe size={11} /> المصدر
+                    </a>
+                  ) : (
+                    <span className="dr-cell-muted">—</span>
+                  )}
                 </td>
               </tr>
             )

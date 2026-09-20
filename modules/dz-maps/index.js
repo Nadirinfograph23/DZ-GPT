@@ -136,6 +136,23 @@ export async function handleMapQuery(msg, _userLocation = null) {
   if (!isMapQuery(msg)) return null
 
   const poiKey  = detectPoiType(msg)
+  // Generic facilities request without a city: preserve the original
+  // nearby-map experience by asking for GPS instead of failing location resolve.
+  if (poiKey === 'facility' && !hasGpsIntent(msg) && !extractLocationFromMsg(msg, poiKey)) {
+    return {
+      content: '🗺️ **البحث عن المرافق القريبة**\\n\\nاضغط على الزر أدناه للسماح بتحديد موقعك، وسأُظهر لك أقرب المرافق والخدمات على خريطة OpenStreetMap 📍',
+      isMap: true,
+      mapHtml: '',
+      mapMeta: {
+        type: 'gps-nearby',
+        needsGps: true,
+        poiKey: 'facility',
+        poiIcon: POI_TYPES.facility.icon,
+        poiNameAr: POI_TYPES.facility.nameAr,
+      },
+    }
+  }
+
   const isRoute = isRoutingQuery(msg)
   const routing = isRoute ? parseRouting(msg) : null
 

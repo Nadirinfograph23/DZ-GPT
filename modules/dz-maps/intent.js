@@ -500,8 +500,9 @@ export function isMapQuery(msg) {
   // discussions about public facilities to the map engine.
   const poiKey = detectPoiType(msg)
   if (hasPoi && poiKey === 'facility') {
-    return !NON_MAP_POI_MODIFIERS.test(msg) && !_hasWebCtx &&
-      (LOC_PREP_REGEX.test(msg) || hasGpsIntent(msg) || ALGERIA_CITIES_AR.some(city => msg.includes(city)))
+    // Generic "مرافق" is a real map intent too: without a city/location,
+    // let the map handler request GPS and show nearby facilities.
+    return !NON_MAP_POI_MODIFIERS.test(msg) && !_hasWebCtx
   }
   if (hasPoi && !NON_MAP_POI_MODIFIERS.test(msg) && !_hasWebCtx) return true
 

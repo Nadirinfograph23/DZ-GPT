@@ -215,49 +215,23 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
                     <span className="dr-name-avatar">{gender === 'f' ? '👩‍⚕️' : '👨‍⚕️'}</span>
                     <div className="dr-name-info">
                       <span className="dr-name-text">{displayName}</span>
-                      {match && (
-                        <span className={`dr-match-badge ${match.cls}`}>{match.label}</span>
-                      )}
-                      {doc.profileUrl && !doc.directoryLink && (
-                        <a
-                          className="dr-profile-btn"
-                          href={doc.profileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="صفحة الطبيب"
-                        >
-                          <Globe size={11} />
-                        </a>
-                      )}
+                      {match && <span className={`dr-match-badge ${match.cls}`}>{match.label}</span>}
                     </div>
                   </div>
                 </td>
                 <td className="dr-td dr-td--spec">
                   {specAr
                     ? <span className="dr-spec-cell">{getSpecEmoji(specAr)} {specAr}</span>
-                    : <span className="dr-cell-muted">—</span>
-                  }
+                    : <span className="dr-cell-muted">—</span>}
                 </td>
                 <td className="dr-td dr-td--address">
                   <div className="dr-contact-cell">
-                    <AddressCell
-                      name={displayName}
-                      address={addrAr}
-                      city={cityAr}
-                      lat={doc.lat}
-                      lng={doc.lng}
-                    />
-                    {typeof doc.distanceKm === 'number' && (
-                      <span className="dr-distance-badge">~{doc.distanceKm} كم</span>
-                    )}
+                    <AddressCell name={displayName} address={addrAr} city={cityAr} lat={doc.lat} lng={doc.lng} />
+                    {typeof doc.distanceKm === 'number' && <span className="dr-distance-badge">~{doc.distanceKm} كم</span>}
                   </div>
                 </td>
                 <td className="dr-td dr-td--phone">
                   {doc.phone ? <PhoneCell phone={doc.phone} /> : <span className="dr-cell-muted">—</span>}
-                </td>
-                <td className="dr-td dr-td--sources" style={{display:'none'}}>
-                  null
-                  )}
                 </td>
               </tr>
             )

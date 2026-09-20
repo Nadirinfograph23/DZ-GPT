@@ -1359,7 +1359,29 @@ export default {
     // ── API routes → Express ───────────────────────────────────────────────
     try {
       // Direct Worker-native routes (no server.js needed)
-      // GitHub OAuth must be handled by the Worker-native implementation before the Express bridge.\n      // This keeps /api/auth/github and its callback on the same Cloudflare runtime that owns the encrypted OAuth cookie.\n      if (url.pathname === '/api/auth/github' || url.pathname === '/api/auth/github/callback' || url.pathname === '/api/auth/github/logout') {\n        return fetchChatDirect(request, env)\n      }\n\n      if (url.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
+      // GitHub OAuth must be handled by the Worker-native implementation before the Express bridge.
+      // This keeps /api/auth/github and its callback on the same Cloudflare runtime that owns the encrypted OAuth cookie.
+      if (url.pathname === '/api/auth/github' || url.pathname === '/api/auth/github/callback' || url.pathname === '/api/auth/github/logout') {
+        return fetchChatDirect(request, env)
+      }
+
+      if (url.pathname === '/api/version' && request.method === 'GET') {
+        return new Response(JSON.stringify({
+          app: 'DZ Agent',
+          version: '2026.09.20',
+          build: env?.VITE_BUILD_ID || 'unknown',
+          commit: env?.VITE_COMMIT_SHA || 'unknown',
+          deployedAt: env?.VITE_BUILD_TIME || 'unknown',
+          status: 'ok',
+        }), {
+          status: 200,
+          headers: {
+            'content-type': 'application/json; charset=utf-8',
+            'cache-control': 'no-store, no-cache, must-revalidate',
+          },
+        })
+      }
+      if (url.pathname === '/api/dz-agent/weather' && request.method === 'GET') {
         return fetchWeatherDirect(request)
       }
       if (url.pathname === '/api/dz-agent/prayer' && request.method === 'GET') {

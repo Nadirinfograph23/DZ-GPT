@@ -594,3 +594,52 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - Commit: 7d5517b33265d9411df0f399b5334a21b47a576a.
 
 - 2026-09-20 — Production deployment fix: updated `.github/workflows/deploy-cloudflare-worker.yml` so the Cloudflare Worker deploy runs on both the release branch and `main`. The previous workflow only watched the release branch, so merging the PR into `main` could leave the live site on an older Worker build. Commit: `0a44a6b8fec640e1bfb685ec7b5582ef036e4b59`.
+
+## 2026-09-20 — Production deployment failure fixed
+- GitHub Actions run `35510371216` reached the Cloudflare deploy step but failed because `workers/entry.js` contained literal `\\n` escape sequences inside the GitHub OAuth route block, causing Wrangler to parse `if` after a malformed `try` and report `Expected "finally" but found "if"` at line 1365.
+- Corrected the OAuth route block to use real JavaScript line breaks in commit `5d2dcd38f70d4865dd6af16e4cb08b1708db8906`.
+- The application build itself succeeded; the failure was specifically at Worker bundling/deploy.
+
+
+## 2026-09-20 — Production build identification
+- Added a persistent production build indicator at the top of the app showing version, GitHub Actions build number, and short commit SHA.
+- Build metadata is injected automatically during the Cloudflare deployment workflow using `VITE_APP_VERSION`, `VITE_BUILD_ID`, `VITE_COMMIT_SHA`, and `VITE_BUILD_TIME`.
+- This allows the live site to be compared directly with the GitHub deployment commit instead of relying on browser cache or assumptions.
+
+
+## 2026-09-20 — Restore original compact Doctor table + exact Google Maps address target
+
+- Re-inspected the historical Doctor Search notes and confirmed the intended compact RTL table: **# | اسم الطبيب | الاختصاص | العنوان | الهاتف**.
+- Removed the visible source-site column/badges from the doctor results UI; source aggregation remains internal and is not displayed as a column.
+- The address itself is now the map action. When an address is available, Google Maps receives **address + city + Algérie** as the query so the selected address is shown directly; coordinates/name remain fallback only when no usable address exists.
+- Updated both the Worker Markdown table (`lib/doctorSearch.js`) and the structured React table (`src/components/DoctorResultsPanel.tsx`).
+- PR #47 merged into main: `95efcb09a5c744007a0fd7860221625072e99164`.
+
+
+## 2026-09-20 — توحيد جدول نتائج الأطباء مع محرك الجداول الموجود في DZ-GPT
+
+### البحث والتحقق
+- تم تفتيش مستودع `Nadirinfograph23/DZ-GPT` عن مكوّن/مشروع جداول قبل إضافة أي مكتبة جديدة.
+- تبيّن أن المشروع يحتوي فعلاً على محرك جداول جاهز ومستخدم في الإنتاج: `src/components/tables/DZSmartTable.tsx` مع `src/hooks/useTableEngine.ts` و `src/lib/table-engine/types.ts`.
+- المحرك يعتمد داخلياً على `@tanstack/react-table` الموجودة مسبقاً في `package.json`، لذلك لم تتم إضافة مشروع جداول خارجي أو dependency جديدة.
+- تم التحقق خارج المستودع أيضاً من أن TanStack Table مشروع مفتوح المصدر بترخيص MIT ويدعم React والجداول القابلة للتخصيص. citeturn0search0turn0search12
+
+### تنفيذ مهمة جدول الأطباء
+- أُضيف `src/components/DoctorResultsTable.tsx` لاستخدام محرك الجداول الموجود في DZ-GPT مع TanStack Table.
+- جدول الأطباء ثابت في أربعة أعمدة فقط:
+  1. اسم الطبيب
+  2. الاختصاص
+  3. رقم الهاتف
+  4. العنوان
+- رقم الهاتف أصبح رابط `tel:` بصيغة جزائرية مناسبة لفتح تطبيق الهاتف وإجراء الاتصال.
+- عنوان الطبيب أصبح رابط Google Maps يستعمل الإحداثيات الدقيقة عند توفرها، وإلا يستخدم اسم الطبيب + العنوان + المدينة + الجزائر.
+- أضيفت إمكانية ترتيب الأعمدة مع الحفاظ على التصميم RTL.
+- لا يتم عرض مصدر الموقع داخل جدول الطبيب.
+- تم توجيه `DoctorResultsPanel` لاستخدام مكوّن الجدول الجديد بدلاً من جدول خاص منفصل.
+- تمت إضافة تنسيقات روابط الهاتف والعنوان إلى `src/index.css`.
+
+### قاعدة دائمة
+كل نتيجة طبيب يجب أن تحافظ على: **اسم الطبيب + الاختصاص + رقم الهاتف + العنوان**. الهاتف قابل للضغط للاتصال، والعنوان قابل للضغط لفتح Google Maps. لا تتم إضافة عمود مصادر إلى جدول الطبيب.
+
+### الحالة
+التغييرات موجودة على الفرع `feat/doctor-table-engine-links`، وسيتم دمجها في `main` فقط بعد نجاح فحص البناء ثم انتظار نشر Cloudflare والتحقق من الموقع المباشر.

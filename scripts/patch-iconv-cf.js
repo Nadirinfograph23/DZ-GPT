@@ -68,6 +68,19 @@ for (const rel of targets) {
   patched++
 }
 
+// Root iconv-lite (old API — Express/body-parser hoisted copy)
+const rootOldPath = path.join(root, 'node_modules/iconv-lite/lib/index.js')
+if (existsSync(rootOldPath)) {
+  const src = readFileSync(rootOldPath, 'utf8')
+  if (!src.includes('CF Workers: streams/extend-node unavailable')) {
+    if (src.includes(OLD_BLOCK)) {
+      writeFileSync(rootOldPath, src.replace(OLD_BLOCK, NEW_BLOCK), 'utf8')
+      console.log('[patch-iconv] patched hoisted iconv-lite 0.4.x')
+      patched++
+    }
+  }
+}
+
 // Root iconv-lite (newer API — wrap enableStreamingAPI)
 const rootPath = path.join(root, 'node_modules/iconv-lite/lib/index.js')
 if (existsSync(rootPath)) {

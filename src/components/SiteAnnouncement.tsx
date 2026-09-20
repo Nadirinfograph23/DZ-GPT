@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, Megaphone, ExternalLink } from 'lucide-react'
+import { X, Megaphone, ExternalLink, Sparkles, Clock3 } from 'lucide-react'
 import '../styles/site-announcement.css'
 
 interface Announcement {
@@ -10,6 +10,9 @@ interface Announcement {
   linkText: string | null
   timestamp: number
   from: string
+  title?: string
+  badge?: string
+  type?: 'update' | 'info' | 'warning' | 'success'
 }
 
 const POLL_INTERVAL = 30_000  // 30s — احتياطي فقط، SSE هو المسار الأساسي
@@ -24,15 +27,31 @@ const DEFAULT_ANNOUNCEMENT: Announcement = {
   linkText: null,
   timestamp: Date.now(),
   from: 'DZ Agent',
+  title: 'تحديث جديد في DZ Agent',
+  badge: 'NEW',
+  type: 'update',
+}
+
+
+function formatAge(ms: number) {
+  if (!Number.isFinite(ms) || ms < 60_000) return 'الآن'
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 60) return `منذ ${minutes} د`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `منذ ${hours} س`
+  return `منذ ${Math.floor(hours / 24)} يوم`
 }
 
 export default function SiteAnnouncement() {
   const [ann, setAnn]         = useState<Announcement | null>(DEFAULT_ANNOUNCEMENT)
   const [visible, setVisible] = useState(true)
   const [entering, setEntering] = useState(true)
+  const [now, setNow] = useState(Date.now())
   const dismissedRef           = useRef<string | null>(null)
   const showTimerRef           = useRef<ReturnType<typeof setTimeout> | null>(null)
   const navigate               = useNavigate()
+
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(t) }, [])
 
   // Initialise dismissed list from sessionStorage
   useEffect(() => {
@@ -153,13 +172,19 @@ export default function SiteAnnouncement() {
       dir="rtl"
     >
       <div className="site-ann-bar">
-        {/* Icon */}
+        {/* Icon + live status */}
         <span className="site-ann-icon" aria-hidden="true">
-          <Megaphone size={17} />
+          <Sparkles size={17} />
+          <i className="site-ann-live-dot" />
         </span>
 
         {/* Content */}
         <div className="site-ann-body">
+          <div className="site-ann-heading">
+            <span className="site-ann-title">{ann.title || 'تحديث من DZ Agent'}</span>
+            {ann.badge && <span className="site-ann-badge">{ann.badge}</span>}
+            <span className="site-ann-time"><Clock3 size={11} /> {formatAge(now - ann.timestamp)}</span>
+          </div>
           <span className="site-ann-text">{cleanText || ann.text}</span>
 
           {allLinks.length > 0 && (

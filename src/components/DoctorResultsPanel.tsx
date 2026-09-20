@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Phone, MapPin, ExternalLink, Globe, ChevronDown, ChevronUp, Copy, Check, LayoutGrid, Table2 } from 'lucide-react'
+import DoctorResultsTable from './DoctorResultsTable'
 
 export interface DoctorResult {
   name: string
@@ -414,11 +415,9 @@ export default function DoctorResultsPanel({ doctors, dirs = [], meta }: Props) 
               <strong>ملاحظة:</strong> اضغط على <span className="dr-tip-highlight"><MapPin size={12} className="dr-tip-inline-icon" /> العنوان</span> لفتح موقع الطبيب مباشرة في Google Maps
             </span>
           </div>
-          <TableView
+          <DoctorResultsTable
             doctors={doctors}
-            specLabel={isNameSearch ? '' : meta.speciality.ar}
-            cityLabel={meta.city.ar}
-            showScore={isNameSearch}
+            specialityLabel={isNameSearch ? '' : meta.speciality.ar}
           />
         </>
       )}

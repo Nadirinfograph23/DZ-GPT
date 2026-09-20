@@ -614,3 +614,32 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - The address itself is now the map action. When an address is available, Google Maps receives **address + city + Algérie** as the query so the selected address is shown directly; coordinates/name remain fallback only when no usable address exists.
 - Updated both the Worker Markdown table (`lib/doctorSearch.js`) and the structured React table (`src/components/DoctorResultsPanel.tsx`).
 - PR #47 merged into main: `95efcb09a5c744007a0fd7860221625072e99164`.
+
+
+## 2026-09-20 — توحيد جدول نتائج الأطباء مع محرك الجداول الموجود في DZ-GPT
+
+### البحث والتحقق
+- تم تفتيش مستودع `Nadirinfograph23/DZ-GPT` عن مكوّن/مشروع جداول قبل إضافة أي مكتبة جديدة.
+- تبيّن أن المشروع يحتوي فعلاً على محرك جداول جاهز ومستخدم في الإنتاج: `src/components/tables/DZSmartTable.tsx` مع `src/hooks/useTableEngine.ts` و `src/lib/table-engine/types.ts`.
+- المحرك يعتمد داخلياً على `@tanstack/react-table` الموجودة مسبقاً في `package.json`، لذلك لم تتم إضافة مشروع جداول خارجي أو dependency جديدة.
+- تم التحقق خارج المستودع أيضاً من أن TanStack Table مشروع مفتوح المصدر بترخيص MIT ويدعم React والجداول القابلة للتخصيص. citeturn0search0turn0search12
+
+### تنفيذ مهمة جدول الأطباء
+- أُضيف `src/components/DoctorResultsTable.tsx` لاستخدام محرك الجداول الموجود في DZ-GPT مع TanStack Table.
+- جدول الأطباء ثابت في أربعة أعمدة فقط:
+  1. اسم الطبيب
+  2. الاختصاص
+  3. رقم الهاتف
+  4. العنوان
+- رقم الهاتف أصبح رابط `tel:` بصيغة جزائرية مناسبة لفتح تطبيق الهاتف وإجراء الاتصال.
+- عنوان الطبيب أصبح رابط Google Maps يستعمل الإحداثيات الدقيقة عند توفرها، وإلا يستخدم اسم الطبيب + العنوان + المدينة + الجزائر.
+- أضيفت إمكانية ترتيب الأعمدة مع الحفاظ على التصميم RTL.
+- لا يتم عرض مصدر الموقع داخل جدول الطبيب.
+- تم توجيه `DoctorResultsPanel` لاستخدام مكوّن الجدول الجديد بدلاً من جدول خاص منفصل.
+- تمت إضافة تنسيقات روابط الهاتف والعنوان إلى `src/index.css`.
+
+### قاعدة دائمة
+كل نتيجة طبيب يجب أن تحافظ على: **اسم الطبيب + الاختصاص + رقم الهاتف + العنوان**. الهاتف قابل للضغط للاتصال، والعنوان قابل للضغط لفتح Google Maps. لا تتم إضافة عمود مصادر إلى جدول الطبيب.
+
+### الحالة
+التغييرات موجودة على الفرع `feat/doctor-table-engine-links`، وسيتم دمجها في `main` فقط بعد نجاح فحص البناء ثم انتظار نشر Cloudflare والتحقق من الموقع المباشر.

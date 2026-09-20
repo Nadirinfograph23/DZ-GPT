@@ -1527,6 +1527,39 @@ function detectDoctorIntent(message) {
   return { isDoctorQuery: true, speciality, city }
 }
 
+// ── Doctor conversation continuation ────────────────────────────────────────
+// Keep the original multi-turn UX: "أريد طبيب" → specialty → wilaya.
+// A city-only follow-up such as "باتنة" continues the pending doctor search.
+function detectDoctorFollowUpIntent(messages = [], lastMessage = '') {
+  if (!Array.isArray(messages) || !lastMessage || typeof lastMessage !== 'string') return { isDoctorQuery: false }
+  const current = normalizeQuery(lastMessage)
+  if (!current || current.split(/\s+/).length > 6) return { isDoctorQuery: false }
+
+  const city = DOCTOR_CITIES.find(c =>
+    current === c.ar.toLowerCase() ||
+    current === c.fr.toLowerCase() ||
+    current.includes(c.ar.toLowerCase()) ||
+    current.includes(c.fr.toLowerCase())
+  )
+  if (!city) return { isDoctorQuery: false }
+
+  const userMessages = messages.filter(m => m?.role === 'user' && typeof m.content === 'string').map(m => m.content)
+  if (userMessages.length < 2) return { isDoctorQuery: false }
+
+  const priorDoctor = userMessages.slice(0, -1)
+    .some(m => DOCTOR_TRIGGER_PATTERNS.some(p => normalizeQuery(m).includes(p.toLowerCase())))
+  if (!priorDoctor) return { isDoctorQuery: false }
+
+  let speciality = null
+  for (let i = userMessages.length - 2; i >= 0 && !speciality; i--) {
+    const norm = normalizeQuery(userMessages[i])
+    for (const sp of SPECIALITIES) {
+      if (sp.aliases.some(a => norm.includes(a.toLowerCase()))) { speciality = sp; break }
+    }
+  }
+  return { isDoctorQuery: true, speciality, city }
+}
+
 // ===== DOCTOR SEARCH — multi-source aggregator (pj-dz, addalile, sahadoc, docteur360, algerie-docto, sihhatech, machrou3) =====
 import {
   searchDoctors as multiSearchDoctors,
@@ -1557,7 +1590,7 @@ import {
   SERVICE_CONFIG,
 } from './lib/dzPlaceSearch.js'
 
-const DOCTOR_SOURCE_COUNT = 4
+const DOCTOR_SOURCE_COUNT = 7
 
 function formatDoctorResults(results, speciality, city, opts = {}) {
   const specLabel = speciality?.ar || speciality?.fr || 'الأطباء'
@@ -13535,7 +13568,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // ── Smart Context Isolation — DZTools tool requests bypass GitHub routing ──
   const _dzToolRequest = typeof req.body.tool === 'string' ? req.body.tool.toLowerCase() : ''
-  const isDZToolRequest = ['jobs', 'health', 'cv', 'legal', 'chart', 'ocr', 'doctor'].includes(_dzToolRequest)
+  const isDZToolRequest = ['jobs', 'health', 'cv', 'legal', 'chart', 'ocr'].includes(_dzToolRequest)
 
   // ── Deep Query Analysis — فهم السؤال قبل الإجابة ──────────────────────
   const queryAnalysis = analyzeQuery(lastUserMessage)
@@ -15749,7 +15782,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     })
   }
 
-  const doctorIntent = detectDoctorIntent(lastUserMessage)
+  const followUpDoctorIntent = detectDoctorFollowUpIntent(messages, lastUserMessage)
+  const doctorIntent = followUpDoctorIntent.isDoctorQuery
+    ? followUpDoctorIntent
+    : detectDoctorIntent(lastUserMessage)
   console.log(`[DoctorSearch] isDoctorQuery=${doctorIntent.isDoctorQuery} isDZToolRequest=${isDZToolRequest} speciality=${doctorIntent.speciality?.ar||'—'} city=${doctorIntent.city?.ar||'—'} query="${lastUserMessage.slice(0,60)}"`)
   // Skip doctor search interception for DZTools requests (symptom analyzer prompt contains "طبيب")
   if (!isDZToolRequest && doctorIntent.isDoctorQuery) {

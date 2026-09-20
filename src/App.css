@@ -2261,3 +2261,40 @@ body:has(.dza-page) {
   0%, 100% { transform: scale(1); box-shadow: 0 0 0 2px #0a0a0a, 0 0 8px rgba(255, 68, 68, 0.6); }
   50%      { transform: scale(1.08); box-shadow: 0 0 0 2px #0a0a0a, 0 0 14px rgba(255, 107, 107, 0.9); }
 }
+
+
+/* Production build identifier */
+.production-build-bar {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 22px;
+  padding: 0 11px;
+  border: 1px solid rgba(200, 255, 0, 0.28);
+  border-top: 0;
+  border-radius: 0 0 9px 9px;
+  background: rgba(12, 14, 16, 0.94);
+  color: #c8ff00;
+  font: 600 10px/1.1 system-ui, sans-serif;
+  letter-spacing: .2px;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+.production-build-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c8ff00;
+  box-shadow: 0 0 7px rgba(200, 255, 0, .8);
+}
+.production-build-commit { opacity: .65; }
+@media (max-width: 600px) {
+  .production-build-bar { font-size: 9px; max-width: calc(100vw - 24px); overflow: hidden; }
+  .production-build-commit { display: none; }
+}

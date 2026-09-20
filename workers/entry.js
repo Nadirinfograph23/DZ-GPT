@@ -232,7 +232,7 @@ async function handleWorkerDoctorSearch(messages, lastUser, userLocation=null) {
     const result = await searchDoctors({ speciality: speciality.search, city: city.fr, userLocation });
     return {
       content: formatResults(result.results, speciality.label, city.ar, {
-        hasGps: !!userLocation, sourceCount: 8
+        hasGps: !!userLocation, sourceCount: 10
       }),
       model: 'doctor-search',
       doctorSearch: true,

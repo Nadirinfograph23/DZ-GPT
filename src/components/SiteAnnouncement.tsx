@@ -70,9 +70,7 @@ export default function SiteAnnouncement() {
   }, [])
 
   const fetchAnn = useCallback(async () => {
-    try {
-      const res = await fetch('/api/site-announceme  const fetchAnn = useCallback(async () => {
-    // مصدر الحقيقة للإصدار المنشور: version.json يُولَّد داخل CI قبل build.
+  const fetchAnn = useCallback(async () => {
     try {
       const res = await fetch(`/version.json?_=${Date.now()}`, {
         cache: 'no-store',
@@ -99,7 +97,6 @@ export default function SiteAnnouncement() {
       }
     } catch {}
 
-    // Fallback للإعلانات اليدوية الحالية.
     try {
       const res = await fetch('/api/site-announcement', { cache: 'no-store' })
       if (!res.ok) return
@@ -107,11 +104,13 @@ export default function SiteAnnouncement() {
       const a: Announcement | null = data.announcement
       if (a) showAnn(a)
     } catch {}
-  }, [showAnn]) fetchAnn()
+  }, [showAnn])
+
+  useEffect(() => {
+    fetchAnn()
     const id = setInterval(fetchAnn, POLL_INTERVAL)
     return () => clearInterval(id)
   }, [fetchAnn])
-
   // ── SSE: استقبال فوري مع تأخير 8 ثوانٍ ───────────────────────────────────
   useEffect(() => {
     let es: EventSource | null = null

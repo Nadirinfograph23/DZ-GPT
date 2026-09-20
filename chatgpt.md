@@ -599,3 +599,9 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - GitHub Actions run `35510371216` reached the Cloudflare deploy step but failed because `workers/entry.js` contained literal `\\n` escape sequences inside the GitHub OAuth route block, causing Wrangler to parse `if` after a malformed `try` and report `Expected "finally" but found "if"` at line 1365.
 - Corrected the OAuth route block to use real JavaScript line breaks in commit `5d2dcd38f70d4865dd6af16e4cb08b1708db8906`.
 - The application build itself succeeded; the failure was specifically at Worker bundling/deploy.
+
+
+## 2026-09-20 — Production build identification
+- Added a persistent production build indicator at the top of the app showing version, GitHub Actions build number, and short commit SHA.
+- Build metadata is injected automatically during the Cloudflare deployment workflow using `VITE_APP_VERSION`, `VITE_BUILD_ID`, `VITE_COMMIT_SHA`, and `VITE_BUILD_TIME`.
+- This allows the live site to be compared directly with the GitHub deployment commit instead of relying on browser cache or assumptions.

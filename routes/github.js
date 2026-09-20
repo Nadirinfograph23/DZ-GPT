@@ -92,6 +92,52 @@ export function createGitHubRouter(deps = {}) {
   const { githubLimiter = (_req, _res, next) => next() } = deps
   const router = Router()
 
+  // ── POST /dz-agent/github/task-log ──────────────────────────
+  // Always persist DZ Agent tasks into chatgpt.md when GitHub credentials are available.
+  router.post('/dz-agent/github/task-log', githubLimiter, async (req, res) => {
+    const token = resolveGitHubToken(req.body?.token || '')
+    const task = sanitizeString(req.body?.task || '', 4000)
+    const status = sanitizeString(req.body?.status || 'started', 40)
+    const taskId = sanitizeString(req.body?.taskId || String(Date.now()), 100)
+    if (!token) return res.status(503).json({ saved: false, error: 'GitHub token is not configured.' })
+    if (!task) return res.status(400).json({ saved: false, error: 'task is required.' })
+
+    const path = 'chatgpt.md'
+    try {
+      const get = await ghFetch(`/repos/Nadirinfograph23/DZ-GPT/contents/${path}`, token)
+      const data = await get.json().catch(() => ({}))
+      if (!get.ok || !data.sha) return res.status(get.status || 502).json({ saved: false, error: data.message || 'Cannot read chatgpt.md' })
+
+      const current = Buffer.from(data.content || '', 'base64').toString('utf8')
+      const stamp = new Date().toISOString()
+      const entry = [
+        '',
+        `## Task ${taskId} — ${stamp}`,
+        `- **Status:** ${status}`,
+        `- **Task:** ${task}`,
+        '- **Rule:** This task was persisted automatically by DZ Agent.',
+        '',
+      ].join('\\n')
+      const updated = current + entry
+
+      const put = await ghFetch(`/repos/Nadirinfograph23/DZ-GPT/contents/${path}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({
+          message: `docs: save DZ Agent task ${taskId}`,
+          content: Buffer.from(updated, 'utf8').toString('base64'),
+          sha: data.sha,
+          branch: data.branch || undefined,
+        }),
+      })
+      const putData = await put.json().catch(() => ({}))
+      if (!put.ok) return res.status(put.status).json({ saved: false, error: putData.message || 'Failed to save task.' })
+      res.json({ saved: true, taskId, commitSha: putData.commit?.sha || null })
+    } catch (err) {
+      console.error('[github/task-log]', err.message)
+      res.status(500).json({ saved: false, error: 'Failed to save task.' })
+    }
+  })
+
   // ── GET /dz-agent/github/status ─────────────────────────────
   router.get('/dz-agent/github/status', async (_req, res) => {
     const token = process.env.GITHUB_TOKEN

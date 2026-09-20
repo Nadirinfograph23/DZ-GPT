@@ -592,3 +592,5 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - Routed all three GitHub OAuth endpoints through the Worker-native handler before the Express bridge.
 - Fixed the OAuth callback to emit two separate `Set-Cookie` headers instead of joining them with a comma, preserving both the OAuth-state cleanup cookie and encrypted GitHub token cookie correctly.
 - Commit: 7d5517b33265d9411df0f399b5334a21b47a576a.
+
+- 2026-09-20 — Production deployment fix: updated `.github/workflows/deploy-cloudflare-worker.yml` so the Cloudflare Worker deploy runs on both the release branch and `main`. The previous workflow only watched the release branch, so merging the PR into `main` could leave the live site on an older Worker build. Commit: `0a44a6b8fec640e1bfb685ec7b5582ef036e4b59`.

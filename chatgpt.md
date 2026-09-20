@@ -605,3 +605,12 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - Added a persistent production build indicator at the top of the app showing version, GitHub Actions build number, and short commit SHA.
 - Build metadata is injected automatically during the Cloudflare deployment workflow using `VITE_APP_VERSION`, `VITE_BUILD_ID`, `VITE_COMMIT_SHA`, and `VITE_BUILD_TIME`.
 - This allows the live site to be compared directly with the GitHub deployment commit instead of relying on browser cache or assumptions.
+
+
+## 2026-09-20 — Restore original compact Doctor table + exact Google Maps address target
+
+- Re-inspected the historical Doctor Search notes and confirmed the intended compact RTL table: **# | اسم الطبيب | الاختصاص | العنوان | الهاتف**.
+- Removed the visible source-site column/badges from the doctor results UI; source aggregation remains internal and is not displayed as a column.
+- The address itself is now the map action. When an address is available, Google Maps receives **address + city + Algérie** as the query so the selected address is shown directly; coordinates/name remain fallback only when no usable address exists.
+- Updated both the Worker Markdown table (`lib/doctorSearch.js`) and the structured React table (`src/components/DoctorResultsPanel.tsx`).
+- PR #47 merged into main: `95efcb09a5c744007a0fd7860221625072e99164`.

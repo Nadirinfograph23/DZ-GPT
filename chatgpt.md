@@ -270,3 +270,35 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 
 ### قاعدة دائمة
 أي تعديل لاحق على بطاقة الأخبار أو مصادر RSS يجب تسجيله في `chatgpt.md` مع التاريخ والحالة وcommit SHA.
+
+
+## سجل مهمة 2026-09-20 — إصلاح اتصال GitHub OAuth في DZ Agent
+
+### المشكلة
+واجهة DZ Agent كانت تشير إلى `/api/auth/github` بينما لم يكن مسار OAuth الفعلي موجوداً في Router، لذلك كان الضغط على اتصال GitHub يفتح مساراً غير مكتمل بدلاً من بدء مصادقة GitHub.
+
+### التنفيذ
+- إضافة `GET /api/auth/github` لبدء OAuth مع GitHub.
+- إضافة `GET /api/auth/github/callback` للتحقق من state وتبادل code مع GitHub.
+- إضافة حماية CSRF عبر state cookie.
+- حفظ access token داخل cookie HttpOnly مشفّرة AES-256-GCM، دون وضع token في URL أو كشفه للواجهة.
+- تمرير جلسة OAuth تلقائياً إلى مسارات GitHub CRUD الحالية دون تغيير عقد API للواجهة.
+- تحديث `/api/dz-agent/github/agent-status` ليتعرف على جلسة OAuth.
+- إضافة `POST /api/auth/github/logout` لمسح جلسة OAuth.
+- دعم `GITHUB_REDIRECT_URI` إن كان مضبوطاً، وإلا يتم اشتقاق callback URL من host/proxy headers.
+
+### متطلبات البيئة
+يجب ضبط:
+- `GITHUB_CLIENT_ID`
+- `GITHUB_CLIENT_SECRET`
+- يفضّل `GITHUB_OAUTH_COOKIE_SECRET` كمفتاح تشفير مستقل؛ يستخدم الكود `GITHUB_CLIENT_SECRET` كبديل عند عدم وجوده.
+
+لا توجد أسرار أو tokens داخل Git.
+
+### Commit
+- `3fadf93bac61601119b84cd35f504b8e477fb324` — `fix: implement GitHub OAuth connection for DZ Agent`
+
+### الحالة
+تم إصلاح المسار البرمجي داخل GitHub. يلزم الآن اختبار endpoint على deployment الفعلي، ثم التأكد من أن GitHub OAuth App يستخدم callback:
+`https://dzagent.app/api/auth/github/callback`
+إذا كان النشر الحالي على هذا النطاق.

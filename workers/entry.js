@@ -134,6 +134,116 @@ function parseWorkerRss(xml, source) {
 
 
 
+// ── Deterministic Doctor Search flow (restored from the original fixed responses) ──
+const WORKER_DOCTOR_SPECIALTIES = [
+  { ar: 'أسنان', search: 'dentiste', label: 'طبيب أسنان', emoji: '🦷' },
+  { ar: 'اسنان', search: 'dentiste', label: 'طبيب أسنان', emoji: '🦷' },
+  { ar: 'قلب', search: 'cardiologue', label: 'طبيب قلب', emoji: '🫀' },
+  { ar: 'عظام', search: 'orthopédiste', label: 'طبيب عظام', emoji: '🦴' },
+  { ar: 'أطفال', search: 'pédiatre', label: 'طبيب أطفال', emoji: '👶' },
+  { ar: 'اطفال', search: 'pédiatre', label: 'طبيب أطفال', emoji: '👶' },
+  { ar: 'عيون', search: 'ophtalmologue', label: 'طبيب عيون', emoji: '👁️' },
+  { ar: 'جلدية', search: 'dermatologue', label: 'طبيب جلدية', emoji: '🌿' },
+  { ar: 'نفسي', search: 'psychiatre', label: 'طبيب نفسي', emoji: '🧠' },
+  { ar: 'نساء', search: 'gynécologue', label: 'طبيب نساء', emoji: '👩‍⚕️' },
+  { ar: 'توليد', search: 'gynécologue', label: 'طبيب نساء وتوليد', emoji: '👩‍⚕️' },
+  { ar: 'عام', search: 'généraliste', label: 'طبيب عام', emoji: '🩺' },
+  { ar: 'أعصاب', search: 'neurologue', label: 'طبيب أعصاب', emoji: '🧬' },
+  { ar: 'اعصاب', search: 'neurologue', label: 'طبيب أعصاب', emoji: '🧬' },
+  { ar: 'جراح', search: 'chirurgien', label: 'جراح', emoji: '🔪' },
+  { ar: 'مسالك', search: 'urologue', label: 'طبيب مسالك', emoji: '💧' },
+  { ar: 'جلد', search: 'dermatologue', label: 'طبيب جلدية', emoji: '🌿' },
+  { ar: 'رئة', search: 'pneumologue', label: 'طبيب رئة', emoji: '🫁' },
+  { ar: 'هضمي', search: 'gastro-entérologue', label: 'طبيب جهاز هضمي', emoji: '🩺' },
+  { ar: 'كلى', search: 'néphrologue', label: 'طبيب كلى', emoji: '🩺' },
+  { ar: 'غدد', search: 'endocrinologue', label: 'طبيب غدد', emoji: '🩺' },
+  { ar: 'أشعة', search: 'radiologue', label: 'طبيب أشعة', emoji: '📡' },
+  { ar: 'اشعة', search: 'radiologue', label: 'طبيب أشعة', emoji: '📡' },
+  { ar: 'أورام', search: 'oncologue', label: 'طبيب أورام', emoji: '🩺' },
+  { ar: 'اورام', search: 'oncologue', label: 'طبيب أورام', emoji: '🩺' },
+];
+const WORKER_DOCTOR_CITIES = [
+  ['الجزائر العاصمة','Alger'],['الجزائر','Alger'],['عنابة','Annaba'],['وهران','Oran'],
+  ['قسنطينة','Constantine'],['سطيف','Setif'],['باتنة','Batna'],['تلمسان','Tlemcen'],
+  ['بجاية','Bejaia'],['تيزي وزو','Tizi Ouzou'],['ورقلة','Ouargla'],['مستغانم','Mostaganem'],
+  ['سكيكدة','Skikda'],['المدية','Medea'],['برج بوعريريج','Bordj Bou Arreridj'],
+  ['بسكرة','Biskra'],['قالمة','Guelma'],['بومرداس','Boumerdes'],['البليدة','Blida'],
+  ['جيجل','Jijel'],['الشلف','Chlef'],['تيارت','Tiaret'],['الجلفة','Djelfa'],
+  ['المسيلة','Msila'],['معسكر','Mascara'],['غليزان','Relizane'],['الوادي','El Oued'],
+  ['خنشلة','Khenchela'],['سوق أهراس','Souk Ahras'],['تبسة','Tebessa'],['ميلة','Mila'],
+];
+
+function workerFindDoctorSpeciality(text='') {
+  const q = normalizeWorkerQuery(text);
+  return WORKER_DOCTOR_SPECIALTIES.find(s => q.includes(normalizeWorkerQuery(s.ar)) ||
+    q.includes(normalizeWorkerQuery(s.label))) || null;
+}
+function workerFindDoctorCity(text='') {
+  const q = normalizeWorkerQuery(text);
+  const found = WORKER_DOCTOR_CITIES.find(([ar]) => q.includes(normalizeWorkerQuery(ar)));
+  if (found) return { ar: found[0], fr: found[1] };
+  const latin = WORKER_DOCTOR_CITIES.find(([,fr]) => q.includes(normalizeWorkerQuery(fr)));
+  return latin ? { ar: latin[0], fr: latin[1] } : null;
+}
+function workerIsDoctorRequest(text='') {
+  const q = normalizeWorkerQuery(text);
+  return /ابحث عن طبيب|اريد طبيب|أريد طبيب|نحوس على طبيب|دور طبيب|طبيب متخصص|طبيب في|دكتور في|طبيبة في|dentiste|cardiologue|pediatre|pédiatre|dermatologue|ophtalmologue|urologue|neurologue|gynécologue|gynecologue/i.test(q)
+    || !!workerFindDoctorSpeciality(text);
+}
+function workerDoctorFixedResponse(speciality=null) {
+  if (!speciality) return [
+    '🩺 **نحوس على طبيب؟ راني جايك!**','',
+    '**واشنو التخصص اللي تحتاجه؟**','',
+    '🦷 `طبيب أسنان` · 🫀 `طبيب قلب` · 🦴 `طبيب عظام` · 👶 `طبيب أطفال`',
+    '👁️ `طبيب عيون` · 🌿 `طبيب جلدية` · 🧠 `طبيب نفسي` · 👩‍⚕️ `طبيب نساء`',
+    '🩺 `طبيب عام` · 🧬 `طبيب أعصاب` · 🔪 `جراح` · 💧 `طبيب مسالك`','',
+    '**وفي أي ولاية؟**','',
+    '`عنابة` · `الجزائر` · `وهران` · `قسنطينة` · `سطيف`',
+    '`تيزي وزو` · `ورقلة` · `باتنة` · `بجاية` · `بسكرة`','',
+    '💡 _مثال: اكتب مباشرة_ **"طبيب أسنان في عنابة"** _أو_ **"دكتور قلب في وهران"**','',
+    '_يمكنك أيضاً البحث باسم الطبيب مباشرة: **دكتور محمد بن علي** أو **Dr Ahmed Annaba**_'
+  ].join('\\n');
+  return [
+    `🩺 فاهم — تحتاج **${speciality.label}**.`,'','**في أي ولاية؟**','',
+    '`عنابة` · `الجزائر العاصمة` · `وهران` · `قسنطينة` · `سطيف`',
+    '`تيزي وزو` · `ورقلة` · `باتنة` · `بجاية` · `بسكرة`',
+    '`سكيكدة` · `قالمة` · `بومرداس` · `البليدة` · `تلمسان`','',
+    `_مثال: اكتب **"${speciality.label} في سطيف"**_`
+  ].join('\\n');
+}
+
+async function handleWorkerDoctorSearch(messages, lastUser, userLocation=null) {
+  const doctorRequested = workerIsDoctorRequest(lastUser) ||
+    messages.some(m => m?.role === 'assistant' && /نحوس على طبيب|واشنو التخصص|في أي ولاية/.test(String(m.content||'')));
+  if (!doctorRequested) return null;
+
+  const speciality = workerFindDoctorSpeciality(lastUser) ||
+    [...messages].reverse().map(m => m?.content || '').map(workerFindDoctorSpeciality).find(Boolean) || null;
+  const city = workerFindDoctorCity(lastUser) ||
+    [...messages].reverse().map(m => m?.content || '').map(workerFindDoctorCity).find(Boolean) || null;
+
+  // Keep the original fixed conversational answers.
+  if (!speciality && !city) return { content: workerDoctorFixedResponse(), model: 'static-doctor' };
+  if (!speciality) return { content: '🩺 **وضّح لي التخصص اللي تحتاجه:**\\n\\n🦷 `طبيب أسنان` · 🫀 `طبيب قلب` · 🦴 `طبيب عظام` · 👶 `طبيب أطفال`\\n👁️ `طبيب عيون` · 🌿 `طبيب جلدية` · 🧠 `طبيب نفسي` · 👩‍⚕️ `طبيب نساء`\\n\\n_مثال: **"أسنان في عنابة"** أو **"عظام في وهران"**_', model: 'static-doctor' };
+  if (!city) return { content: workerDoctorFixedResponse(speciality), model: 'static-doctor' };
+
+  try {
+    const { searchDoctors, formatResults } = await import('../lib/doctorSearch.js');
+    const result = await searchDoctors({ speciality: speciality.search, city: city.fr, userLocation });
+    return {
+      content: formatResults(result.results, speciality.label, city.ar, {
+        hasGps: !!userLocation, sourceCount: 8
+      }),
+      model: 'doctor-search',
+      doctorSearch: true,
+      sources: result.results.flatMap(d => d.sourceUrls || []).filter(Boolean)
+    };
+  } catch (e) {
+    console.warn('[Worker:DoctorSearch] search failed:', e?.message || e);
+    return { content: workerDoctorFixedResponse(speciality) + '\\n\\n⚠️ تعذر الوصول إلى مصادر الأطباء حالياً، حاول مرة أخرى.', model: 'static-doctor' };
+  }
+}
+
 async function callResearchRouter(messages, payload) {
   injectEnv(payload?._env || {})
   const { callAIRouter } = await import('../lib/ai-router/index.js')

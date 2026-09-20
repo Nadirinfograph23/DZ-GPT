@@ -404,6 +404,30 @@ async function fetchChatDirect(request, env = {}) {
       }
     }
 
+    // ── Restored DZ Maps / OpenStreetMap place search ─────────────────────
+    // Preserve the original POI flow (e.g. "مسجد في عنابة") before AI so
+    // place queries return the real OpenStreetMap/Leaflet map and POI list.
+    try {
+      const { handleMapQuery } = await import('../modules/dz-maps/index.js')
+      const mapResult = await handleMapQuery(lastUser, payload?.userLocation || null)
+      if (mapResult) {
+        return new Response(JSON.stringify({
+          content: mapResult.content,
+          isMap: !!mapResult.isMap,
+          mapHtml: mapResult.mapHtml || null,
+          mapMeta: mapResult.mapMeta || null,
+          mode: 'dz-maps',
+        }), { headers: {
+          'content-type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        }})
+      }
+    } catch (e) {
+      console.warn('[Worker:Maps] place/map interception failed:', e?.message || e)
+    }
+
     // ── Restored deterministic Doctor Search fixed-answer flow ─────────────
     // Must run before static knowledge / live research / AI so the original
     // specialty → city conversation and structured doctor table are preserved.

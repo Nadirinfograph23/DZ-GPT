@@ -209,3 +209,19 @@ body.has-downloads .dza-input-row,
 body.has-downloads .agent-input-area {
   margin-bottom: 56px;
 }
+
+
+/* ── Doctor table: reusable DZ table engine + direct actions ─────────────── */
+.dr-table-wrap { overflow-x: auto; width: 100%; }
+.dr-table { width: 100%; border-collapse: collapse; min-width: 620px; }
+.dr-th { cursor: pointer; user-select: none; white-space: nowrap; }
+.dr-th > span { display: inline-flex; align-items: center; gap: 5px; }
+.dr-address-link, .dr-phone-link { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-weight: 600; }
+.dr-address-link { color: #38bdf8; }
+.dr-phone-link { color: #34d399; }
+.dr-address-link:hover, .dr-phone-link:hover { text-decoration: underline; }
+.dr-cell-muted { opacity: .55; }
+@media (max-width: 700px) {
+  .dr-table { min-width: 560px; }
+  .dr-th, .dr-td { padding: 8px 7px; font-size: .78rem; }
+}

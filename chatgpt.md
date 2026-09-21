@@ -670,3 +670,11 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - تحقق خارجي بتاريخ 21/09/2026 أكد أن DZDOC يعرض نتائج حقيقية لـ Chirurgien dentiste في Annaba، وأن Docteur360 يعرض نتائج حقيقية مع العناوين وأرقام الهاتف في بعض السجلات.
 - commit: `9b1392015de26d9db012bab326550eb3b4385717`.
 - بعد نشر هذا commit، يجب أن يتحول الطلب «طبيب أسنان في عنابة» إلى بيانات منظمة `results[]` ثم تظهر واجهة الجدول بأعمدة: اسم الطبيب، الاختصاص، العنوان، الهاتف؛ وليس جدول «روابط البحث».
+
+
+## 2026-09-21 — Doctor table still absent on production
+- Rechecked the production-path root cause after the user reported that the doctor answer still appears as source links instead of the four-column table.
+- Found and repaired malformed escaped newline characters in the Worker-native route section of `workers/entry.js`, which could prevent the structured `POST /api/dz-agent/doctor-search` route from being deployed correctly.
+- Commit: `2c0ed44ba9172d1770384451b950264ce3abc714`.
+- GitHub Actions push deployment run #267 was created for this exact commit and is currently queued; production is therefore not yet confirmed updated.
+- The intended production response remains structured `results` for the DoctorResultsPanel four-column table: doctor name, specialty, address, phone.

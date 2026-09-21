@@ -72,3 +72,18 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.toml
+
+      - name: Verify production deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..12}; do
+            BODY="$(curl -fsSL --max-time 10 "https://dzagent.app/version.json?_=$GITHUB_SHA")" && {
+              echo "$BODY"
+              echo "$BODY" | grep -F '"commit":"'$GITHUB_SHA'"'
+              exit 0
+            } || true
+            sleep 5
+          done
+          echo "Production verification failed: version.json does not expose $GITHUB_SHA"
+          exit 1

@@ -594,3 +594,40 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - Commit: 7d5517b33265d9411df0f399b5334a21b47a576a.
 
 - 2026-09-20 — Production deployment fix: updated `.github/workflows/deploy-cloudflare-worker.yml` so the Cloudflare Worker deploy runs on both the release branch and `main`. The previous workflow only watched the release branch, so merging the PR into `main` could leave the live site on an older Worker build. Commit: `0a44a6b8fec640e1bfb685ec7b5582ef036e4b59`.
+
+
+## سجل مهمة 2026-09-21 — إصلاح جدول بحث الأطباء ومصادر النتائج
+
+### المطلوب
+إصلاح حالة بحث الطبيب لأن الجدول لم يكن يظهر بشكل موثوق، وكانت قائمة المصادر شبه فارغة، مع الالتزام بالعمل على الفرع الدائم:
+`devin/1774405518-init-dz-gpt`.
+
+### فحص الكود
+- تم العثور على جدول نتائج الأطباء فعلياً داخل `src/components/DoctorResultsPanel.tsx`، وهو جدول HTML مخصص وليس `DoctorResultsTable.tsx` على هذا الفرع.
+- تم العثور على محرك الجداول العام في:
+  - `src/components/tables/DZSmartTable.tsx`
+  - `src/hooks/useTableEngine.ts`
+  - `src/lib/table-engine/types.ts`
+- المشروع يستخدم بالفعل TanStack Table/React Table، لذلك لم تتم إضافة مكتبة جداول خارجية بلا حاجة. TanStack Table موثق كمحرك headless يترك طريقة العرض والتنسيق للتطبيق. citeturn0search5turn0search0
+
+### مصادر الأطباء
+تمت مراجعة المصادر الخارجية مباشرة. DZDOC يعرض بحثاً حسب التخصص والولاية، وصفحات نتائج فعلية للأطباء؛ وDocteur360 يعرض صفحات بحث حسب التخصص والموقع وملفات الأطباء التي تتضمن العنوان، وبعض النتائج تتضمن أرقام الهاتف. citeturn2view0turn4search0turn4search11
+
+### التنفيذ
+- تم استبدال قائمة المصادر القديمة المتعددة في `lib/doctorSearch.js` بمصدرين فعليين فقط حسب المطلوب:
+  1. DZDOC — `https://dzdoc.com/`
+  2. Docteur360 — `https://docteur360.com.dz/`
+- أضيف parser حي لـ DZDOC يكتشف قيم التخصص/الولاية من نموذج الموقع نفسه، ثم يقرأ روابط ملفات الأطباء ويثري النتائج من صفحات الملفات عند الحاجة بالهاتف والعنوان.
+- أضيف parser حي لـ Docteur360 باستخدام صفحات `/specialiste/{specialite}/{wilaya}/{wilaya}` وقراءة روابط ملفات الأطباء والعنوان والهاتف من النتائج.
+- أضيفت إزالة التكرار داخل مصدر Docteur360.
+- أضيفت تسمية `DZDOC` في واجهة المصادر داخل جدول الأطباء.
+- تم الحفاظ على الحقول المطلوبة في الجدول: اسم الطبيب، التخصص، العنوان، رقم الهاتف. العنوان يبقى رابط Google Maps، والهاتف يبقى رابط `tel:`.
+
+### Commit
+`7d3d73561ad18a53352245deee49dbe364ae2422` — `fix: use live DZDOC and Docteur360 doctor sources`
+
+### حالة النشر
+التعديل موجود على فرع `devin/1774405518-init-dz-gpt`. يجب تشغيل CI ثم نشره إلى الإنتاج قبل اعتبار الإصلاح ظاهراً في `https://dzagent.app`.
+
+### قاعدة دائمة
+أي تعديل لاحق على بحث الأطباء يجب أن يحافظ على مصدرَي DZDOC وDocteur360، وعلى جدول النتائج وروابط Google Maps والهاتف، مع تسجيل الخطوات والـ commit في هذا الملف.

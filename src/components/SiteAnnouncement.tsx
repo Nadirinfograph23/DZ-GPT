@@ -70,7 +70,6 @@ export default function SiteAnnouncement() {
   }, [])
 
   const fetchAnn = useCallback(async () => {
-  const fetchAnn = useCallback(async () => {
     try {
       const res = await fetch(`/version.json?_=${Date.now()}`, {
         cache: 'no-store',

@@ -107,6 +107,7 @@ function matchLabel(score: number): { label: string; cls: string } | null {
 }
 
 const SOURCE_LABELS: Record<string, string> = {
+  dzdoc: 'DZDOC',
   sahadoc: 'Sahadoc', addalile: 'Addalile', 'pj-dz': 'PJ-DZ',
   'algerie-docto': 'Algerie-Docto', docteur360: 'Docteur360', 'salim-dz': 'SALIM-DZ', altibbi: 'Altibbi',
   sihhatech: 'Sihhatech', machrou3: 'Machrou3', beesiha: 'Beesiha',

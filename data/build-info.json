@@ -1,8 +1,8 @@
 {
-  "commit": "36c35fa1223431de09b3d1ee07f9aeb0b02157d2",
-  "commitShort": "36c35fa1",
+  "commit": "86d45f591cbf97083cdc43fdac68ec78a913be26",
+  "commitShort": "86d45f59",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: make bundled yt-dlp executable",
-  "deployedAt": "2026-08-14T11:53:37.676889Z",
+  "message": "feat: add interactive doctor selection and OSM facility maps",
+  "deployedAt": "2026-09-21T00:01:24.553052Z",
   "deployedBy": "scripts/deploy.py"
 }

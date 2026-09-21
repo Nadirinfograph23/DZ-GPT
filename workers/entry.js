@@ -1365,6 +1365,43 @@ export default {
       if (url.pathname === '/api/dz-agent/prayer' && request.method === 'GET') {
         return fetchPrayerDirect(request)
       }
+      if (url.pathname === '/api/dz-agent/doctor-search' && request.method === 'POST') {
+        try {
+          const payload = await request.json()
+          const speciality = String(payload?.speciality || '').trim()
+          const city = String(payload?.city || '').trim()
+          const userLocation = payload?.userLocation || null
+          if (!speciality || !city) {
+            return new Response(JSON.stringify({ results: [], error: 'speciality and city are required' }), {
+              status: 400,
+              headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+            })
+          }
+          const { searchDoctors } = await import('../lib/doctorSearch.js')
+          const result = await searchDoctors({ speciality, city, userLocation })
+          return new Response(JSON.stringify({
+            results: result.results || [],
+            errors: result.errors || [],
+            cached: !!result.cached,
+            model: 'doctor-search'
+          }), {
+            headers: {
+              'content-type': 'application/json',
+              'cache-control': 'no-store',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            }
+          })
+        } catch (e) {
+          console.warn('[Worker:DoctorSearchAPI] failed:', e?.message || e)
+          return new Response(JSON.stringify({ results: [], error: 'تعذّر جلب نتائج الأطباء حالياً' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+          })
+        }
+      }
+
       if (url.pathname === '/api/dz-agent-chat' && request.method === 'POST') {
         return fetchChatDirect(request, env)
       }

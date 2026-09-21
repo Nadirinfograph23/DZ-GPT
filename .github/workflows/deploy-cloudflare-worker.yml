@@ -31,6 +31,21 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Generate deployment metadata
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+          const commit = process.env.GITHUB_SHA;
+          const message = execSync('git log -1 --pretty=%B', { encoding: 'utf8' }).replace(/\\s+/g, ' ').trim();
+          const data = { commit, commitShort: commit.slice(0, 8), branch: process.env.GITHUB_REF_NAME, message, deployedAt: new Date().toISOString(), deployedBy: 'GitHub Actions + Cloudflare Workers' };
+          fs.mkdirSync('public', { recursive: true });
+          fs.writeFileSync('public/version.json', JSON.stringify(data, null, 2) + '\\n');
+          fs.mkdirSync('data', { recursive: true });
+          fs.writeFileSync('data/build-info.json', JSON.stringify(data, null, 2) + '\\n');
+          NODE
+
       - name: Use public npm tarballs in CI
         run: sed -i 's#http://package-firewall\.replit\.local/npm/#https://registry.npmjs.org/#g' package-lock.json
 
@@ -46,3 +61,18 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.toml
+      - name: Verify production deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$GITHUB_SHA"
+          for i in 1 2 3 4 5 6; do
+            actual="$(curl -fsSL --max-time 10 "https://dzagent.app/version.json?_=$GITHUB_RUN_ID-$i" || true)"
+            if printf '%s' "$actual" | grep -Fq "\"commit\":\"$expected\""; then
+              echo "Production is serving $expected"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Production did not expose $expected via /version.json"
+          exit 1

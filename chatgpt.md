@@ -652,3 +652,11 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - تم تصحيح عدد المصادر في رسالة البحث إلى مصدرين نشطين فقط: DZDOC وDocteur360.
 - Branch: `devin/1774405518-init-dz-gpt`
 - Commits: `eef92abb5173de13a14538d641765635e9d43c93` وcommit تصحيح source count لاحقاً.
+
+
+## 2026-09-21 — تسريع وصول تحديثات الفرع إلى الإنتاج
+- تم تدقيق مسار النشر ووجد أن الفرع المطلوب يحتوي Workflow خاصاً بـ Cloudflare Worker، لكن آلية التحقق من الإنتاج كانت غير كافية.
+- تم تحديث `.github/workflows/deploy-cloudflare-worker.yml` على الفرع `devin/1774405518-init-dz-gpt` ليشمل توليد `public/version.json` و`data/build-info.json` من `GITHUB_SHA`، ثم نشر Worker، ثم التحقق من أن `https://dzagent.app/version.json` يعرض نفس commit قبل اعتبار النشر ناجحاً.
+- Workflow الفرع مضبوط ليعمل على push إلى `devin/1774405518-init-dz-gpt` وكذلك `main`، ما يجعل كل commit جديد على الفرع مؤهلاً لتشغيل النشر دون انتظار merge.
+- ملاحظة: الفرع حالياً متشعب عن main (12 commits ahead و43 behind)، لذلك لا يتم دمجه قسراً أو الكتابة فوق main تلقائياً لأن ذلك قد يؤدي إلى استبدال تغييرات الإنتاج. تم الاكتفاء بتقوية مسار النشر على الفرع المطلوب.
+- Commit الخاص بتحسين Workflow: `116eba2b2576f2a01a5ae4eec48cd8dd89313f3c`.

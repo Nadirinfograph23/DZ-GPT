@@ -642,3 +642,13 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - تم تحديث العدد الافتراضي للمصادر المعروض في ملخص الإجابة من 10 إلى 2 لأنه يعكس المصدرين النشطين حالياً.
 - Branch: `devin/1774405518-init-dz-gpt`
 - Commit: `041aca1fbd48766a27d67b93406cb995c50765b2`
+
+
+## 2026-09-21 — إصلاح سبب عدم ظهور جدول الأطباء
+- التدقيق في المسار الكامل كشف أن واجهة `DoctorResultsPanel` كانت موجودة فعلاً وتحتوي على `TableView`، لكن صفحة `DZTools` كانت تستدعي `/api/dz-agent/doctor-search` بينما Worker كان يمرر هذا المسار إلى Express، في حين أن تدفق البحث الأصلي داخل Worker كان يعيد `content` Markdown فقط.
+- هذا يعني أن الواجهة لم تحصل على `doctorData.results` الذي تحتاجه لإظهار React table.
+- تمت إضافة endpoint Worker-native مباشر: `POST /api/dz-agent/doctor-search` يعيد `results` المنظمة من `searchDoctors()` مع بيانات المصادر، العنوان، الهاتف، والإحداثيات.
+- تم إبقاء التدفق القديم الثابت في الدردشة دون تغييره، وأصبح المسار الخاص بواجهة البحث يستخدم نفس محرك البحث الحالي.
+- تم تصحيح عدد المصادر في رسالة البحث إلى مصدرين نشطين فقط: DZDOC وDocteur360.
+- Branch: `devin/1774405518-init-dz-gpt`
+- Commits: `eef92abb5173de13a14538d641765635e9d43c93` وcommit تصحيح source count لاحقاً.

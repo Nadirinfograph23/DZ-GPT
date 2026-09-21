@@ -1495,6 +1495,30 @@ const DOCTOR_CITIES = [
   { ar: 'غليزان', fr: 'Relizane' },
 ]
 
+
+const DOCTOR_SELECTION_SPECIALTIES = SPECIALITIES.map(({ ar, fr, search }) => ({
+  ar,
+  fr,
+  search,
+})).slice(0, 18)
+
+const DOCTOR_SELECTION_CITIES = DOCTOR_CITIES.map(({ ar, fr }) => ({ ar, fr }))
+
+function buildDoctorSelection(speciality, city) {
+  return {
+    selected: {
+      speciality: speciality ? { ar: speciality.ar, fr: speciality.fr } : null,
+      city: city ? { ar: city.ar, fr: city.fr } : null,
+    },
+    missing: {
+      speciality: !speciality,
+      city: !city,
+    },
+    specialties: DOCTOR_SELECTION_SPECIALTIES,
+    cities: DOCTOR_SELECTION_CITIES,
+  }
+}
+
 // كلمات تدل على السياق التقني — إذا وُجدت مع "توليد" لا يُعدّ طلب طبيب
 const TECH_CONTEXT_EXCLUSIONS = [
   'صور', 'صورة', 'image', 'images', 'photo', 'كود', 'code', 'نص', 'text',
@@ -15809,6 +15833,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           '',
           '_يمكنك أيضاً البحث باسم الطبيب مباشرة: **دكتور محمد بن علي** أو **Dr Ahmed Annaba**_',
         ].join('\n'),
+        _doctorSearchMode: true,
+        doctorSelection: buildDoctorSelection(null, null),
       })
     }
     if (!doctorIntent.speciality) {
@@ -15822,6 +15848,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           '',
           '_مثال: **"أسنان في عنابة"** أو **"عظام في وهران"**_',
         ].join('\n'),
+        _doctorSearchMode: true,
+        doctorSelection: buildDoctorSelection(null, doctorIntent.city),
       })
     }
     if (!doctorIntent.city) {
@@ -15837,6 +15865,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           '',
           `_مثال: اكتب **"طبيب ${doctorIntent.speciality.ar} في سطيف"**_`,
         ].join('\n'),
+        _doctorSearchMode: true,
+        doctorSelection: buildDoctorSelection(doctorIntent.speciality, null),
       })
     }
     const { results, cached } = await multiSearchDoctors({

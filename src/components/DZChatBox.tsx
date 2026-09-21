@@ -22,6 +22,7 @@ import WC2026MatchCard from './WC2026MatchCard'
 import { DZMDTable } from './tables/DZSmartTable'
 import DZDashboard from './DZDashboard'
 import DoctorResultsPanel, { type DoctorResult, type DirLink } from './DoctorResultsPanel'
+import DoctorSelectionPanel, { type DoctorSelectionData } from './DoctorSelectionPanel'
 import { DeveloperCard } from './DeveloperCard'
 import VoicePanel from './VoicePanel'
 import AgentStepsPanel from './AgentStepsPanel'
@@ -353,6 +354,7 @@ type RichType =
   | 'web-reader'
   | 'github-profile'
   | 'doctor-results'
+  | 'doctor-selection'
   | 'task-plan'
   | 'github-react'
   | 'github-agent'
@@ -636,6 +638,7 @@ interface DZMessage {
   doctors?: DoctorResult[]
   dirs?: DirLink[]
   doctorMeta?: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; hasGps?: boolean; cached?: boolean; byName?: boolean; queryName?: string }
+  doctorSelection?: DoctorSelectionData
   dua?: string
   visitorAnalyticsData?: { period: string }
   thinkingTrace?: ThinkingTraceRole[]
@@ -7983,6 +7986,16 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         return
       }
 
+      // ── Doctor selection — choose specialty and city before searching ─────
+      if (data._doctorSearchMode && data.doctorSelection) {
+        addAssistantMessage({
+          content: (data.content as string) || 'اختر اختصاص الطبيب والولاية:',
+          richType: 'doctor-selection',
+          doctorSelection: data.doctorSelection as DoctorSelectionData,
+        })
+        return
+      }
+
       // ── Visitor Analytics — بطاقة إحصائيات الزوار ────────────────────────
       if (data.richType === 'visitor-analytics' && data.analyticsData) {
         addAssistantMessage({
@@ -9017,6 +9030,16 @@ ${rows}
                               {msg.dua}
                             </div>
                           )}
+                        </>
+                      )}
+
+                      {msg.richType === 'doctor-selection' && msg.doctorSelection && (
+                        <>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                          <DoctorSelectionPanel
+                            data={msg.doctorSelection}
+                            onSend={sendMessage}
+                          />
                         </>
                       )}
 

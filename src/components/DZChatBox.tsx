@@ -22,6 +22,7 @@ import WC2026MatchCard from './WC2026MatchCard'
 import { DZMDTable } from './tables/DZSmartTable'
 import DZDashboard from './DZDashboard'
 import DoctorResultsPanel, { type DoctorResult, type DirLink } from './DoctorResultsPanel'
+import DoctorSelectionPanel, { type DoctorSelectionData } from './DoctorSelectionPanel'
 import { DeveloperCard } from './DeveloperCard'
 import VoicePanel from './VoicePanel'
 import AgentStepsPanel from './AgentStepsPanel'
@@ -353,6 +354,7 @@ type RichType =
   | 'web-reader'
   | 'github-profile'
   | 'doctor-results'
+  | 'doctor-selection'
   | 'task-plan'
   | 'github-react'
   | 'github-agent'
@@ -636,6 +638,7 @@ interface DZMessage {
   doctors?: DoctorResult[]
   dirs?: DirLink[]
   doctorMeta?: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; hasGps?: boolean; cached?: boolean; byName?: boolean; queryName?: string }
+  doctorSelection?: DoctorSelectionData
   dua?: string
   visitorAnalyticsData?: { period: string }
   thinkingTrace?: ThinkingTraceRole[]
@@ -3937,9 +3940,7 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
       : `📍 ${s(meta.locationName) || 'الجزائر'}`
 
   // Google Maps embed URL (primary) or legacy Leaflet HTML
-  // The server's legacy field is named gmapsUrl, but map embeds are
-  // OpenStreetMap export URLs. Keep accepting the old field for compatibility.
-  const mapEmbedUrl = meta.gmapsUrl ? String(meta.gmapsUrl) : null
+  const gmapsUrl = meta.gmapsUrl ? String(meta.gmapsUrl) : null
 
   // External links
   const locationFr  = s(meta.locationFr || meta.locationName || '')
@@ -3978,16 +3979,16 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
           )}
         </div>
         <div className="dz-map-card-controls">
-          <span className="dz-map-badge dz-map-badge--subtle">OpenStreetMap</span>
+          <span className="dz-map-badge dz-map-badge--subtle">Google Maps</span>
           <span className="dz-map-collapse-btn">{expanded ? '▲' : '▼'}</span>
         </div>
       </div>
 
       {expanded && (
         <div className="dz-map-iframe-wrap">
-          {mapEmbedUrl ? (
+          {gmapsUrl ? (
             <iframe
-              src={mapEmbedUrl}
+              src={gmapsUrl}
               width="100%"
               height="380"
               style={{ border: 'none', display: 'block' }}
@@ -4008,8 +4009,8 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
       )}
 
       <div className="dz-map-card-actions">
-        <a className="dz-map-action-btn dz-map-action-btn--osm" href={osmOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
-          <MapPin size={11} /> فتح في OpenStreetMap
+        <a className="dz-map-action-btn dz-map-action-btn--gmaps" href={gmapsOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+          <MapPin size={11} /> فتح في Google Maps
         </a>
         {!isRoute && (lat && lng || locationFr) && (
           <a
@@ -4028,12 +4029,12 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
             🚗 إنشاء مسار
           </a>
         )}
-        <a className="dz-map-action-btn dz-map-action-btn--gmaps" href={gmapsOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
-          Google Maps
+        <a className="dz-map-action-btn dz-map-action-btn--osm" href={osmOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+          🗺️ OpenStreetMap
         </a>
       </div>
       <div className="dz-map-card-footer">
-        OpenStreetMap · © <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · مجاني 🇩🇿
+        Google Maps Embed · © <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> · مجاني 🇩🇿
       </div>
     </div>
   )
@@ -7983,6 +7984,16 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         return
       }
 
+      // ── Doctor selection — choose specialty and city before searching ─────
+      if (data._doctorSearchMode && data.doctorSelection) {
+        addAssistantMessage({
+          content: (data.content as string) || 'اختر اختصاص الطبيب والولاية:',
+          richType: 'doctor-selection',
+          doctorSelection: data.doctorSelection as DoctorSelectionData,
+        })
+        return
+      }
+
       // ── Visitor Analytics — بطاقة إحصائيات الزوار ────────────────────────
       if (data.richType === 'visitor-analytics' && data.analyticsData) {
         addAssistantMessage({
@@ -9017,6 +9028,15 @@ ${rows}
                               {msg.dua}
                             </div>
                           )}
+                        </>
+                      )}
+                      {msg.richType === 'doctor-selection' && msg.doctorSelection && (
+                        <>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                          <DoctorSelectionPanel
+                            data={msg.doctorSelection}
+                            onSend={sendMessage}
+                          />
                         </>
                       )}
 

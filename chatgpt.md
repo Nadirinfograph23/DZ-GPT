@@ -643,3 +643,13 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 
 ### الحالة
 التغييرات موجودة على الفرع `feat/doctor-table-engine-links`، وسيتم دمجها في `main` فقط بعد نجاح فحص البناء ثم انتظار نشر Cloudflare والتحقق من الموقع المباشر.
+
+
+## 2026-09-22 — YouTube search/analysis production fix
+- Investigated the existing YouTube Insight implementation and found a critical production gap: `modules/youtube_insight_module/mount.js` was still a stub returning “not available”, while the Cloudflare Worker did not route YouTube requests to the existing controller.
+- Restored the API mount for `/api/youtube-insight/analyze` and `/api/youtube-insight/discuss` using the existing `handleYouTubeInput` and `handleVideoDiscussion` engine.
+- Added a Worker-native YouTube route before the generic AI/tools router so video searches and YouTube URLs use the dedicated engine (search → metadata → captions → AI analysis) instead of generic fallback/tool routing.
+- Fixed the YouTube discussion button so it preserves the actual video URL in the request; this prevents the selected video from being lost and routes the request back to the real video-analysis flow.
+- PR branch: `fix/youtube-search-analysis`.
+
+- Extended the same dedicated YouTube routing to the Vercel/serverless fallback handlers (`api/chat.js` and `api/index.js`) so a platform fallback cannot silently lose video search/analysis.

@@ -41,6 +41,39 @@ async function handleChat(req, res) {
       return res.status(200).json({ content: 'أنا DZ Agent، مساعد ذكي مصمم خصيصاً للمستخدمين الجزائريين. أعمل على توفير معلومات دقيقة وخدمات متنوعة.', model: 'static-guard' })
     }
 
+    // Dedicated YouTube path: never let video requests fall through to generic AI.
+    if (/(?:youtube|youtu\\.be|يوتيوب|يوتيب|فيديو|فيديوهات|بالفيديو|ابحث عن فيديو|حلّل الفيديو|حلل الفيديو|اشرح لي الفيديو)/i.test(lastUser)) {
+      try {
+        const { handleYouTubeInput } = await import('../modules/youtube_insight_module/controller.js')
+        const yt = await handleYouTubeInput(lastUser, {
+          aiGenerate: async ({ messages, max_tokens }) => callAIRouter(messages, { max_tokens: Math.min(Number(max_tokens) || 1400, 4096), taskHint: 'retrieval' }),
+        })
+        return res.status(200).json({
+          content: yt?.message || '',
+          model: 'youtube-insight',
+          richType: 'youtube',
+          youtubeFlow: yt?.flow,
+          youtubeVideo: yt?.video ? {
+            id: yt.video.id, url: yt.video.url, title: yt.video.title,
+            channel: yt.video.author || yt.video.channel || '',
+            duration: yt.video.duration || 0, views: yt.video.views || 0,
+            thumbnail: yt.video.thumbnail || '', description: yt.video.description || '',
+            captionText: yt.captionText || null,
+          } : undefined,
+          youtubeResults: (yt?.results || []).map(v => ({
+            id: v.id, url: v.url, title: v.title, channel: v.channel || '',
+            duration: v.duration || 0, views: v.views || 0, thumbnail: v.thumbnail || '',
+          })),
+          youtubeAnalysis: yt?.analysis ? { ok: true, summary: yt.analysis.summary || '', captionAvailable: !!yt.captionText } : undefined,
+          youtubeSuggestions: yt?.suggestions || [],
+          captionText: yt?.captionText || null,
+          captionNote: yt?.captionNote || null,
+        })
+      } catch (e) {
+        console.warn('[YouTube Insight] dedicated route failed:', e?.message || e)
+      }
+    }
+
     const result = await callAIRouter(
       [{ role: 'system', content: DZ_SYSTEM_PROMPT }, ...messages],
       { max_tokens: 2048, taskHint: 'multilingual' },

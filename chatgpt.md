@@ -651,3 +651,5 @@ SearXNG يوثق `/search` و`format=json`، ويمكن للـ instance تشغي
 - Added a Worker-native YouTube route before the generic AI/tools router so video searches and YouTube URLs use the dedicated engine (search → metadata → captions → AI analysis) instead of generic fallback/tool routing.
 - Fixed the YouTube discussion button so it preserves the actual video URL in the request; this prevents the selected video from being lost and routes the request back to the real video-analysis flow.
 - PR branch: `fix/youtube-search-analysis`.
+
+- Extended the same dedicated YouTube routing to the Vercel/serverless fallback handlers (`api/chat.js` and `api/index.js`) so a platform fallback cannot silently lose video search/analysis.

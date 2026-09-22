@@ -404,6 +404,64 @@ async function fetchChatDirect(request, env = {}) {
       }
     }
 
+    // ── YouTube Insight: search + URL analysis ─────────────────────────────
+    // Keep video requests out of the generic AI/tool router. The original
+    // YouTube engine already provides search, metadata, captions and analysis.
+    const isYouTubeRequest = /(?:youtube|youtu\.be|يوتيوب|يوتيب|فيديو|فيديوهات|بالفيديو|فيديو عن|ابحث عن فيديو|حلّل الفيديو|حلل الفيديو|اشرح لي الفيديو)/i.test(lastUser)
+    if (isYouTubeRequest) {
+      try {
+        const { handleYouTubeInput } = await import('../modules/youtube_insight_module/controller.js')
+        const yt = await handleYouTubeInput(lastUser, {
+          aiGenerate: async ({ messages, max_tokens }) => callResearchRouter(messages, { ...payload, max_tokens }),
+          noSuggestions: false,
+        })
+        if (yt?.flow === 'url' || yt?.flow === 'search') {
+          return new Response(JSON.stringify({
+            content: yt.message || '',
+            model: 'youtube-insight',
+            richType: 'youtube',
+            youtubeFlow: yt.flow,
+            youtubeVideo: yt.video ? {
+              id: yt.video.id,
+              url: yt.video.url,
+              title: yt.video.title,
+              channel: yt.video.author || yt.video.channel || '',
+              duration: yt.video.duration || 0,
+              views: yt.video.views || 0,
+              thumbnail: yt.video.thumbnail || '',
+              description: yt.video.description || '',
+              captionText: yt.captionText || null,
+            } : undefined,
+            youtubeResults: (yt.results || []).map(v => ({
+              id: v.id, url: v.url, title: v.title,
+              channel: v.channel || v.author || '',
+              duration: v.duration || 0, views: v.views || 0,
+              thumbnail: v.thumbnail || '',
+            })),
+            youtubeAnalysis: yt.analysis ? {
+              ok: true,
+              summary: yt.analysis.summary || '',
+              captionAvailable: !!yt.captionText,
+            } : undefined,
+            youtubeSuggestions: yt.suggestions || [],
+            captionText: yt.captionText || null,
+            captionNote: yt.captionNote || null,
+          }), {
+            headers: {
+              'content-type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            },
+          })
+        }
+      } catch (e) {
+        console.warn('[Worker:YouTube] Insight engine failed:', e?.message || e)
+        // Fall through to the normal AI router only when the dedicated
+        // engine itself cannot run; never return a fake video result.
+      }
+    }
+
     // ── Restored DZ Maps / OpenStreetMap place search ─────────────────────
     // Preserve the original POI flow (e.g. "مسجد في عنابة") before AI so
     // place queries return the real OpenStreetMap/Leaflet map and POI list.

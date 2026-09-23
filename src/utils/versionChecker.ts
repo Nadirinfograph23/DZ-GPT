@@ -50,19 +50,6 @@ async function fetchVersion(): Promise<{ deployTs: string; label: string } | nul
     }
   } catch { /* تجاهل */ }
 
-  // Legacy Vercel fallback removed: production is Cloudflare-only.
-  // Keep returning null if the canonical endpoint and static asset are unavailable.
-  try {
-    const res = await fetch(`/api/version?_=${bust}`, {
-      cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
-    })
-    if (!res.ok) return null
-    const d = await res.json()
-    const deployTs = d.deployedAt || d.serverTime || null
-    const label    = d.commit || d.version || 'new'
-    if (deployTs) return { deployTs, label }
-  } catch {}
 
   return null
 }

@@ -1,7 +1,6 @@
 // DZ Agent YouTube ordinal-action bridge.
-// IMPORTANT: ordinal suggestions must use the same React analysis flow as
-// "تحليل و مناقشة الفيديو". Sending "اشرح لي الفيديو الأول" through the
-// generic chat router loses the selected result and may produce a tool redirect.
+// Keeps ordinal suggestions on the native YouTube analysis flow instead of
+// sending "اشرح لي الفيديو الأول" through the generic chat router.
 (function () {
   'use strict'
 
@@ -28,11 +27,8 @@
     var card = cards[index]
     if (!card) return false
 
-    // The result cards are React buttons. Clicking the real card first updates
-    // selectedVideo inside YouTubePanel. We then click the component's own
-    // "تحليل و مناقشة الفيديو" action, which calls onDiscuss(selectedVideo)
-    // and enters the existing YouTube analysis/transcript flow.
-    card.click()
+    // Select the real React result first, then invoke its own analysis action.
+    if (typeof card.click === 'function') card.click()
 
     var attempts = 0
     function findAndClickAnalysis() {
@@ -42,12 +38,11 @@
         action.click()
         return true
       }
-      if (attempts < 20) {
-        window.setTimeout(findAndClickAnalysis, 25)
-      }
+      // React state/rendering can take a little longer on mobile/slow devices.
+      if (attempts < 60) window.setTimeout(findAndClickAnalysis, 50)
       return false
     }
-    window.setTimeout(findAndClickAnalysis, 30)
+    window.setTimeout(findAndClickAnalysis, 50)
     return true
   }
 
@@ -65,13 +60,10 @@
     if (index < 0) return
 
     var panel = button.closest('.dzc-yt')
-    if (!panel) return
-    var cards = panel.querySelectorAll('.dzc-yt-card')
-    if (!cards[index]) return
+    if (!panel || !panel.querySelectorAll('.dzc-yt-card')[index]) return
 
-    // Stop the generic onAsk(s) handler. That handler intentionally sends the
-    // suggestion text to the generic AI router, which is the root cause of the
-    // old "اقترح أداة" response.
+    // Prevent the generic suggestion handler from replacing the selected video
+    // with plain text. The existing native analysis flow owns the request.
     event.preventDefault()
     event.stopImmediatePropagation()
     clickRealAnalysisAction(panel, index)

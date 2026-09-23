@@ -190,8 +190,10 @@ export function startVersionChecker() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (event.data?.type === 'NEW_VERSION' || event.data?.type === 'SW_UPDATED') {
+        // Do not show a banner merely because the SW activated: that also happens
+        // on a first install. Confirm that the deployed version actually changed.
         console.log('[VersionChecker] SW message:', event.data.type)
-        showUpdateBanner()
+        checkForUpdate()
       }
     })
 

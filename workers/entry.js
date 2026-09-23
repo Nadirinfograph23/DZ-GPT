@@ -445,6 +445,66 @@ async function fetchChatDirect(request, env = {}) {
       console.warn('[Worker:Chat] Doctor search interception failed:', e?.message || e)
     }
 
+    // ── YouTube Insight direct path ───────────────────────────────────────
+    // Keep video search/analysis out of the generic AI/research fallback.
+    // This is intentionally Worker-native so production uses the same
+    // YouTube Insight controller as the Vercel API routes.
+    if (/(?:youtube|youtu\\.be|يوتيوب|يوتيب|فيديو|فيديوهات|بالفيديو|ابحث عن فيديو|حلّل الفيديو|حلل الفيديو|اشرح لي الفيديو|شرح .*فيديو|tutorial|how to)/i.test(lastUser)) {
+      try {
+        const { handleYouTubeInput } = await import('../modules/youtube_insight_module/controller.js');
+        const youtubeAiGenerate = async ({ messages, max_tokens }) => {
+          injectEnv(env);
+          const { callAIRouter } = await import('../lib/ai-router/index.js');
+          return callAIRouter(messages, {
+            max_tokens: Math.min(Number(max_tokens) || 1400, 4096),
+            taskHint: 'retrieval',
+          });
+        };
+        const yt = await handleYouTubeInput(lastUser, { aiGenerate: youtubeAiGenerate });
+        return new Response(JSON.stringify({
+          content: yt?.message || '',
+          model: 'youtube-insight',
+          richType: 'youtube',
+          youtubeFlow: yt?.flow,
+          youtubeVideo: yt?.video ? {
+            id: yt.video.id,
+            url: yt.video.url,
+            title: yt.video.title,
+            channel: yt.video.author || yt.video.channel || '',
+            duration: yt.video.duration || 0,
+            views: yt.video.views || 0,
+            thumbnail: yt.video.thumbnail || '',
+            description: yt.video.description || '',
+            captionText: yt.captionText || null,
+          } : undefined,
+          youtubeResults: (yt?.results || []).map(v => ({
+            id: v.id,
+            url: v.url,
+            title: v.title,
+            channel: v.channel || '',
+            duration: v.duration || 0,
+            views: v.views || 0,
+            thumbnail: v.thumbnail || '',
+          })),
+          youtubeAnalysis: yt?.analysis ? {
+            ok: true,
+            summary: yt.analysis.summary || '',
+            captionAvailable: !!yt.captionText,
+          } : undefined,
+          youtubeSuggestions: yt?.suggestions || [],
+          captionText: yt?.captionText || null,
+          captionNote: yt?.captionNote || null,
+        }), { headers: {
+          'content-type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        }});
+      } catch (e) {
+        console.warn('[Worker:YouTubeInsight] direct path failed:', e?.message || e);
+      }
+    }
+
     // ── Static knowledge fast-path — إجابة فورية صحيحة بدون أي مزوّد ────────
     // يعمل حتى لو تعطلت كل خدمات الذكاء الاصطناعي (نفس قاعدة معرفة server.js).
     // مطابق مع lookupStaticFact: عواصم، حقائق جزائرية، معرفة إسلامية وعامة...

@@ -19,3 +19,12 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Do not replace the release branch with an older snapshot. Preserve all newer functionality and restore historical features selectively.
 - Every production-related change must be recorded here with its commit SHA, PR number (when applicable), deployment/build identifier, and verification status.
 - The live site is `https://dzagent.app/` and must be checked after deployment rather than assuming that a successful GitHub commit means the live site has updated.
+
+## Latest video-search routing hardening — 2026-09-23
+- Root cause addressed: the YouTube analysis/discussion endpoints were multiplexed through `api/index.js` plus the generic `/api/(.*) -> /api/index` rewrite. This made the dedicated video flow dependent on the generic serverless entry instead of having its own Vercel functions.
+- Added dedicated serverless handlers: `api/youtube-insight/analyze.js` and `api/youtube-insight/discuss.js`.
+- Added explicit Vercel function configuration and rewrites for both video endpoints before the generic API fallback.
+- Existing `modules/youtube_insight_module/controller.js` remains the source for search, metadata, captions, analysis and discussion; no replacement of the historical video engine was made.
+- Working branch created from the requested production source branch: `fix/video-analysis-direct-routes-20260923` (based on `devin/1774405518-init-dz-gpt`).
+- Commits: `2cc2975ebddff5921620b53a7d62df98b1cbd30c`, `fe817265dba52f93431a6b18e3b3a00e4a32f651`, `ee4b75049832b4bac22064f63526a71c77a81e5d`, followed by this continuation-note commit.
+- Verification status: code-level routing fix committed; production Vercel verification still required after the PR is merged/deployed.

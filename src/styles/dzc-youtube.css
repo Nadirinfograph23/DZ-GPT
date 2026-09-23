@@ -594,3 +594,8 @@
     width: 100%;
   }
 }
+
+
+/* YouTube remote media resilience */
+.dzc-yt-card-thumb { display: block; }
+.dzc-yt-embed-wrap { min-height: 220px; }

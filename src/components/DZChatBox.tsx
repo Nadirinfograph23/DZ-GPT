@@ -2692,7 +2692,7 @@ function YouTubePanel({
         {/* iframe embed */}
         <div className="dzc-yt-embed-wrap">
           <iframe
-            src={`https://www.youtube-nocookie.com/embed/${embedId}?rel=0&modestbranding=1`}
+            src={`https://www.youtube.com/embed/${embedId}?rel=0&modestbranding=1&playsinline=1&origin=${encodeURIComponent(window.location.origin)}`}
             title={video.title}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -2831,7 +2831,14 @@ function YouTubePanel({
 
               <div className="dzc-yt-card-thumb-wrap">
                 <img
-                  src={`https://i.ytimg.com/vi/${r.id}/hqdefault.jpg`}
+                  src={`https://img.youtube.com/vi/${r.id}/hqdefault.jpg`}
+                  onError={(e) => {
+                    const img = e.currentTarget
+                    if (!img.dataset.fallback) {
+                      img.dataset.fallback = "1"
+                      img.src = `https://i.ytimg.com/vi/${r.id}/hqdefault.jpg`
+                    }
+                  }}
                   alt={r.title}
                   className="dzc-yt-card-thumb"
                   loading="lazy"
@@ -2870,7 +2877,7 @@ function YouTubePanel({
         {activeId && (
           <div className="dzc-yt-embed-wrap">
             <iframe
-              src={`https://www.youtube-nocookie.com/embed/${activeId}?rel=0`}
+              src={`https://www.youtube.com/embed/${activeId}?rel=0&playsinline=1&origin=${encodeURIComponent(window.location.origin)}`}
               title="YouTube Player"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen

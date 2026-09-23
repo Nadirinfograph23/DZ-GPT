@@ -57,3 +57,9 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Updated the Worker YouTube search adapter and controller fallback list to use currently listed public Invidious instances. The official Invidious documentation notes that the public instance list is short because of current YouTube issues, so the adapter keeps multiple fallbacks rather than relying on one endpoint.
 - Expected flow after deployment: user asks for/searches a YouTube topic → DZ Agent displays multiple YouTube videos → user selects a video → the selected video is embedded → **تحليل و مناقشة الفيديو** analyzes that exact selected video → follow-up questions continue against the active video context.
 - Verification required after deployment: search a YouTube topic, confirm `youtubeResults` contains multiple cards, select a card, click **تحليل و مناقشة الفيديو**, and confirm the response remains tied to that selected video rather than starting a new search.
+
+
+## YouTube thumbnail/preview follow-up — 2026-09-24
+- User reported that YouTube results were returning but thumbnails and the selected-video preview were not visible.
+- Frontend hardening: standard YouTube embed host with the current site origin, plus `img.youtube.com` thumbnails with `i.ytimg.com` fallback.
+- Existing multi-result selection and selected-video analysis flow remain unchanged; fixed/static answers are untouched.

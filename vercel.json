@@ -8,6 +8,14 @@
       "maxDuration": 300,
       "includeFiles": "server.js,bin/**,data/**,dialect/**,lib/**,modules/**"
     },
+    "api/youtube-insight/analyze.js": {
+      "maxDuration": 300,
+      "includeFiles": "lib/**,modules/**"
+    },
+    "api/youtube-insight/discuss.js": {
+      "maxDuration": 300,
+      "includeFiles": "lib/**,modules/**"
+    },
     "api/report-bug.js": {
       "maxDuration": 30
     }
@@ -53,6 +61,14 @@
     {
       "source": "/api/report-bug",
       "destination": "/api/report-bug"
+    },
+    {
+      "source": "/api/youtube-insight/analyze",
+      "destination": "/api/youtube-insight/analyze"
+    },
+    {
+      "source": "/api/youtube-insight/discuss",
+      "destination": "/api/youtube-insight/discuss"
     },
     {
       "source": "/api/(.*)",

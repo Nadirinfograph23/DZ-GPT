@@ -11,3 +11,11 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - This preserves the existing YouTube search, metadata/captions extraction and AI video discussion implementation instead of routing video questions through generic chat.
 - Commit: `3621455cfe58d78280df631e630d276500d0b263`.
 - Documentation commit: `d392a1e254e1a96a4d91a06ae4fcc28ae09438a5`.
+
+## Source/deployment branch policy — 2026-09-23
+- The production source of truth for the DZ Agent deployment is `devin/1774405518-init-dz-gpt`.
+- This branch is being treated as the effective `main` for the current production workflow because the live deployment did not reliably reflect updates made only to the GitHub `main` branch.
+- Future restoration/fixes must be applied to `devin/1774405518-init-dz-gpt` first, then synchronized to the original GitHub repository/production path through a PR so that the live site receives the same code without losing newer updates.
+- Do not replace the release branch with an older snapshot. Preserve all newer functionality and restore historical features selectively.
+- Every production-related change must be recorded here with its commit SHA, PR number (when applicable), deployment/build identifier, and verification status.
+- The live site is `https://dzagent.app/` and must be checked after deployment rather than assuming that a successful GitHub commit means the live site has updated.

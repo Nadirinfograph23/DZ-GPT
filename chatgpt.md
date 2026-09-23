@@ -26,3 +26,17 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - The previous Cloudflare build for commit `df5cb67aa430989059a8646ecad46cb969274b56` failed. A new release-branch commit is being created now to trigger the current workflow against the latest code.
 - Verification target: `https://dzagent.app/version.json` must expose the exact GitHub commit SHA produced by the deployment workflow.
 - Do not place Cloudflare API tokens or Global API Keys in this file or in source code.
+
+## YouTube / Cloudflare Worker production fix — 2026-09-23
+- Root cause found in the production Worker path: wrangler.toml aliases youtube-sr to workers/stubs/youtube-sr.js, and that stub previously threw `youtube-sr: not available in Cloudflare Workers`. The YouTube controller therefore had no working primary search provider inside the Worker.
+- A second issue was that the Worker-native fetchChatDirect() path did not invoke the restored handleYouTubeInput() flow before generic live research/AI. This allowed natural YouTube requests to fall through instead of returning structured youtubeResults.
+- Fixed workers/stubs/youtube-sr.js with a fetch-based Invidious adapter that preserves the result shape expected by the existing YouTube Insight controller and keeps the existing multi-instance fallback logic.
+- Added a Worker-native YouTube Insight interception in workers/entry.js, returning the same structured fields used by the existing Vercel route: youtubeFlow, youtubeVideo, youtubeResults, youtubeAnalysis, youtubeSuggestions, captionText, and captionNote.
+- Updated .github/workflows/deploy-cloudflare-worker.yml to use cloudflare/wrangler-action@v4 and added a production smoke test for the exact failing query "شرح أدوات الفوتوشوب". Deployment is now considered unsuccessful if /version.json does not expose the deployed commit or if the YouTube route does not return youtube-insight + youtubeResults.
+- Commits created on the production release branch:
+  - 0971915face5f6da0d73d021aa174487724bcddd — YouTube Worker search adapter.
+  - 813b0c797602a6105e9a6562c8ec6ad87da7ad9f — Worker-native YouTube Insight routing.
+  - 0aff73c1e59458d6258051a864d105376dc7449e — Cloudflare CI deployment + production smoke verification.
+- Required GitHub repository secrets are configured by the repository owner: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. Their values must never be stored in this file or source code.
+- Official Cloudflare CI/CD guidance confirms Wrangler requires the API token + account ID and recommends storing them in the CI/CD secret store rather than the repository.
+- Final deployment status must be recorded after GitHub Actions completes; a GitHub commit alone is not treated as proof of production deployment. Verification target remains https://dzagent.app/version.json plus the YouTube production smoke test.

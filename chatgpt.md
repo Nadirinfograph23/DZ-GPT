@@ -40,3 +40,11 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Required GitHub repository secrets are configured by the repository owner: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. Their values must never be stored in this file or source code.
 - Official Cloudflare CI/CD guidance confirms Wrangler requires the API token + account ID and recommends storing them in the CI/CD secret store rather than the repository.
 - Final deployment status must be recorded after GitHub Actions completes; a GitHub commit alone is not treated as proof of production deployment. Verification target remains https://dzagent.app/version.json plus the YouTube production smoke test.
+
+## Cloudflare deployment diagnosis and re-trigger — 2026-09-24
+- Inspected GitHub Actions run `35894294613` for the Cloudflare Worker deployment.
+- Cloudflare authentication reached the Wrangler deployment step successfully; the failure was a Worker bundle build failure, not an API-token authentication failure.
+- The failed commit `f08ad1b82d4c90b1125e41fa082116a287c63e0a` contained two malformed regular expressions: `lib/news.js:262` and `lib/worker-live-search.js:161`.
+- The current production branch `devin/1774405518-init-dz-gpt` is now at `8f905482347e957a16516a2ec0f7404a445f7590`, where both malformed regexes have already been replaced with valid Cloudflare-safe implementations.
+- A controlled documentation commit is being used to trigger exactly one new Cloudflare deployment from the current release branch. No Cloudflare secret values are stored here.
+- Success criteria: GitHub Actions Deploy Worker succeeds, `https://dzagent.app/version.json` exposes the exact new commit SHA, then the YouTube production smoke test passes.

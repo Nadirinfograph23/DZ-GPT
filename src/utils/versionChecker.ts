@@ -20,7 +20,22 @@ let _bannerShown = false
 async function fetchVersion(): Promise<{ deployTs: string; label: string } | null> {
   const bust = Date.now()
 
-  // 1) version.json — ملف ثابت، أسرع
+  // 1) Canonical Cloudflare API endpoint — the Worker now serves the
+  // same deployment metadata generated into /version.json, with no-store.
+  try {
+    const res = await fetch(`/api/version?_=${bust}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
+    })
+    if (res.ok) {
+      const d = await res.json()
+      const deployTs = d.deployedAt || d.buildAt || null
+      const label = d.commitShort || d.commit || d.version || 'new'
+      if (deployTs) return { deployTs, label }
+    }
+  } catch { /* fallback to static version.json */ }
+
+  // 2) version.json — static asset fallback
   try {
     const res = await fetch(`/version.json?_=${bust}`, {
       cache: 'no-store',
@@ -35,7 +50,8 @@ async function fetchVersion(): Promise<{ deployTs: string; label: string } | nul
     }
   } catch { /* تجاهل */ }
 
-  // 2) /api/version — fallback
+  // Legacy Vercel fallback removed: production is Cloudflare-only.
+  // Keep returning null if the canonical endpoint and static asset are unavailable.
   try {
     const res = await fetch(`/api/version?_=${bust}`, {
       cache: 'no-store',

@@ -4,26 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DZ AGENT - AI Chat</title>
-
-    <!-- Favicon -->
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-
-    <!-- PWA -->
     <link rel="manifest" href="/manifest.webmanifest?v=13" />
     <meta name="theme-color" content="#22c55e" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="DZ AGENT" />
-
-    <!-- SEO -->
     <meta name="description" content="DZ AGENT — AI Chat powered by LLaMA, ChatGPT and more. By Nadir Houamria." />
-
-    <!-- RTL + LTR global baseline: let each element auto-detect its own direction -->
     <style>
       * { unicode-bidi: plaintext; }
       input, textarea, button, code, pre, [dir="ltr"] { unicode-bidi: embed; direction: ltr; text-align: left; }
@@ -33,24 +25,20 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- Cache-busted production bridge: keeps ordinal video actions on native analysis. -->
+    <!-- Restored native YouTube ordinal-analysis bridge. -->
     <script src="/dz-youtube-ordinal-fix.js?v=20260923-2"></script>
     <script>
-      // ── PWA install prompt ─────────────────────────────────────────────────
       window.__pwaPrompt = null;
       window.addEventListener('beforeinstallprompt', function(e) {
         e.preventDefault();
         window.__pwaPrompt = e;
       });
-
-      // ── Service Worker registration ────────────────────────────────────────
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then(function(reg) {
               console.log('[SW] مسجّل بنجاح — scope:', reg.scope);
-              reg.update();
-
+              if (reg.update) reg.update();
               reg.addEventListener('updatefound', function() {
                 var newWorker = reg.installing;
                 if (!newWorker) return;
@@ -60,17 +48,9 @@
                   }
                 });
               });
-
               window.__swRegistration = reg;
             })
-            .catch(function(err) {
-              console.warn('[SW] فشل التسجيل:', err);
-            });
-
-          var refreshing = false;
-          navigator.serviceWorker.addEventListener('controllerchange', function() {
-            if (!refreshing) { refreshing = true; }
-          });
+            .catch(function(err) { console.warn('[SW] فشل التسجيل:', err); });
         });
       }
     </script>

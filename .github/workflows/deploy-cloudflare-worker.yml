@@ -56,7 +56,7 @@ jobs:
         run: npm run build
 
       - name: Deploy Worker
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -76,3 +76,24 @@ jobs:
           done
           echo "Production did not expose $expected via /version.json"
           exit 1
+
+      - name: Smoke test YouTube search on production
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -fsSL --max-time 30 \
+            -H 'Content-Type: application/json' \
+            -d '{"messages":[{"role":"user","content":"شرح أدوات الفوتوشوب"}]}' \
+            "https://dzagent.app/api/dz-agent-chat?_=$GITHUB_RUN_ID-youtube")"
+          printf '%s' "$response" > /tmp/youtube-response.json
+          if ! printf '%s' "$response" | grep -Fq 'youtube-insight'; then
+            echo "YouTube smoke test failed: response is not using youtube-insight"
+            cat /tmp/youtube-response.json
+            exit 1
+          fi
+          if ! printf '%s' "$response" | grep -Fq 'youtubeResults'; then
+            echo "YouTube smoke test failed: youtubeResults missing"
+            cat /tmp/youtube-response.json
+            exit 1
+          fi
+          echo "YouTube production route is active"

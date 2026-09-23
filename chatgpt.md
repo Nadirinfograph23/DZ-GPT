@@ -19,3 +19,10 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Do not replace the release branch with an older snapshot. Preserve all newer functionality and restore historical features selectively.
 - Every production-related change must be recorded here with its commit SHA, PR number (when applicable), deployment/build identifier, and verification status.
 - The live site is `https://dzagent.app/` and must be checked after deployment rather than assuming that a successful GitHub commit means the live site has updated.
+
+## Cloudflare production deployment — 2026-09-23
+- Cloudflare Workers deployment is configured through `.github/workflows/deploy-cloudflare-worker.yml`.
+- The workflow is triggered by pushes to `devin/1774405518-init-dz-gpt` and `main`, then deploys `wrangler.toml` using the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+- The previous Cloudflare build for commit `df5cb67aa430989059a8646ecad46cb969274b56` failed. A new release-branch commit is being created now to trigger the current workflow against the latest code.
+- Verification target: `https://dzagent.app/version.json` must expose the exact GitHub commit SHA produced by the deployment workflow.
+- Do not place Cloudflare API tokens or Global API Keys in this file or in source code.

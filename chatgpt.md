@@ -63,3 +63,29 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - User reported that YouTube results were returning but thumbnails and the selected-video preview were not visible.
 - Frontend hardening: standard YouTube embed host with the current site origin, plus `img.youtube.com` thumbnails with `i.ytimg.com` fallback.
 - Existing multi-result selection and selected-video analysis flow remain unchanged; fixed/static answers are untouched.
+
+
+## Permanent continuation / deployment path — 2026-09-24
+- Repository: `Nadirinfograph23/DZ-GPT`.
+- Production/live site: `https://dzagent.app/`.
+- **Production source branch:** `devin/1774405518-init-dz-gpt`. Treat this branch as the effective production/main branch for project work. Do not start fixes from GitHub `main` unless explicitly requested.
+- **Primary deployment path:** push/commit to `devin/1774405518-init-dz-gpt` → GitHub Actions workflow `.github/workflows/deploy-cloudflare-worker.yml` → `npm install` → `npm run build` → `cloudflare/wrangler-action@v4` → `wrangler deploy --config wrangler.toml` → production verification at `https://dzagent.app/version.json` → YouTube production smoke test.
+- The workflow also listens to `main`, but the project-specific production work must use `devin/1774405518-init-dz-gpt` because that is the branch previously established as the live production source.
+- **Do not use Vercel as the primary production deployment path.** Vercel project/deployment access was observed blocked; Cloudflare Worker deployment is the intended production path for `dzagent.app`.
+- Required Cloudflare GitHub secrets are `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Never request, print, commit, or store their values in repository files. Cloudflare's current GitHub Actions guidance confirms these secrets are used by Wrangler CI/CD. citeturn0search0
+- **Verification rule:** a commit is NOT considered deployed merely because GitHub accepted it. Verify the production `/version.json` commit SHA and then run/confirm the production feature smoke test. Cloudflare documents that pushes to the configured production branch trigger the production build/deploy flow. citeturn0search1
+- **Fast continuation checklist for future sessions:**
+  1. Read this section of `chatgpt.md` first.
+  2. Checkout/use `devin/1774405518-init-dz-gpt`.
+  3. Inspect the latest commit on that branch before changing anything; preserve all newer work.
+  4. Apply the requested fix on that branch only.
+  5. Update `chatgpt.md` with the change, commit SHA, deployment status, and verification result.
+  6. Push/update the branch in the original repository.
+  7. Wait for the Cloudflare GitHub Actions deployment; do not assume Vercel deployment means production is updated.
+  8. Verify `https://dzagent.app/version.json` contains the exact deployed commit SHA.
+  9. Test the affected live feature on `https://dzagent.app/`.
+  10. Only then report the task as deployed/complete.
+- **YouTube verification flow:** search a topic → confirm multiple result cards and thumbnails → select a result → confirm the embedded preview appears → click `تحليل و مناقشة الفيديو` → confirm analysis is tied to the selected video → ask a follow-up question and confirm the active video context is preserved.
+- **Latest code commit:** `cacefe3dc252c2df53a0814688b53bc2349f4ac0` — `fix: restore YouTube thumbnails and preview embed`.
+- This latest commit is currently the next deployment candidate; its live deployment must still be verified before claiming production completion.
+- Keep this section intact and append new deployment/fix entries below it rather than rewriting the established production path.

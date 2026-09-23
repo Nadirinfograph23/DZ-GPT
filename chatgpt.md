@@ -97,3 +97,13 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Code commit: `263a4066079ffa6d27f3421e2cc236c1d6203770`.
 - Documentation commit: this entry.
 - Deployment verification required: confirm the release branch commit reaches Cloudflare, then verify `/version.json` and the visible countdown banner on `https://dzagent.app/`.
+
+## Deep API/version endpoint hardening — 2026-09-24
+- Root cause identified: the frontend and Service Worker already expected `/api/version`, but the only repository implementation in `api/version.js` is Vercel-specific and reads `VERCEL_GIT_COMMIT_SHA`, `VERCEL_GIT_BRANCH`, and `VERCEL_URL`. Production `dzagent.app` is now Cloudflare Workers, so that endpoint is not the authoritative runtime endpoint.
+- Added a **Cloudflare-native `GET /api/version`** route in `workers/entry.js`. It reads the exact `/version.json` generated during the Cloudflare deployment workflow through the `ASSETS` binding and returns the same deployment metadata with `no-store`, `cdn-cache-control: no-store`, CORS, and an explicit `x-dz-version-source` marker.
+- Changed `src/utils/versionChecker.ts` to use the Cloudflare `/api/version` endpoint as the primary source, with static `/version.json` as fallback. The obsolete Vercel API fallback was removed from the client-side checker.
+- This fixes the update-detection chain at the API/routing layer instead of relying only on browser cache-busting: **Cloudflare deployment → generated version.json → Worker /api/version → Service Worker/versionChecker → countdown banner**.
+- Cloudflare documents that static assets and Worker code are deployed as one unit, and that `run_worker_first` controls which requests reach the Worker; this project already routes `/api/*` through the Worker. citeturn0search2turn0search4
+- Cloudflare also documents default static-asset revalidation headers and explicit cache controls, supporting the use of a dedicated no-store version endpoint. citeturn0search12turn0search1
+- Code commits: `f948254171b1e0fa979466d9c7df186012444093`, `b49a639b00d10a833a84000542f1992ce9780045`.
+- Next verification: Cloudflare deployment must expose `GET /api/version` with the current deployment commit, then the live update banner and affected API flows should be tested. A GitHub commit alone is not production proof.

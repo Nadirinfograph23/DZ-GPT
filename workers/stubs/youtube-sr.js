@@ -4,10 +4,11 @@
 // the subset consumed by modules/youtube_insight_module/controller.js.
 
 const INSTANCES = [
-  'https://iv.ggtyler.dev',
-  'https://invidious.materialio.us',
-  'https://invidious.protokolla.fi',
-  'https://invidious.lunar.icu',
+  "https://inv.nadeko.net",
+  "https://invidious.nerdvpn.de",
+  "https://yt.chocolatemoo53.com",
+  "https://invidious.tiekoetter.com",
+  "https://invidious.f5.si"
 ];
 
 async function search(query, options = {}) {

@@ -445,6 +445,63 @@ async function fetchChatDirect(request, env = {}) {
       console.warn('[Worker:Chat] Doctor search interception failed:', e?.message || e)
     }
 
+    // ── YouTube selected-video discussion path ─────────────────────────────
+    // The YouTube results card stores the selected video in youtubeContext.
+    // When the user clicks "تحليل و مناقشة الفيديو", do NOT treat the follow-up
+    // sentence as a fresh YouTube keyword search. Re-enter the native discussion
+    // flow with the selected video's metadata/context.
+    if (payload?.youtubeContext?.id && /(?:حلل|حلّل|تحليل|ناقش|مناقشة|اشرح|شرح).*(?:الفيديو|هذا الفيديو|محتوى الفيديو)/i.test(lastUser)) {
+      try {
+        const { handleVideoDiscussion } = await import('../modules/youtube_insight_module/controller.js');
+        const youtubeAiGenerate = async ({ messages, max_tokens }) => {
+          injectEnv(env);
+          const { callAIRouter } = await import('../lib/ai-router/index.js');
+          return callAIRouter(messages, {
+            max_tokens: Math.min(Number(max_tokens) || 900, 4096),
+            taskHint: 'retrieval',
+          });
+        };
+        const discussion = await handleVideoDiscussion(
+          payload.youtubeContext,
+          lastUser,
+          messages.slice(0, -1),
+          youtubeAiGenerate,
+        );
+        const ctx = payload.youtubeContext;
+        return new Response(JSON.stringify({
+          content: discussion?.reply || '',
+          model: 'youtube-insight',
+          richType: 'youtube',
+          youtubeFlow: 'url',
+          youtubeVideo: {
+            id: ctx.id,
+            url: ctx.url || `https://www.youtube.com/watch?v=${ctx.id}`,
+            title: ctx.title || 'فيديو YouTube',
+            channel: ctx.channel || '',
+            duration: Number(ctx.duration) || 0,
+            views: Number(ctx.views) || 0,
+            thumbnail: ctx.thumbnail || `https://i.ytimg.com/vi/${ctx.id}/hqdefault.jpg`,
+            description: ctx.description || '',
+            captionText: ctx.captionText || null,
+          },
+          youtubeAnalysis: {
+            ok: true,
+            summary: discussion?.reply || '',
+            captionAvailable: !!ctx.captionText,
+          },
+          youtubeSuggestions: discussion?.quickSuggestions || [],
+          captionText: ctx.captionText || null,
+        }), { headers: {
+          'content-type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        }});
+      } catch (e) {
+        console.warn('[Worker:YouTubeDiscussion] selected-video path failed:', e?.message || e);
+      }
+    }
+
     // ── YouTube Insight direct path ───────────────────────────────────────
     // Keep video search/analysis out of the generic AI/research fallback.
     // This is intentionally Worker-native so production uses the same

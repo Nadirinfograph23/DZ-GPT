@@ -48,3 +48,12 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - The current production branch `devin/1774405518-init-dz-gpt` is now at `8f905482347e957a16516a2ec0f7404a445f7590`, where both malformed regexes have already been replaced with valid Cloudflare-safe implementations.
 - A controlled documentation commit is being used to trigger exactly one new Cloudflare deployment from the current release branch. No Cloudflare secret values are stored here.
 - Success criteria: GitHub Actions Deploy Worker succeeds, `https://dzagent.app/version.json` exposes the exact new commit SHA, then the YouTube production smoke test passes.
+
+
+## YouTube selected-video analysis restoration — 2026-09-24
+- Confirmed the DZ Agent frontend already renders real YouTube search cards with thumbnails and a **تحليل و مناقشة الفيديو** action.
+- Root cause in the Cloudflare Worker: clicking that action sends the selected video in `youtubeContext`, but the Worker previously ignored that context and passed the follow-up sentence to `handleYouTubeInput()` as a new keyword search. This caused the selected video to be searched again instead of being analyzed.
+- Fixed the Worker to route a selected `youtubeContext` through `handleVideoDiscussion()`, preserving the selected video's ID, title, channel, metadata and captions.
+- Updated the Worker YouTube search adapter and controller fallback list to use currently listed public Invidious instances. The official Invidious documentation notes that the public instance list is short because of current YouTube issues, so the adapter keeps multiple fallbacks rather than relying on one endpoint.
+- Expected flow after deployment: user asks for/searches a YouTube topic → DZ Agent displays multiple YouTube videos → user selects a video → the selected video is embedded → **تحليل و مناقشة الفيديو** analyzes that exact selected video → follow-up questions continue against the active video context.
+- Verification required after deployment: search a YouTube topic, confirm `youtubeResults` contains multiple cards, select a card, click **تحليل و مناقشة الفيديو**, and confirm the response remains tied to that selected video rather than starting a new search.

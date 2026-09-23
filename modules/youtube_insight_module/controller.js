@@ -14,11 +14,11 @@ const YT_HEADERS = {
 
 // ── Invidious fallback instances (for metadata only, not search) ──────────
 const INVIDIOUS_INSTANCES = [
-  'https://invidious.materialio.us',
-  'https://invidious.protokolla.fi',
-  'https://iv.ggtyler.dev',
-  'https://invidious.privacyredirect.com',
-  'https://invidious.lunar.icu',
+  "https://inv.nadeko.net",
+  "https://invidious.nerdvpn.de",
+  "https://yt.chocolatemoo53.com",
+  "https://invidious.tiekoetter.com",
+  "https://invidious.f5.si"
 ]
 
 // ── Format duration (seconds → human readable) ────────────────────────────

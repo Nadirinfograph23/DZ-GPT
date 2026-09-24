@@ -52,6 +52,9 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Patch Cloudflare YouTube intent before build
+        run: node scripts/patch-youtube-worker-intent.js
+
       - name: Build application assets
         run: npm run build
 

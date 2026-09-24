@@ -38,12 +38,12 @@ jobs:
           const fs = require('fs');
           const { execSync } = require('child_process');
           const commit = process.env.GITHUB_SHA;
-          const message = execSync('git log -1 --pretty=%B', { encoding: 'utf8' }).replace(/\\s+/g, ' ').trim();
+          const message = execSync('git log -1 --pretty=%B', { encoding: 'utf8' }).replace(/\s+/g, ' ').trim();
           const data = { commit, commitShort: commit.slice(0, 8), branch: process.env.GITHUB_REF_NAME, message, deployedAt: new Date().toISOString(), deployedBy: 'GitHub Actions + Cloudflare Workers' };
           fs.mkdirSync('public', { recursive: true });
-          fs.writeFileSync('public/version.json', JSON.stringify(data, null, 2) + '\\n');
+          fs.writeFileSync('public/version.json', JSON.stringify(data, null, 2) + '\n');
           fs.mkdirSync('data', { recursive: true });
-          fs.writeFileSync('data/build-info.json', JSON.stringify(data, null, 2) + '\\n');
+          fs.writeFileSync('data/build-info.json', JSON.stringify(data, null, 2) + '\n');
           NODE
 
       - name: Use public npm tarballs in CI
@@ -61,39 +61,48 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.toml
-      - name: Verify production deployment
+
+      - name: Verify production deployment version
         shell: bash
         run: |
           set -euo pipefail
           expected="$GITHUB_SHA"
-          for i in 1 2 3 4 5 6; do
-            actual="$(curl -fsSL --max-time 10 "https://dzagent.app/version.json?_=$GITHUB_RUN_ID-$i" || true)"
-            if printf '%s' "$actual" | grep -Fq "\"commit\":\"$expected\""; then
-              echo "Production is serving $expected"
+          for i in 1 2 3 4 5 6 7 8; do
+            version="$(curl -fsSL --max-time 10 "https://dzagent.app/api/version?_=$GITHUB_RUN_ID-$i" || true)"
+            if printf '%s' "$version" | grep -Fq "\"commit\":\"$expected\""; then
+              echo "Production API version is serving $expected"
               exit 0
             fi
+            echo "Waiting for production version... attempt $i"
             sleep 10
           done
-          echo "Production did not expose $expected via /version.json"
+          echo "Production did not expose $expected via /api/version"
           exit 1
+
+      - name: Verify production static version fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$GITHUB_SHA"
+          actual="$(curl -fsSL --max-time 10 "https://dzagent.app/version.json?_=$GITHUB_RUN_ID-static")"
+          printf '%s' "$actual" | grep -Fq "\"commit\":\"$expected\"" || { echo "Static version mismatch"; printf '%s\n' "$actual"; exit 1; }
 
       - name: Smoke test YouTube search on production
         shell: bash
         run: |
           set -euo pipefail
-          response="$(curl -fsSL --max-time 30 \
+          response="$(curl -fsSL --max-time 40 \
             -H 'Content-Type: application/json' \
             -d '{"messages":[{"role":"user","content":"شرح أدوات الفوتوشوب"}]}' \
             "https://dzagent.app/api/dz-agent-chat?_=$GITHUB_RUN_ID-youtube")"
           printf '%s' "$response" > /tmp/youtube-response.json
-          if ! printf '%s' "$response" | grep -Fq 'youtube-insight'; then
-            echo "YouTube smoke test failed: response is not using youtube-insight"
-            cat /tmp/youtube-response.json
-            exit 1
-          fi
-          if ! printf '%s' "$response" | grep -Fq 'youtubeResults'; then
-            echo "YouTube smoke test failed: youtubeResults missing"
-            cat /tmp/youtube-response.json
-            exit 1
-          fi
-          echo "YouTube production route is active"
+          node <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync('/tmp/youtube-response.json', 'utf8'));
+          const results = Array.isArray(body.youtubeResults) ? body.youtubeResults : [];
+          if (body.model !== 'youtube-insight') throw new Error('YouTube route did not activate: ' + JSON.stringify(body));
+          if (results.length < 1) throw new Error('YouTube route returned zero results: ' + JSON.stringify(body));
+          const valid = results.every(v => /^[A-Za-z0-9_-]{11}$/.test(String(v.id || '')) && v.title && v.thumbnail);
+          if (!valid) throw new Error('YouTube results are malformed: ' + JSON.stringify(results));
+          console.log(`YouTube production smoke test passed: ${results.length} valid result(s)`);
+          NODE

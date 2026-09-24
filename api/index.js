@@ -8,10 +8,7 @@ const DZ_SYSTEM_PROMPT = `أنت DZ Agent — مساعد ذكي جزائري م�
 أجب بشكل مفيد، دقيق، ومختصر.`
 
 async function youtubeAiGenerate({ messages, max_tokens }) {
-  return callAIRouter(messages, {
-    max_tokens: Math.min(Number(max_tokens) || 1400, 4096),
-    taskHint: 'retrieval',
-  })
+  return callAIRouter(messages, { max_tokens: Math.min(Number(max_tokens) || 1400, 4096), taskHint: 'retrieval' })
 }
 
 async function handleYouTubeAnalyze(req, res) {
@@ -19,26 +16,10 @@ async function handleYouTubeAnalyze(req, res) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
     const input = String(body.url || body.query || body.text || '').trim()
     if (!input) return res.status(400).json({ ok: false, error: 'url or query is required' })
-
     const { handleYouTubeInput } = await import('../modules/youtube_insight_module/controller.js')
-    const yt = await handleYouTubeInput(input, {
-      aiGenerate: youtubeAiGenerate,
-      preloadedMeta: body.preloadedMeta || null,
-      noSuggestions: !!body.noSuggestions,
-    })
-
-    return res.status(200).json({
-      ok: true,
-      content: yt?.message || '', model: 'youtube-insight', richType: 'youtube', youtubeFlow: yt?.flow,
-      youtubeVideo: yt?.video ? { id: yt.video.id, url: yt.video.url, title: yt.video.title, channel: yt.video.author || yt.video.channel || '', duration: yt.video.duration || 0, views: yt.video.views || 0, thumbnail: yt.video.thumbnail || '', description: yt.video.description || '', captionText: yt.captionText || null } : undefined,
-      youtubeResults: (yt?.results || []).map(v => ({ id: v.id, url: v.url, title: v.title, channel: v.channel || '', duration: v.duration || 0, views: v.views || 0, thumbnail: v.thumbnail || '' })),
-      youtubeAnalysis: yt?.analysis ? { ok: true, summary: yt.analysis.summary || '', captionAvailable: !!yt.captionText } : undefined,
-      youtubeSuggestions: yt?.suggestions || [], captionText: yt?.captionText || null, captionNote: yt?.captionNote || null,
-    })
-  } catch (e) {
-    console.error('[YouTube Insight] analyze failed:', e)
-    return res.status(502).json({ ok: false, error: e?.message || 'YouTube analysis failed' })
-  }
+    const yt = await handleYouTubeInput(input, { aiGenerate: youtubeAiGenerate, preloadedMeta: body.preloadedMeta || null, noSuggestions: !!body.noSuggestions })
+    return res.status(200).json({ ok: true, content: yt?.message || '', model: 'youtube-insight', richType: 'youtube', youtubeFlow: yt?.flow, youtubeVideo: yt?.video ? { id: yt.video.id, url: yt.video.url, title: yt.video.title, channel: yt.video.author || yt.video.channel || '', duration: yt.video.duration || 0, views: yt.video.views || 0, thumbnail: yt.video.thumbnail || '', description: yt.video.description || '', captionText: yt.captionText || null } : undefined, youtubeResults: (yt?.results || []).map(v => ({ id: v.id, url: v.url, title: v.title, channel: v.channel || '', duration: v.duration || 0, views: v.views || 0, thumbnail: v.thumbnail || '' })), youtubeAnalysis: yt?.analysis ? { ok: true, summary: yt.analysis.summary || '', captionAvailable: !!yt.captionText } : undefined, youtubeSuggestions: yt?.suggestions || [], captionText: yt?.captionText || null, captionNote: yt?.captionNote || null })
+  } catch (e) { console.error('[YouTube Insight] analyze failed:', e); return res.status(502).json({ ok: false, error: e?.message || 'YouTube analysis failed' }) }
 }
 
 async function handleYouTubeDiscuss(req, res) {
@@ -49,10 +30,7 @@ async function handleYouTubeDiscuss(req, res) {
     const { handleVideoDiscussion } = await import('../modules/youtube_insight_module/controller.js')
     const result = await handleVideoDiscussion(body.youtubeContext || body.video || body.context || {}, question, Array.isArray(body.history) ? body.history : [], youtubeAiGenerate)
     return res.status(200).json({ ok: true, ...result, model: 'youtube-insight' })
-  } catch (e) {
-    console.error('[YouTube Insight] discussion failed:', e)
-    return res.status(502).json({ ok: false, error: e?.message || 'YouTube discussion failed' })
-  }
+  } catch (e) { console.error('[YouTube Insight] discussion failed:', e); return res.status(502).json({ ok: false, error: e?.message || 'YouTube discussion failed' }) }
 }
 
 async function handleChat(req, res) {
@@ -61,7 +39,6 @@ async function handleChat(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
   if (req.method === 'OPTIONS') return res.status(200).end('')
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
-
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body
     const messages = Array.isArray(body.messages) ? body.messages : []
@@ -70,42 +47,32 @@ async function handleChat(req, res) {
     const lower = lastUser.toLowerCase()
     const staticAnswer = lookupStaticFact(lastUser)
     if (staticAnswer) return res.status(200).json({ content: staticAnswer, model: 'static-fact', _static: true })
-
     if (/ما هي قدراتك|ما يمكنك|ماذا يمكنك/.test(lower)) return res.status(200).json({ content: 'أنا DZ Agent — مساعد ذكي جزائري. أستطيع:\n- 💬 المحادثة والرد على الأسئلة\n- 🌤️ الطقس لجميع ولايات الجزائر\n- 🕌 مواقيت الصلاة\n- 📰 آخر الأخبار الجزائرية\n- 📺 البحث وتحليل فيديوهات YouTube\n- 📊 تحليل البيانات والرسوم\n- 🔍 البحث على الإنترنت\n- 📄 إنشاء وتعديل الملفات\n\nاطرح أي سؤال!', model: 'static-guard' })
     if (/من أنت|من مطورك|من صانعك/.test(lower)) return res.status(200).json({ content: 'أنا DZ Agent، مساعد ذكي مصمم خصيصاً للمستخدمين الجزائريين. أعمل على توفير معلومات دقيقة وخدمات متنوعة.', model: 'static-guard' })
 
-    // Dedicated YouTube intent routing.
-    // IMPORTANT: tutorial/search intent such as "شرح أدوات الفوتوشوب" does not
-    // contain the word YouTube or فيديو. It must still enter the YouTube flow.
-    // Static/fixed answers are checked first, so this does not alter fixed answers.
-    const youtubeIntent = /(?:youtube|youtu\.be|يوتيوب|يوتيب|فيديو|فيديوهات|بالفيديو|ابحث عن فيديو|حلّل الفيديو|حلل الفيديو|اشرح لي الفيديو|شرح\s+(?:.*(?:فيديو|دروس|درس|أدوات|برنامج|برامج|فوتوشوب|photoshop|excel|word|برمجة|تعلم|تعليم))|دروس\s+(?:.*)|tutorials?|how\s+to\s+.+|تعلم\s+(?:.*)|تعليم\s+(?:.*))/i.test(lastUser)
+    // Dedicated YouTube intent routing. Static/fixed answers are checked first.
+    // Tutorial requests such as "شرح أدوات الفوتوشوب" must enter this flow even
+    // when the user does not explicitly mention YouTube or فيديو.
+    const youtubeIntent = /(?:youtube|youtu\.be|يوتيوب|يوتيب|فيديو|فيديوهات|بالفيديو|ابحث عن فيديو|حلّل الفيديو|حلل الفيديو|اشرح لي الفيديو|شرح\s+(?:.*(?:فيديو|دروس|درس|أدوات|برنامج|برامج|فوتوشوب|photoshop|excel|word|برمجة|تعلم|تعليم))|دروس\s+.+|tutorials?|how\s+to\s+.+|تعلم\s+.+|تعليم\s+.+)/i.test(lastUser)
     if (youtubeIntent) {
       try {
         const { handleYouTubeInput } = await import('../modules/youtube_insight_module/controller.js')
         const yt = await handleYouTubeInput(lastUser, { aiGenerate: youtubeAiGenerate })
-        return res.status(200).json({
-          content: yt?.message || '', model: 'youtube-insight', richType: 'youtube', youtubeFlow: yt?.flow,
-          youtubeVideo: yt?.video ? { id: yt.video.id, url: yt.video.url, title: yt.video.title, channel: yt.video.author || yt.video.channel || '', duration: yt.video.duration || 0, views: yt.video.views || 0, thumbnail: yt.video.thumbnail || '', description: yt.video.description || '', captionText: yt.captionText || null } : undefined,
-          youtubeResults: (yt?.results || []).map(v => ({ id: v.id, url: v.url, title: v.title, channel: v.channel || '', duration: v.duration || 0, views: v.views || 0, thumbnail: v.thumbnail || '' })),
-          youtubeAnalysis: yt?.analysis ? { ok: true, summary: yt.analysis.summary || '', captionAvailable: !!yt.captionText } : undefined,
-          youtubeSuggestions: yt?.suggestions || [], captionText: yt?.captionText || null, captionNote: yt?.captionNote || null,
-        })
-      } catch (e) {
-        console.warn('[YouTube Insight] dedicated route failed:', e?.message || e)
-      }
+        return res.status(200).json({ content: yt?.message || '', model: 'youtube-insight', richType: 'youtube', youtubeFlow: yt?.flow, youtubeVideo: yt?.video ? { id: yt.video.id, url: yt.video.url, title: yt.video.title, channel: yt.video.author || yt.video.channel || '', duration: yt.video.duration || 0, views: yt.video.views || 0, thumbnail: yt.video.thumbnail || '', description: yt.video.description || '', captionText: yt.captionText || null } : undefined, youtubeResults: (yt?.results || []).map(v => ({ id: v.id, url: v.url, title: v.title, channel: v.channel || '', duration: v.duration || 0, views: v.views || 0, thumbnail: v.thumbnail || '' })), youtubeAnalysis: yt?.analysis ? { ok: true, summary: yt.analysis.summary || '', captionAvailable: !!yt.captionText } : undefined, youtubeSuggestions: yt?.suggestions || [], captionText: yt?.captionText || null, captionNote: yt?.captionNote || null })
+      } catch (e) { console.warn('[YouTube Insight] dedicated route failed:', e?.message || e) }
     }
-
-    const ai = await callAIRouter(messages, { max_tokens: 1400, taskHint: 'general' })
-    return res.status(200).json({ content: ai?.content || ai?.choices?.[0]?.message?.content || 'تعذر الحصول على إجابة حالياً.', model: ai?.model || 'ai-router' })
-  } catch (err) {
-    console.error('[Chat] Error:', err)
-    return res.status(500).json({ error: 'Server error', message: err.message })
-  }
+    const result = await callAIRouter([{ role: 'system', content: DZ_SYSTEM_PROMPT }, ...messages], { max_tokens: 2048, taskHint: 'multilingual' })
+    return res.status(200).json({ content: result?.content || 'عذراً، لم أتمكن من الحصول على رد الآن. يرجى المحاولة مرة أخرى.', model: result?.model || 'fallback', provider: result?.provider || undefined })
+  } catch (err) { console.error('[Chat] Error:', err); return res.status(500).json({ error: 'Server error', message: err.message }) }
 }
 
 export default async function handler(req, res) {
-  const path = req.url?.split('?')[0] || ''
-  if (path.endsWith('/youtube-insight/analyze')) return handleYouTubeAnalyze(req, res)
-  if (path.endsWith('/youtube-insight/discuss')) return handleYouTubeDiscuss(req, res)
-  return handleChat(req, res)
+  const url = new URL(req.url || `http://localhost${req.url}`)
+  if (url.pathname === '/api/youtube-insight/analyze' && req.method === 'POST') return handleYouTubeAnalyze(req, res)
+  if (url.pathname === '/api/youtube-insight/discuss' && req.method === 'POST') return handleYouTubeDiscuss(req, res)
+  if (req.method === 'OPTIONS' && url.pathname.startsWith('/api/youtube-insight/')) { res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS'); res.setHeader('Access-Control-Allow-Headers', 'Content-Type'); return res.status(200).end('') }
+  if (req.method === 'POST' && url.pathname === '/api/dz-agent-chat') return handleChat(req, res)
+  let app
+  try { const { app: importedApp } = await import('../server.js'); app = importedApp } catch (err) { console.error('[Vercel] server.js import FAILED:', err?.message); app = (_req, res) => res.status(500).json({ error: 'Server startup failed', message: err?.message, stack: err?.stack?.split('\n').slice(0, 15) }) }
+  return app(req, res)
 }

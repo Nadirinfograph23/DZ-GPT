@@ -1493,10 +1493,21 @@ export default {
             method: 'GET',
             headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
           })
-          const versionResponse = env.ASSETS ? await env.ASSETS.fetch(versionRequest) : null
-          const raw = versionResponse?.ok ? await versionResponse.text() : ''
-          let data = {}
-          try { data = raw ? JSON.parse(raw) : {} } catch {}
+          if (!env.ASSETS) {
+            throw new Error('ASSETS binding unavailable')
+          }
+          const versionResponse = await env.ASSETS.fetch(versionRequest)
+          if (!versionResponse.ok) {
+            throw new Error('version.json returned HTTP ' + versionResponse.status)
+          }
+          const raw = await versionResponse.text()
+          let data
+          try { data = JSON.parse(raw) } catch {
+            throw new Error('version.json is invalid JSON')
+          }
+          if (!data?.commit || !data?.deployedAt) {
+            throw new Error('version.json is missing deployment metadata')
+          }
           const body = {
             ...data,
             status: 'ok',

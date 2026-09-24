@@ -52,8 +52,23 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Patch Cloudflare YouTube intent before build
-        run: node scripts/patch-youtube-worker-intent.js
+      - name: Patch and verify Cloudflare YouTube intent
+        run: |
+          node scripts/patch-youtube-worker-intent.js
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs'
+          const source = fs.readFileSync('workers/entry.js', 'utf8')
+          const required = [
+            'دروس\\\\s+.+',
+            'tutorials?',
+            'تعليم\\\\s+.+',
+            'فوتوشوب',
+          ]
+          for (const marker of required) {
+            if (!source.includes(marker)) throw new Error('YouTube intent marker missing after patch: ' + marker)
+          }
+          console.log('YouTube intent pre-build verification passed')
+          NODE
 
       - name: Build application assets
         run: npm run build

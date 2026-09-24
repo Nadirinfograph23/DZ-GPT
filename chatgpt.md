@@ -107,3 +107,10 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Cloudflare also documents default static-asset revalidation headers and explicit cache controls, supporting the use of a dedicated no-store version endpoint. citeturn0search12turn0search1
 - Code commits: `f948254171b1e0fa979466d9c7df186012444093`, `b49a639b00d10a833a84000542f1992ce9780045`.
 - Next verification: Cloudflare deployment must expose `GET /api/version` with the current deployment commit, then the live update banner and affected API flows should be tested. A GitHub commit alone is not production proof.
+
+## Deep YouTube production hardening — 2026-09-24
+- Confirmed that the update banner only proves the deployment marker changed; it does not prove the YouTube retrieval pipeline returned actual videos.
+- Hardened `workers/stubs/youtube-sr.js`: concurrent provider race, per-provider timeouts, overall search deadline, result-shape validation, YouTube ID validation, and Google/Jina/Invidious fallback paths. A single dead public Invidious instance can no longer block the whole search chain.
+- Hardened `.github/workflows/deploy-cloudflare-worker.yml`: production verification now checks both `/api/version` and `/version.json`, and the YouTube smoke test now requires `model === youtube-insight`, a non-empty `youtubeResults` array, and at least one valid 11-character YouTube video ID with a title.
+- Hardened `workers/entry.js` `/api/version`: missing Assets binding, missing version file, invalid JSON, or missing commit/deployedAt metadata now fail with HTTP 503 instead of returning a false successful version response.
+- The deployment branch remains `devin/1774405518-init-dz-gpt`; every production change must be verified by the actual live endpoint and real YouTube results, not merely by the appearance of the update banner.

@@ -1,150 +1,161 @@
-// Cloudflare Workers compatibility adapter for youtube-sr.
-// youtube-sr itself depends on Node-only networking, so the Worker uses
-// a fetch-based YouTube search provider instead. The returned shape matches
-// the subset consumed by modules/youtube_insight_module/controller.js.
+// Cloudflare Worker adapter for youtube-sr.
+// Production YouTube search must not depend on one unofficial instance.
+// Providers are tried in order, each with a hard timeout, and results are
+// validated/deduplicated before they reach the YouTube Insight controller.
 
-const INSTANCES = [
-  "https://inv.nadeko.net",
-  "https://invidious.nerdvpn.de",
-  "https://yt.chocolatemoo53.com",
-  "https://invidious.tiekoetter.com",
-  "https://invidious.f5.si"
-];
+const INVIDIOUS = [
+  'https://inv.nadeko.net',
+  'https://invidious.nerdvpn.de',
+  'https://yt.chocolatemoo53.com',
+  'https://invidious.tiekoetter.com',
+  'https://invidious.f5.si',
+]
+const UA = 'Mozilla/5.0 (compatible; DZ-Agent/2.3; +https://dzagent.app)'
+const ID_RE = /^[A-Za-z0-9_-]{11}$/
 
-const PROVIDER_TIMEOUT_MS = 4500;
-const TOTAL_TIMEOUT_MS = 9500;
-
-function normalizeResults(data, limit) {
-  if (!Array.isArray(data)) return [];
-  return data.slice(0, limit).map((video) => ({
-    id: video.videoId || video.id || '',
-    title: String(video.title || '').trim(),
-    description: video.description || '',
-    duration: Number(video.lengthSeconds || 0) * 1000,
-    views: Number(video.viewCount || video.views || 0),
-    channel: { name: video.author || video.channel?.name || video.channel || '' },
-    thumbnail: { url: video.videoThumbnails?.[0]?.url || video.thumbnail?.url || '' },
-    thumbnails: (video.videoThumbnails || video.thumbnails || []).map((t) => ({ url: t.url || t })),
-  })).filter((video) => /^[A-Za-z0-9_-]{11}$/.test(video.id) && video.title.length >= 2);
-}
-
-async function fetchJson(url, timeout = PROVIDER_TIMEOUT_MS) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeout);
-  try {
-    const response = await fetch(url, {
-      signal: ctrl.signal,
-      headers: { 'Accept': 'application/json,text/plain,*/*', 'User-Agent': 'Mozilla/5.0 (compatible; DZ-Agent/2.2)' },
-    });
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    return await response.json();
-  } finally {
-    clearTimeout(timer);
+function video(id, title = '', extra = {}) {
+  return {
+    id,
+    title: String(title || '').trim() || 'YouTube video',
+    description: extra.description || '',
+    duration: Number(extra.duration || 0),
+    views: Number(extra.views || 0),
+    channel: { name: extra.channel || '' },
+    thumbnail: { url: `https://i.ytimg.com/vi/${id}/hqdefault.jpg` },
+    thumbnails: [{ url: `https://i.ytimg.com/vi/${id}/hqdefault.jpg` }],
   }
 }
 
-async function searchInvidiousProvider(query, limit) {
-  const encoded = encodeURIComponent(query);
-  const attempts = INSTANCES.map(async (base) => {
-    const data = await fetchJson(base + '/api/v1/search?q=' + encoded + '&type=video&page=1');
-    const results = normalizeResults(data, limit);
-    if (!results.length) throw new Error('empty results');
-    return results;
-  });
-  return Promise.any(attempts);
+function normalize(data, limit) {
+  if (!Array.isArray(data)) return []
+  return data.map(v => {
+    const id = v.videoId || v.id || ''
+    return video(id, v.title, {
+      description: v.description,
+      duration: Number(v.lengthSeconds || v.duration || 0) * 1000,
+      views: v.viewCount || v.views,
+      channel: v.author || v.channel?.name || v.channel,
+    })
+  }).filter(v => ID_RE.test(v.id) && v.title.length > 1).slice(0, limit)
 }
 
-async function searchJinaProvider(query, limit) {
-  const encoded = encodeURIComponent(query);
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 7000);
+async function fetchText(url, timeout = 7000, headers = {}) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeout)
   try {
-    const response = await fetch(
-      'https://r.jina.ai/https://www.youtube.com/results?search_query=' + encoded,
-      { signal: ctrl.signal, headers: { 'Accept': 'text/plain,text/markdown,*/*', 'User-Agent': 'DZ-Agent/2.2' } },
-    );
-    if (!response.ok) throw new Error('Jina HTTP ' + response.status);
-    const text = await response.text();
-    const results = [];
-    const seen = new Set();
-    const re = /https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})/g;
-    let m;
-    while ((m = re.exec(text)) && results.length < limit) {
-      if (seen.has(m[1])) continue;
-      seen.add(m[1]);
-      results.push({
-        id: m[1], title: 'YouTube: ' + query, description: '', duration: 0, views: 0,
-        channel: { name: '' },
-        thumbnail: { url: 'https://i.ytimg.com/vi/' + m[1] + '/hqdefault.jpg' },
-        thumbnails: [{ url: 'https://i.ytimg.com/vi/' + m[1] + '/hqdefault.jpg' }],
-      });
+    const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': UA, ...headers } })
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    return await r.text()
+  } finally { clearTimeout(timer) }
+}
+
+async function invidious(query, limit) {
+  const q = encodeURIComponent(query)
+  const attempts = INVIDIOUS.map(async base => {
+    const raw = await fetchText(`${base}/api/v1/search?q=${q}&type=video&page=1`, 4500, { Accept: 'application/json' })
+    const data = JSON.parse(raw)
+    const out = normalize(data, limit)
+    if (!out.length) throw new Error('empty')
+    return out
+  })
+  return Promise.any(attempts)
+}
+
+async function youtubeHtml(query, limit) {
+  const q = encodeURIComponent(query)
+  const html = await fetchText(`https://www.youtube.com/results?search_query=${q}&hl=ar`, 8000, {
+    Accept: 'text/html,application/xhtml+xml',
+    'Accept-Language': 'ar,en;q=0.8',
+  })
+  const out = []
+  const seen = new Set()
+
+  // YouTube embeds videoId/title in ytInitialData. Extract IDs first, then
+  // recover a nearby title when available. This survives UI markup changes
+  // better than scraping CSS selectors.
+  const idRe = /"videoId":"([A-Za-z0-9_-]{11})"/g
+  let m
+  while ((m = idRe.exec(html)) && out.length < limit) {
+    const id = m[1]
+    if (seen.has(id)) continue
+    seen.add(id)
+    const window = html.slice(m.index, Math.min(html.length, m.index + 2500))
+    const titleMatch = window.match(/"title":\{"runs":\[\{"text":"((?:\\.|[^"\\])*)"/)
+    let title = query
+    if (titleMatch) {
+      try { title = JSON.parse('"' + titleMatch[1] + '"') } catch { title = titleMatch[1] }
     }
-    if (!results.length) throw new Error('empty Jina results');
-    return results;
-  } finally {
-    clearTimeout(timer);
+    out.push(video(id, title))
   }
+  if (!out.length) throw new Error('YouTube HTML contained no video results')
+  return out
 }
 
-async function searchWebProvider(query, limit) {
-  const encoded = encodeURIComponent('site:youtube.com/watch ' + query);
-  const response = await fetch(
-    'https://www.google.com/search?q=' + encoded + '&num=10&hl=ar',
-    { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'ar,en;q=0.8' }, signal: AbortSignal.timeout(5000) },
-  );
-  if (!response.ok) throw new Error('Google HTTP ' + response.status);
-  const html = await response.text();
-  const results = [];
-  const seen = new Set();
-  const re = /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})/g;
-  let m;
-  while ((m = re.exec(html)) && results.length < limit) {
-    if (seen.has(m[1])) continue;
-    seen.add(m[1]);
-    results.push({
-      id: m[1], title: 'YouTube: ' + query, description: '', duration: 0, views: 0,
-      channel: { name: '' },
-      thumbnail: { url: 'https://i.ytimg.com/vi/' + m[1] + '/hqdefault.jpg' },
-      thumbnails: [{ url: 'https://i.ytimg.com/vi/' + m[1] + '/hqdefault.jpg' }],
-    });
+async function jina(query, limit) {
+  const q = encodeURIComponent(query)
+  const md = await fetchText(`https://r.jina.ai/https://www.youtube.com/results?search_query=${q}`, 9000, { Accept: 'text/plain,text/markdown,*/*' })
+  const out = []
+  const seen = new Set()
+  const re = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/g
+  let m
+  while ((m = re.exec(md)) && out.length < limit) {
+    const id = m[1]
+    if (seen.has(id)) continue
+    seen.add(id)
+    const before = md.slice(Math.max(0, m.index - 300), m.index)
+    const tm = before.match(/\[([^\]]{3,180})\]\([^)]*$/)
+    out.push(video(id, tm?.[1] || query))
   }
-  if (!results.length) throw new Error('empty web results');
-  return results;
+  if (!out.length) throw new Error('Jina contained no YouTube results')
+  return out
+}
+
+async function google(query, limit) {
+  const q = encodeURIComponent(`site:youtube.com/watch ${query}`)
+  const html = await fetchText(`https://www.google.com/search?q=${q}&num=10&hl=ar`, 6000, { 'Accept-Language': 'ar,en;q=0.8' })
+  const out = []
+  const seen = new Set()
+  const re = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/g
+  let m
+  while ((m = re.exec(html)) && out.length < limit) {
+    const id = m[1]
+    if (seen.has(id)) continue
+    seen.add(id)
+    out.push(video(id, query))
+  }
+  if (!out.length) throw new Error('Google contained no YouTube results')
+  return out
 }
 
 async function search(query, options = {}) {
-  const limit = Math.min(Number(options.limit) || 8, 12);
-  const q = String(query || '').trim();
-  if (!q) return [];
+  const q = String(query || '').trim()
+  const limit = Math.min(Math.max(Number(options.limit) || 8, 1), 12)
+  if (!q) return []
 
   const providers = [
-    () => searchInvidiousProvider(q, limit),
-    () => searchJinaProvider(q, limit),
-    () => searchWebProvider(q, limit),
-  ];
-
-  const deadline = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('youtube search deadline exceeded')), TOTAL_TIMEOUT_MS)
-  );
+    () => youtubeHtml(q, limit),
+    () => invidious(q, limit),
+    () => jina(q, limit),
+    () => google(q, limit),
+  ]
+  const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('all YouTube providers timed out')), 14000))
 
   try {
-    const results = await Promise.race([Promise.any(providers.map((fn) => fn())), deadline]);
-    if (Array.isArray(results) && results.length) {
-      console.log('[youtube-sr worker adapter] search OK: ' + results.length + ' results for "' + q + '"');
-      return results;
+    const result = await Promise.race([Promise.any(providers.map(fn => fn())), deadline])
+    if (Array.isArray(result) && result.length) {
+      console.log(`[DZ YouTube] ${result.length} results for: ${q}`)
+      return result
     }
-  } catch (error) {
-    console.warn('[youtube-sr worker adapter] all providers failed:', error?.message || error);
+  } catch (e) {
+    console.warn('[DZ YouTube] providers failed:', e?.message || e)
   }
-  return [];
+  return []
 }
 
 const YouTube = {
   search,
-  getVideo: async () => {
-    throw new Error('youtube-sr getVideo is not available in Cloudflare Workers');
-  },
-};
+  getVideo: async () => { throw new Error('youtube-sr getVideo is unavailable in Cloudflare Workers') },
+}
 
-export { YouTube };
-export default YouTube;
+export { YouTube }
+export default YouTube

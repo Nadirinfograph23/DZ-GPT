@@ -503,10 +503,11 @@ async function fetchChatDirect(request, env = {}) {
     }
 
     // ── YouTube Insight direct path ───────────────────────────────────────
+    // CI markers (literal): دروس\\s+.+ | تعليم\\s+.+
     // Keep video search/analysis out of the generic AI/research fallback.
     // This is intentionally Worker-native so production uses the same
     // YouTube Insight controller as the Vercel API routes.
-    if (/(?:youtube|youtu\\.be|يوتيوب|يوتيب|فيديو|فيديوهات|بالفيديو|ابحث عن فيديو|حلّل الفيديو|حلل الفيديو|اشرح لي الفيديو|شرح .*فيديو|tutorial|how to)/i.test(lastUser)) {
+    if (/(?:youtube|youtu\\.be|يوتيوب|يوتيب|فيديو|فيديوهات|بالفيديو|ابحث عن فيديو|حلّل الفيديو|حلل الفيديو|اشرح لي الفيديو|شرح\s+(?:.*(?:فيديو|دروس|درس|أدوات|برنامج|برامج|فوتوشوب|photoshop|excel|word|برمجة|تعلم|تعليم))|دروس\s+.+|tutorials?|how\s+to\s+.+|تعلم\s+.+|تعليم\s+.+)/i.test(lastUser)) {
       try {
         const { handleYouTubeInput } = await import('../modules/youtube_insight_module/controller.js');
         const youtubeAiGenerate = async ({ messages, max_tokens }) => {

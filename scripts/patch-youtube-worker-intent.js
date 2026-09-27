@@ -10,9 +10,8 @@ const old = "شرح .*فيديو|tutorial|how to"
 const replacement = "شرح\\s+(?:.*(?:فيديو|دروس|درس|أدوات|برنامج|برامج|فوتوشوب|photoshop|excel|word|برمجة|تعلم|تعليم))|دروس\\s+.+|tutorials?|how\\s+to\\s+.+|تعلم\\s+.+|تعليم\\s+.+"
 const marker = 'دروس\\s+.+'
 
-let updated = source
 if (source.includes(old)) {
-  updated = source.replace(old, replacement)
+  const updated = source.replace(old, replacement)
   if (updated === source) throw new Error('[YouTube intent patch] replacement made no change')
   fs.writeFileSync(path, updated)
   console.log('[YouTube intent patch] applied to workers/entry.js')
@@ -36,9 +35,9 @@ for (const markerText of requiredMarkers) {
   }
 }
 
-// Validate the actual user query that exposed the regression. This is a
-// source-level guard, so the build fails before Wrangler can deploy a bad Worker.
-const intent = new RegExp('(?:youtube|youtu\\\\.be|يوتيوب|يوتيب|فيديو|فيديوهات|بالفيديو|ابحث عن فيديو|حلّل الفيديو|حلل الفيديو|اشرح لي الفيديو|شرح\\\\s+(?:.*(?:فيديو|دروس|درس|أدوات|برنامج|برامج|فوتوشوب|photoshop|excel|word|برمجة|تعلم|تعليم))|دروس\\\\s+.+|tutorials?|how\\\\s+to\\\\s+.+|تعلم\\\\s+.+|تعليم\\\\s+.+)', 'i')
+// Validate the exact regression queries before Wrangler deploys the Worker.
+// This catches both accidental intent regressions and incorrect escaping in the patch.
+const intent = /(?:youtube|youtu\.be|يوتيوب|يوتيب|فيديو|فيديوهات|بالفيديو|ابحث عن فيديو|حلّل الفيديو|حلل الفيديو|اشرح لي الفيديو|شرح\s+(?:.*(?:فيديو|دروس|درس|أدوات|برنامج|برامج|فوتوشوب|photoshop|excel|word|برمجة|تعلم|تعليم))|دروس\s+.+|tutorials?|how\s+to\s+.+|تعلم\s+.+|تعليم\s+.+)/i
 const regressionQueries = [
   'شرح أدوات الفوتوشوب',
   'شرح فوتوشوب للمبتدئين',

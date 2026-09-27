@@ -14,11 +14,11 @@ const YT_HEADERS = {
 
 // ── Invidious fallback instances (for metadata only, not search) ──────────
 const INVIDIOUS_INSTANCES = [
-  "https://inv.nadeko.net",
-  "https://invidious.nerdvpn.de",
-  "https://yt.chocolatemoo53.com",
-  "https://invidious.tiekoetter.com",
-  "https://invidious.f5.si"
+  'https://invidious.materialio.us',
+  'https://invidious.protokolla.fi',
+  'https://iv.ggtyler.dev',
+  'https://invidious.privacyredirect.com',
+  'https://invidious.lunar.icu',
 ]
 
 // ── Format duration (seconds → human readable) ────────────────────────────
@@ -584,8 +584,11 @@ export async function handleYouTubeInput(urlOrQuery, opts = {}) {
 
   // ── Search Mode ──────────────────────────────────────────────────────────
   const searchQuery = urlOrQuery
-    .replace(/(?:ابحث\s+(?:عن|لي|لنا)|جيبلي|عطيني|شرحلي|شوفلي|حبيت\s+نشوف|بالفيديو|بالفيديوهات|فيديو\s+(?:عن|حول|بخصوص)|يوتيوب|يوتيب|على\s+يوتيوب)/gi, '')
-    .replace(/^\s*(?:ابحث|جيب|شوف|عطي)\s+/gi, '')
+    .replace(/^\s*(?:(?:ابحث|بحث)\s+(?:(?:لي|لنا)\s+)?(?:عن\s+)?|جيبلي\s+|عطيني\s+|شرحلي\s+|شوفلي\s+|حبيت\s+نشوف\s+)/i, '')
+    .replace(/^\s*(?:عن|على)\s+/i, '')
+    .replace(/^\s*(?:بالفيديو|بالفيديوهات|فيديو\s+(?:عن|حول|بخصوص)|يوتيوب|يوتيب)\s*/i, '')
+    .replace(/^\s*(?:فيديوهات?|الفيديوهات?)\s+(?:(?:عن|حول|بخصوص)\s+)?/i, '')
+    .replace(/\s+(?:على\s+)?(?:يوتيوب|يوتيب)\s*$/i, '')
     .replace(/\s+/g, ' ').trim()
     || urlOrQuery
 

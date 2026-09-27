@@ -69,8 +69,5 @@
   },
   "engines": {
     "node": "20.x"
-  },
-  "overrides": {
-    "undici": "^7.8.0"
   }
 }

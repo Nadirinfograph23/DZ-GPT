@@ -3,15 +3,16 @@ import fs from 'node:fs'
 const path = 'workers/entry.js'
 const source = fs.readFileSync(path, 'utf8')
 
-// Production is Cloudflare Worker, so this patch must be applied to the exact
-// Worker entry that Wrangler bundles. Fail closed if the expected intent rule
-// changes: an unpatched Worker must never be silently deployed.
+// This patch runs against the exact Worker entry that Wrangler bundles.
+// Keep it deterministic and fail closed: a production build must never ship
+// without recognizing ordinary tutorial requests such as "شرح أدوات الفوتوشوب".
 const old = "شرح .*فيديو|tutorial|how to"
 const replacement = "شرح\\s+(?:.*(?:فيديو|دروس|درس|أدوات|برنامج|برامج|فوتوشوب|photoshop|excel|word|برمجة|تعلم|تعليم))|دروس\\s+.+|tutorials?|how\\s+to\\s+.+|تعلم\\s+.+|تعليم\\s+.+"
 const marker = 'دروس\\s+.+'
 
+let updated = source
 if (source.includes(old)) {
-  const updated = source.replace(old, replacement)
+  updated = source.replace(old, replacement)
   if (updated === source) throw new Error('[YouTube intent patch] replacement made no change')
   fs.writeFileSync(path, updated)
   console.log('[YouTube intent patch] applied to workers/entry.js')
@@ -22,8 +23,30 @@ if (source.includes(old)) {
 }
 
 const finalSource = fs.readFileSync(path, 'utf8')
-if (!finalSource.includes('دروس\\s+.+') || !finalSource.includes('tutorials?') || !finalSource.includes('تعليم\\s+.+')) {
-  throw new Error('[YouTube intent patch] post-patch verification failed')
+const requiredMarkers = [
+  'دروس\\s+.+',
+  'tutorials?',
+  'تعليم\\s+.+',
+  'فوتوشوب',
+  'photoshop',
+]
+for (const markerText of requiredMarkers) {
+  if (!finalSource.includes(markerText)) {
+    throw new Error('[YouTube intent patch] post-patch verification failed: ' + markerText)
+  }
 }
 
-console.log('[YouTube intent patch] verification passed: tutorial/search intent is present in the Worker source')
+// Validate the actual user query that exposed the regression. This is a
+// source-level guard, so the build fails before Wrangler can deploy a bad Worker.
+const intent = new RegExp('(?:youtube|youtu\\\\.be|يوتيوب|يوتيب|فيديو|فيديوهات|بالفيديو|ابحث عن فيديو|حلّل الفيديو|حلل الفيديو|اشرح لي الفيديو|شرح\\\\s+(?:.*(?:فيديو|دروس|درس|أدوات|برنامج|برامج|فوتوشوب|photoshop|excel|word|برمجة|تعلم|تعليم))|دروس\\\\s+.+|tutorials?|how\\\\s+to\\\\s+.+|تعلم\\\\s+.+|تعليم\\\\s+.+)', 'i')
+const regressionQueries = [
+  'شرح أدوات الفوتوشوب',
+  'شرح فوتوشوب للمبتدئين',
+  'دروس الفوتوشوب',
+  'Photoshop tutorial',
+]
+for (const query of regressionQueries) {
+  if (!intent.test(query)) throw new Error('[YouTube intent patch] regression query not recognized: ' + query)
+}
+
+console.log('[YouTube intent patch] verification passed: production Worker recognizes tutorial/YouTube queries, including "شرح أدوات الفوتوشوب"')

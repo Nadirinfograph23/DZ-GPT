@@ -7814,10 +7814,16 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         new Promise<void>(resolve => setTimeout(resolve, 10000)),
       ])
 
-      // ── Streaming fast-path (Vercel AI SDK) ──────────────────────────────
+      // Structured doctor searches must bypass the generic streaming endpoint.
+    // The stream endpoint returns plain text only, which can consume the request before
+    // the full /api/dz-agent-chat response reaches the richType=doctor-results renderer.
+    // Without this guard users see only the query/date text and never the doctor table.
+    const shouldBypassStructuredStream = /(?:طبيب|أطباء|دكتور|دكاترة|dentiste|docteur|doctor|médecin).*(?:في|بـ|ب|بولاية|عنابة|الجزائر|قسنطينة|وهران|سطيف|باتنة|سكيكدة|قالمة|عنابة|annaba|alger|oran|setif|constantine|batna|skikda|guelma)|(?:في|بـ|بولاية)\\s+(?:عنابة|الجزائر|قسنطينة|وهران|سطيف|باتنة|سكيكدة|قالمة|annaba|alger|oran|setif|constantine|batna|skikda|guelma).*?(?:طبيب|دكتور|dentiste|docteur|doctor|médecin)/i.test(text);
+
+    // ── Streaming fast-path (Vercel AI SDK) ──────────────────────────────
       // يُجرّب endpoint البث أولاً — المستخدم يرى أول كلمة خلال ~300ms.
       // إذا أعاد Server "redirect:full" (بيانات حية) → يُكمل بالـ endpoint الكامل.
-      const _streamResult = await (async (): Promise<string | null> => {
+      const _streamResult = shouldBypassStructuredStream ? null : await (async (): Promise<string | null> => {
         const tempId = generateId()
         streamingMsgIdRef.current = tempId
         setMessages(prev => [...prev, {

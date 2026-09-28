@@ -423,6 +423,31 @@ async function fetchChatDirect(request, env = {}) {
       }
     }
 
+    // Currency intent must run before News intent because 'اليوم' is also a news keyword.
+    if (WORKER_CURRENCY_QUERY_RE.test(lower)) {
+      try {
+        const currencyData = await fetchWorkerCurrency()
+        if (currencyData.status === 'live') {
+          const usd = Number(currencyData.rates.USD)
+          const eur = Number(currencyData.rates.EUR)
+          const content = '## 💱 أسعار الصرف مقابل الدينار الجزائري\n\n- **الدولار الأمريكي:** ' + (1 / usd).toFixed(2) + ' دج\n- **اليورو:** ' + (1 / eur).toFixed(2) + ' دج\n\n> الأسعار تقريبية وتتغير حسب المصدر والسوق.'
+          return new Response(JSON.stringify({ content, model: 'currency-api', currencyData }), { headers: {
+            'content-type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          }})
+        }
+        return new Response(JSON.stringify({ content: '⚠️ تعذر جلب أسعار الصرف حالياً. حاول بعد قليل.', model: 'currency-api', currencyData }), { headers: {
+          'content-type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        }})
+      } catch (e) {
+        console.warn('[Worker:Chat] Currency fetch failed:', e?.message || e)
+      }
+    }
     // News intent
     if (/أخبار|خبر|مستجدات|عاجل|اليوم.*الجزائر|الجزائر.*اليوم|news/i.test(lower)) {
       try {

@@ -65,3 +65,12 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Current branch HEAD is now `ce22d690b7d9ec9f7a9e216e0e6320bac89918d3`. The latest change is in the exact build-time intent patch and includes source-level regression tests for the user's failing query.
 - GitHub status still reports an unrelated Vercel failure (`Account is blocked`); this must not be used as Cloudflare deployment proof.
 - Cloudflare deployment proof is still pending: a completed successful Cloudflare Actions run must serve the exact HEAD through `/api/version`, followed by the production YouTube smoke test. Until that happens, do not report the live YouTube fix as complete.
+
+## Doctor search restoration — 2026-09-27
+- The current branch checkout was verified at 37b5b65 before this repair; older SHA notes above are historical and must not be treated as the current branch state.
+- The Node/Express YouTube and doctor engines both work locally: the Photoshop-tools query returned 8 valid YouTube results, and the dentist-in-Annaba query returned 7 doctor records with profile/source URLs.
+- Root cause found in the Cloudflare path: workers/entry.js returned doctor search as Markdown plus doctorSearch: true, but omitted the structured richType doctor-results, doctors, dirs, and metadata consumed by DZChatBox. Production therefore could not render the interactive doctor table even when the search succeeded.
+- Repair: the Worker doctor response now includes the same structured doctor payload as the Express path (richType, real doctors, directory links, specialty/city metadata, cache/GPS flags, and the existing dua). Existing Markdown remains as a fallback.
+- Verification completed before the workspace restart: node tests/basic.test.js → 32/32 passed; direct YouTube controller search → 8 results with valid IDs/titles/thumbnails; direct doctor search → 7 results; Express routes → YouTube 8 results and doctor 7 results using a browser User-Agent. node --check workers/entry.js also passed before the restart.
+- The full npm run build could not be completed in the local environment: the TypeScript process was killed with exit code 137 (resource exhaustion), with no TypeScript diagnostic emitted. This is an environment verification failure, not evidence of a source compile error.
+- Pending after commit: run the Cloudflare workflow, confirm the deployed SHA via /api/version and /version.json, then run the production YouTube and doctor smoke tests. Do not call the live repair complete before those checks pass.

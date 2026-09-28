@@ -230,12 +230,25 @@ async function handleWorkerDoctorSearch(messages, lastUser, userLocation=null) {
   try {
     const { searchDoctors, formatResults } = await import('../lib/doctorSearch.js');
     const result = await searchDoctors({ speciality: speciality.search, city: city.fr, userLocation });
+    const doctors = (result.results || []).filter(d => !d.directoryLink);
+    const dirs = (result.results || []).filter(d => d.directoryLink);
     return {
       content: formatResults(result.results, speciality.label, city.ar, {
         hasGps: !!userLocation, sourceCount: 2
       }),
       model: 'doctor-search',
       doctorSearch: true,
+      // Keep the Worker response aligned with the Express response consumed by
+      // DZChatBox. Without this structured payload, production returned only
+      // Markdown and the interactive doctor table was never rendered.
+      richType: 'doctor-results',
+      doctors,
+      dirs,
+      speciality: { ar: speciality.label, fr: speciality.search },
+      city: { ar: city.ar, fr: city.fr },
+      hasGps: !!userLocation,
+      cached: !!result.cached,
+      dua: 'ربي يجيب الشفاء 🤍\nاللهم اشفي مرضانا ومرضى المسلمين أجمعين يا رب العالمين.',
       sources: result.results.flatMap(d => d.sourceUrls || []).filter(Boolean)
     };
   } catch (e) {

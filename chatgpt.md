@@ -116,3 +116,10 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Minimal repair committed as `cc4ad1d806273b3d86392e31168481bac15d8c89`: changed the workflow dependency step from `npm install --no-audit --no-fund` to `npm ci --no-audit --no-fund`.
 - This keeps the existing lockfile-based dependency tree and the current deployment path; no reset to `36c35fa1223431de09b3d1ee07f9aeb0b02157d2` was performed.
 - Next verification requirement: confirm the new GitHub Actions run completes install/build/deploy, then verify the deployed SHA through `/api/version` and `/version.json`, followed by the production doctor-search/table smoke test.
+
+
+## Cloudflare CI repair — 2026-09-28
+- Verified GitHub Actions run #343 / ID 36391376622 on `devin/1774405518-init-dz-gpt` failed during `npm run build` because the previous `npm ci` reported `Exit handler never called!` and left required packages such as React/Vite unavailable.
+- Commit `6a5ccaaf3bc6989ff5b5c6d4e075bf091f93e79e` hardens the install path: upgrades npm to 10.9.3, installs with `npm ci --ignore-scripts --prefer-online`, verifies critical modules exist, then runs the Cloudflare compatibility postinstall explicitly.
+- Do not reset to the historical successful commit `36c35fa1223431de09b3d1ee07f9aeb0b02157d2`; preserve all newer work.
+- Next verification: GitHub Actions must complete Build + Deploy, then production SHA checks and YouTube smoke test must pass.

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Phone, MapPin, ExternalLink, Globe, ChevronDown, ChevronUp, Copy, Check, LayoutGrid, Table2 } from 'lucide-react'
+import { Phone, MapPin, ExternalLink, Globe, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Copy, Check, LayoutGrid, Table2 } from 'lucide-react'
 
 export interface DoctorResult {
   name: string
@@ -181,6 +181,13 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
   cityLabel: string
   showScore: boolean
 }) {
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(20)
+  const totalPages = Math.max(1, Math.ceil(doctors.length / pageSize))
+  const safePage = Math.min(page, totalPages - 1)
+  const start = safePage * pageSize
+  const visibleDoctors = doctors.slice(start, start + pageSize)
+
   return (
     <div className="dr-table-wrap">
       <table className="dr-table" dir="rtl">
@@ -194,7 +201,8 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
           </tr>
         </thead>
         <tbody>
-          {doctors.map((doc, i) => {
+          {visibleDoctors.map((doc, localIndex) => {
+            const i = start + localIndex
             const displayName = cleanName(doc.name)
             const gender = guessGender(doc.name)
             const specAr = doc.specialityAr || specLabel || ''
@@ -286,6 +294,45 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
           })}
         </tbody>
       </table>
+      {doctors.length > 0 && (
+        <div className="dr-table-pagination" dir="rtl">
+          <div className="dr-page-summary">
+            عرض <strong>{start + 1}</strong>–<strong>{Math.min(start + pageSize, doctors.length)}</strong> من <strong>{doctors.length}</strong> نتيجة
+          </div>
+          <div className="dr-page-controls">
+            <label className="dr-page-size">
+              <span>لكل صفحة</span>
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0) }}
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              className="dr-page-btn"
+              disabled={safePage === 0}
+              onClick={() => setPage(Math.max(0, safePage - 1))}
+              aria-label="الصفحة السابقة"
+            >
+              <ChevronRight size={14} />
+            </button>
+            <span className="dr-page-number">صفحة {safePage + 1} / {totalPages}</span>
+            <button
+              type="button"
+              className="dr-page-btn"
+              disabled={safePage >= totalPages - 1}
+              onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))}
+              aria-label="الصفحة التالية"
+            >
+              <ChevronLeft size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

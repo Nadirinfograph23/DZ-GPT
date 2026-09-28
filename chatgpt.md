@@ -99,3 +99,12 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Fix: structured doctor searches now bypass the generic streaming fast-path and continue through the full response path, where `doctor-results` is converted into `DoctorResultsPanel` with doctors, sources, phone links, Google Maps links, and pagination.
 - Fix commit: `cda3d48e41af0519c3bb25487389f6518fbdb9d7` on `devin/1774405518-init-dz-gpt`.
 - Deployment is still subject to the established Cloudflare production workflow and must be verified by the exact deployed SHA plus a live doctor search smoke test.
+
+
+## 2026-09-28 — فرض نشر آخر تحديثات الفرع + الجداول للقوائم
+- الفرع الإنتاجي المعتمد: `devin/1774405518-init-dz-gpt`.
+- تم الحفاظ على جميع التحديثات الأخيرة وعدم الرجوع إلى commit `36c35fa1223431de09b3d1ee07f9aeb0b02157d2`؛ هذا الـcommit مرجع لمسار النشر الناجح فقط.
+- آخر إصلاح بحث الأطباء: `35f51ca9b88aaadb514d77a4e10d6c449347ecef`، لإرجاع نتائج Docteur360 كبيانات منظمة (اسم، تخصص، هاتف، عنوان، رابط الملف).
+- قاعدة واجهة النتائج: عند وجود قائمة منظمة (أطباء، أخبار، نتائج بحث، خدمات، عناصر متعددة...) يجب عرضها في جدول منظم ومتجاوب على الهاتف بدلاً من نص/روابط مصادر فقط. عند عدم توفر بيانات حقيقية فقط يُستخدم fallback.
+- يجب أن تبقى بيانات الجدول مرتبطة بالـrich payload الموجود في الواجهة، وألا يتم تمريرها إلى مسار streaming النصي العام الذي يحوّلها إلى نص فقط.
+- يجب أن يمر النشر من آخر HEAD للفرع، مع التحقق من SHA المنشور بعد البناء؛ لا يجوز نشر commit قديم مكان آخر التحديثات.

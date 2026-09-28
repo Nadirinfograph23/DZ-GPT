@@ -74,3 +74,10 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Verification completed before the workspace restart: node tests/basic.test.js → 32/32 passed; direct YouTube controller search → 8 results with valid IDs/titles/thumbnails; direct doctor search → 7 results; Express routes → YouTube 8 results and doctor 7 results using a browser User-Agent. node --check workers/entry.js also passed before the restart.
 - The full npm run build could not be completed in the local environment: the TypeScript process was killed with exit code 137 (resource exhaustion), with no TypeScript diagnostic emitted. This is an environment verification failure, not evidence of a source compile error.
 - Pending after commit: run the Cloudflare workflow, confirm the deployed SHA via /api/version and /version.json, then run the production YouTube and doctor smoke tests. Do not call the live repair complete before those checks pass.
+
+## Deployment follow-up — 2026-09-28
+- Repair commit: ce06fc1208dea47ee3cbc143bf63a4e21f9de718 (ce06fc1), pushed to devin/1774405518-init-dz-gpt. It changes only workers/entry.js and this documentation file.
+- Cloudflare workflow run 36370737180 was triggered for that exact SHA but completed with failure in Build application assets; Deploy Worker and all live smoke tests were skipped. The run URL is https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/36370737180.
+- Local npm run build was also killed with exit code 137 during TypeScript compilation in the restarted verification environment. No TypeScript diagnostic was emitted, so the source build remains unproven rather than proven broken.
+- Live version check at 2026-09-28 02:43 UTC still served version.json commit 36c35fa1223431de09b3d1ee07f9aeb0b02157d2 from 2026-08-14; /api/version reported commit unknown. This confirms the doctor repair is not deployed to production yet.
+- Next action: diagnose the Build application assets failure, get a successful Cloudflare deployment for ce06fc1 (or a follow-up fix), then require /api/version, /version.json, and production doctor/YouTube smoke tests before marking the repair complete.

@@ -108,3 +108,11 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - قاعدة واجهة النتائج: عند وجود قائمة منظمة (أطباء، أخبار، نتائج بحث، خدمات، عناصر متعددة...) يجب عرضها في جدول منظم ومتجاوب على الهاتف بدلاً من نص/روابط مصادر فقط. عند عدم توفر بيانات حقيقية فقط يُستخدم fallback.
 - يجب أن تبقى بيانات الجدول مرتبطة بالـrich payload الموجود في الواجهة، وألا يتم تمريرها إلى مسار streaming النصي العام الذي يحوّلها إلى نص فقط.
 - يجب أن يمر النشر من آخر HEAD للفرع، مع التحقق من SHA المنشور بعد البناء؛ لا يجوز نشر commit قديم مكان آخر التحديثات.
+
+
+## 2026-09-28 — Cloudflare CI dependency-install repair
+- Latest production branch: `devin/1774405518-init-dz-gpt`.
+- The Cloudflare deployment workflow was failing during dependency installation with `npm error Exit handler never called!`, followed by missing `react`, `vite`, `lucide-react`, etc. because dependencies were incomplete.
+- Minimal repair committed as `cc4ad1d806273b3d86392e31168481bac15d8c89`: changed the workflow dependency step from `npm install --no-audit --no-fund` to `npm ci --no-audit --no-fund`.
+- This keeps the existing lockfile-based dependency tree and the current deployment path; no reset to `36c35fa1223431de09b3d1ee07f9aeb0b02157d2` was performed.
+- Next verification requirement: confirm the new GitHub Actions run completes install/build/deploy, then verify the deployed SHA through `/api/version` and `/version.json`, followed by the production doctor-search/table smoke test.

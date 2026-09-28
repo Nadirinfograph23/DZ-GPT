@@ -50,7 +50,7 @@ jobs:
         run: sed -i 's#http://package-firewall\.replit\.local/npm/#https://registry.npmjs.org/#g' package-lock.json
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Patch and verify Cloudflare YouTube intent
         run: |

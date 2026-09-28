@@ -54,7 +54,20 @@ jobs:
         run: |
           set -euo pipefail
           npm install --global npm@10.9.3
-          npm ci --ignore-scripts --no-audit --no-fund --prefer-online
+          rm -rf node_modules
+          npm cache verify
+          install_ok=0
+          for attempt in 1 2 3; do
+            echo "npm ci attempt $attempt/3"
+            if npm ci --ignore-scripts --no-audit --no-fund --prefer-online; then
+              install_ok=1
+              break
+            fi
+            echo "npm ci failed; clearing partial install before retry"
+            rm -rf node_modules
+            npm cache clean --force
+          done
+          test "$install_ok" = "1"
           test -f node_modules/react/package.json
           test -f node_modules/vite/package.json
           test -f node_modules/@vitejs/plugin-react/package.json

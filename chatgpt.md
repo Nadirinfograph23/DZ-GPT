@@ -91,3 +91,11 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Commits: `63fc7be2b550898a40937d000cb43956ef74f023` (component pagination), `b42162296aeba36e6795179d8747eeb9371b045f` (pagination styling).
 - This is a UI-only improvement; the doctor search backend and structured `doctor-results` payload are preserved.
 - Deployment is still pending until the Cloudflare build succeeds and the exact deployed SHA is verified through `/api/version` and live doctor smoke tests.
+
+
+## Doctor table rendering fix — 2026-09-28
+- User reported that a query such as `طبيب أسنان في عنابة` was returning only the query/date text instead of the doctor table.
+- Root cause found in `src/components/DZChatBox.tsx`: the Vercel AI SDK streaming fast-path could consume the request and return plain text before the full `/api/dz-agent-chat` response with `richType: 'doctor-results'` reached the existing `DoctorResultsPanel` renderer.
+- Fix: structured doctor searches now bypass the generic streaming fast-path and continue through the full response path, where `doctor-results` is converted into `DoctorResultsPanel` with doctors, sources, phone links, Google Maps links, and pagination.
+- Fix commit: `cda3d48e41af0519c3bb25487389f6518fbdb9d7` on `devin/1774405518-init-dz-gpt`.
+- Deployment is still subject to the established Cloudflare production workflow and must be verified by the exact deployed SHA plus a live doctor search smoke test.

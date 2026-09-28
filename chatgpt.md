@@ -81,3 +81,13 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Local npm run build was also killed with exit code 137 during TypeScript compilation in the restarted verification environment. No TypeScript diagnostic was emitted, so the source build remains unproven rather than proven broken.
 - Live version check at 2026-09-28 02:43 UTC still served version.json commit 36c35fa1223431de09b3d1ee07f9aeb0b02157d2 from 2026-08-14; /api/version reported commit unknown. This confirms the doctor repair is not deployed to production yet.
 - Next action: diagnose the Build application assets failure, get a successful Cloudflare deployment for ce06fc1 (or a follow-up fix), then require /api/version, /version.json, and production doctor/YouTube smoke tests before marking the repair complete.
+
+
+## Doctor table UI update — 2026-09-28
+- User selected option #2 (shadcn-data-table style) for the doctor-results interface and requested support for long result lists.
+- Kept the existing DoctorResultsPanel data model and phone/Google Maps/source actions intact.
+- Added client-side pagination to `src/components/DoctorResultsPanel.tsx`: 20 results per page by default, selectable 20/50/100, previous/next controls, and a visible range/total counter.
+- Added responsive pagination styling to `src/styles/doctor-results.css`; the existing horizontal mobile table behavior remains intact.
+- Commits: `63fc7be2b550898a40937d000cb43956ef74f023` (component pagination), `b42162296aeba36e6795179d8747eeb9371b045f` (pagination styling).
+- This is a UI-only improvement; the doctor search backend and structured `doctor-results` payload are preserved.
+- Deployment is still pending until the Cloudflare build succeeds and the exact deployed SHA is verified through `/api/version` and live doctor smoke tests.

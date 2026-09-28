@@ -9,7 +9,7 @@
     "start": "NODE_ENV=production node server.js",
     "lint": "eslint .",
     "preview": "vite preview",
-    "postinstall": "node scripts/patch-cf-compat.js"
+    "postinstall": "node scripts/patch-cf-compat.js && node scripts/patch-doctor-search.js"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",

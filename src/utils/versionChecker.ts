@@ -19,39 +19,42 @@ let _bannerShown = false
 // ── جلب معلومات الإصدار — يتجاوز كل الكاش بـ query param ──────────────────
 async function fetchVersion(): Promise<{ deployTs: string; label: string } | null> {
   const bust = Date.now()
+  const endpoints = ['/api/version', '/version.json']
 
-  // 1) Canonical Cloudflare API endpoint — the Worker now serves the
-  // same deployment metadata generated into /version.json, with no-store.
-  try {
-    const res = await fetch(`/api/version?_=${bust}`, {
-      cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
-    })
-    if (res.ok) {
+  // Read both endpoints. During a Cloudflare rollout the Worker API and the
+  // static asset can briefly be on different versions; choosing the newest
+  // deployedAt prevents a stale API response from hiding the update banner.
+  const candidates = await Promise.all(endpoints.map(async (endpoint) => {
+    try {
+      const res = await fetch(`${endpoint}?_=${bust}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
+      })
+      if (!res.ok) return null
       const d = await res.json()
       const deployTs = d.deployedAt || d.buildAt || null
-      const label = d.commitShort || d.commit || d.version || 'new'
-      if (deployTs) return { deployTs, label }
+      if (!deployTs) return null
+      return {
+        endpoint,
+        deployTs: String(deployTs),
+        label: String(d.commitShort || d.commit || d.version || 'new'),
+      }
+    } catch {
+      return null
     }
-  } catch { /* fallback to static version.json */ }
+  }))
 
-  // 2) version.json — static asset fallback
-  try {
-    const res = await fetch(`/version.json?_=${bust}`, {
-      cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
-    })
-    if (res.ok) {
-      const d = await res.json()
-      // deployedAt هو المعيار الأساسي — يتغيّر في كل deploy
-      const deployTs = d.deployedAt || d.buildAt || null
-      const label    = d.commitShort || d.commit || 'new'
-      if (deployTs) return { deployTs, label }
-    }
-  } catch { /* تجاهل */ }
+  const valid = candidates.filter((item): item is { endpoint: string; deployTs: string; label: string } => Boolean(item))
+  if (!valid.length) return null
 
-
-  return null
+  valid.sort((a, b) => {
+    const aTime = Date.parse(a.deployTs)
+    const bTime = Date.parse(b.deployTs)
+    if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) return bTime - aTime
+    // If timestamps are not parseable or equal, prefer the canonical API.
+    return a.endpoint === '/api/version' ? -1 : 1
+  })
+  return { deployTs: valid[0].deployTs, label: valid[0].label }
 }
 
 // ── عرض البانر ────────────────────────────────────────────────────────────

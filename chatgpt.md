@@ -123,3 +123,31 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Commit `6a5ccaaf3bc6989ff5b5c6d4e075bf091f93e79e` hardens the install path: upgrades npm to 10.9.3, installs with `npm ci --ignore-scripts --prefer-online`, verifies critical modules exist, then runs the Cloudflare compatibility postinstall explicitly.
 - Do not reset to the historical successful commit `36c35fa1223431de09b3d1ee07f9aeb0b02157d2`; preserve all newer work.
 - Next verification: GitHub Actions must complete Build + Deploy, then production SHA checks and YouTube smoke test must pass.
+
+## 2026-09-29 — Feature providers and automatic update handoff
+
+### قواعد العمل
+- العمل فقط داخل Nadirinfograph23/DZ-GPT وعلى الفرع devin/1774405518-init-dz-gpt، وعدم الرجوع إلى commits قديمة أو تعديل main.
+- قراءة chatgpt.md أولًا، ثم فحص SHA الحالي والكود الفعلي قبل الاعتماد على الملاحظات التاريخية.
+- مسار الإنتاج هو GitHub Actions ثم Cloudflare Worker باسم dzagent؛ وجود commit أو رسالة تحديث لا يثبت وحده اكتمال النشر.
+
+### خريطة المزودات والميزات
+- أسعار الصرف: workers/entry.js يقدّم currency intent قبل news intent، ويستخدم open.er-api.com ثم exchangerate-api.com لأسعار DZD؛ src/components/CurrencyWidget.tsx يعرض الجدول المنظم.
+- الأطباء: lib/doctorSearch.js يبحث في الأدلة الجزائرية المهيأة؛ Worker يعيد doctor-results منظمة؛ src/components/DoctorResultsPanel.tsx يعرض الجدول والبطاقات، الهاتف والمصدر، pagination، ورابط Google Maps من خلال https://www.google.com/maps/search/?api=1&query=.
+- YouTube: workers/stubs/youtube-sr.js يستخدم YouTube HTML ثم Invidious وJina وGoogle كبدائل؛ modules/youtube_insight_module/controller.js يتولى metadata وcaptions وdiscussion؛ يجب الحفاظ على selected-video context وتحليل الفيديو المختار. الهدف المرئي 8 بطاقات، مع قبول smoke test لنتيجة صحيحة واحدة على الأقل.
+- التحديث التلقائي: src/utils/versionChecker.ts يفحص /api/version و/version.json، يقارن deployedAt، ويعرض banner أعلى الصفحة بعدّاد 15 ثانية وزر 🚀 تحديث الآن، ويمسح caches وService Workers ثم يعيد التحميل. public/sw.js يرسل NEW_VERSION وSW_UPDATED.
+
+### ما تم إنجازه في 2026-09-29
+- HEAD الحالي عند وقت التوثيق هو c22de834efe9c0e8b78bac01977e13ab7b9ca0ff.
+- b89ba1c55e776e202e645430f2621922a8fb50ce normalized 106 رابطًا داخليًا من Replit في package-lock.json إلى https://registry.npmjs.org/، وأصلح تثبيت الحزم في Cloudflare CI دون تغيير dependencies التطبيق.
+- c22de834efe9c0e8b78bac01977e13ab7b9ca0ff حصّن versionChecker ليقرأ المصدرين ويختار أحدث deployedAt، حتى لا يخفي رد API قديم banner الخاص بالنسخة الجديدة.
+- GitHub Actions run 36539103201 / run 354: Install dependencies وpatches وBuild application assets وDeploy Worker وVerify production deployment version نجحت.
+- /api/version و/version.json يعرضان SHA c22de834efe9c0e8b78bac01977e13ab7b9ca0ff في الموقع الحي.
+- run 354 فشل فقط في Verify production static version fallback، ولذلك تم تخطي Smoke test YouTube؛ عند الفحص اللاحق كان /version.json الحي يعرض SHA الصحيح، فالمشكلة تبدو عدم اتساقًا/تأخرًا عابرًا في لحظة التحقق وليس فشلًا في deployment نفسه.
+
+### المهام التالية
+1. إعادة تشغيل أو متابعة run جديد بعد آخر commit، والتأكد من نجاح static version fallback ثم Smoke test YouTube.
+2. اختبار أسعار الصرف فعليًا، ثم بحث طبيب مع تحقق من الجدول ورابط Google Maps.
+3. اختبار بحث YouTube بإظهار 8 بطاقات، اختيار فيديو، preview، ثم تحليل ومناقشة الفيديو المختار.
+4. تسجيل SHA المنشور ونتائج الاختبارات الحية هنا؛ لا تعتبر المهمة مكتملة قبل تطابق SHA في /api/version و/version.json ونجاح smoke tests.
+5. إذا تكرر فشل npm، افحص hosts داخل package-lock.json قبل تعديل كود الميزات.

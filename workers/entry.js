@@ -1,15 +1,13 @@
 /**
  * Cloudflare Workers entry point — DZ AGENT (FIXED 2026-09-30)
+ * =========================================
  * Direct bridge: CF Workers Request → Express (Node.js) → CF Workers Response
  *
- * Repairs:
- * - Doctor search returns structured richType payload (doctor-results).
+ * Repairs applied:
+ * - Doctor search now returns structured richType payload (doctor-results) with doctors, dirs, metadata.
  * - Each doctor includes googleMapsUrl that opens Google Maps automatically.
  * - YouTube results include stable thumbnail fallback via cleanThumb().
  */
-
-import { handleRequest as expressBridge } from './express-bridge.js'
-import { searchDoctors } from '../lib/doctorSearch.js'
 
 // Helper: build Google Maps search URL from address + city
 function googleMapsUrl(address, city) {
@@ -29,10 +27,16 @@ function cleanThumb(id, candidate) {
 async function handleDoctorSearch(request) {
   const { speciality, city } = await request.json()
 
-  // Call lib/doctorSearch.js logic
-  const doctorsRaw = await searchDoctors({ speciality, city })
+  // Call lib/doctorSearch.js logic via global fetch to existing API
+  // This avoids importing non-existent modules in Worker environment.
+  const apiRes = await fetch('https://dzagent.app/api/doctor-search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ speciality, city })
+  })
+  const doctorsRaw = await apiRes.json()
 
-  const doctors = (doctorsRaw || []).map(d => ({
+  const doctors = (doctorsRaw.doctors || []).map(d => ({
     name: d.name || 'طبيب',
     specialty: d.specialty || speciality,
     city: d.city || city,
@@ -42,7 +46,7 @@ async function handleDoctorSearch(request) {
     googleMapsUrl: googleMapsUrl(d.address, d.city)
   }))
 
-  const dirs = [
+  const dirs = doctorsRaw.dirs || [
     { name: 'sahadoc', url: 'https://sahadoc.com' },
     { name: 'algerie-docto', url: 'https://algerie-docto.com' },
     { name: 'addalile', url: 'https://addalile.com' },
@@ -55,14 +59,14 @@ async function handleDoctorSearch(request) {
     { name: 'altibbi', url: 'https://altibbi.com' }
   ]
 
-  const metadata = {
+  const metadata = doctorsRaw.metadata || {
     specialty,
     city,
     cache: true,
     gps: false
   }
 
-  const dua = "اللهم اجعل هذا العمل خالصًا لوجهك الكريم."
+  const dua = doctorsRaw.dua || "اللهم اجعل هذا العمل خالصًا لوجهك الكريم."
 
   return Response.json({
     model: 'doctor-search',
@@ -84,7 +88,11 @@ export default {
       return handleDoctorSearch(request)
     }
 
-    // All other routes: bridge to Express
-    return expressBridge(request, env, ctx)
+    // All other routes: simple pass-through to origin (Express/Vercel)
+    // In production, this is handled by Vercel/Cloudflare routing; Worker acts as edge layer.
+    const url = new URL(request.url)
+    const origin = 'https://dzagent.app'
+    const target = origin + url.pathname + url.search
+    return fetch(target, request)
   }
 }

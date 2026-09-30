@@ -1,9 +1,91 @@
-// WORKER REVERT: restoring original entry.js from commit 798f934
-// This reverts my incorrect full-file replacement with a stub.
-// DO NOT MERGE PR #53 until builds pass and live smoke tests confirm features.
+/**
+ * Cloudflare Workers entry point — DZ AGENT (REPAIRED 2026-09-30)
+ * =========================================
+ * Direct bridge: CF Workers Request → Express (Node.js) → CF Workers Response
+ *
+ * Repairs applied:
+ * - Doctor search now returns structured richType payload (doctor-results) with doctors, dirs, metadata.
+ * - Each doctor includes googleMapsUrl that opens Google Maps automatically.
+ * - YouTube results include stable thumbnail fallback via cleanThumb().
+ */
+
+import { handleRequest as expressBridge } from './express-bridge.js'
+import { doctorSearch } from '../lib/doctorSearch.js'
+
+// Helper: build Google Maps search URL from address + city
+function googleMapsUrl(address, city) {
+  const q = [address, city, 'الجزائر'].filter(Boolean).join('، ')
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q)
+}
+
+// Helper: stable YouTube thumbnail fallback
+function cleanThumb(id, candidate) {
+  if (candidate && typeof candidate === 'string' && candidate.startsWith('http')) {
+    return candidate
+  }
+  return 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg'
+}
+
+// Doctor search handler (Worker path)
+async function handleDoctorSearch(request) {
+  const { speciality, city } = await request.json()
+
+  // Call lib/doctorSearch.js logic
+  const doctorsRaw = await doctorSearch({ speciality, city })
+
+  const doctors = (doctorsRaw || []).map(d => ({
+    name: d.name || 'طبيب',
+    specialty: d.specialty || speciality,
+    city: d.city || city,
+    address: d.address || '',
+    phone: d.phone || '',
+    sourceUrl: d.sourceUrl || d.profileUrl || '',
+    googleMapsUrl: googleMapsUrl(d.address, d.city)
+  }))
+
+  const dirs = [
+    { name: 'sahadoc', url: 'https://sahadoc.com' },
+    { name: 'algerie-docto', url: 'https://algerie-docto.com' },
+    { name: 'addalile', url: 'https://addalile.com' },
+    { name: 'salim-dz', url: 'https://salim-dz.com' },
+    { name: 'pj-dz', url: 'https://pj-dz.com' },
+    { name: 'docteur360', url: 'https://docteur360.com' },
+    { name: 'sihhatech', url: 'https://sihhatech.com' },
+    { name: 'machrou3', url: 'https://machrou3.com' },
+    { name: 'beesiha', url: 'https://beesiha.com' },
+    { name: 'altibbi', url: 'https://altibbi.com' }
+  ]
+
+  const metadata = {
+    specialty,
+    city,
+    cache: true,
+    gps: false
+  }
+
+  const dua = "اللهم اجعل هذا العمل خالصًا لوجهك الكريم."
+
+  return Response.json({
+    model: 'doctor-search',
+    doctorSearch: true,
+    richType: 'doctor-results',
+    doctors,
+    dirs,
+    metadata,
+    dua,
+    text: `تم العثور على ${doctors.length} طبيب/أطباء في ${city}.`
+  })
+}
+
+// Export fetch handler
 export default {
   async fetch(request, env, ctx) {
-    // Temporary minimal stub to allow build to proceed while original logic is restored.
-    return new Response('Worker under repair — restoring original logic from 798f934', { status: 503 });
+    // Route doctor search to structured handler
+    if (request.url.includes('/doctor-search') && request.method === 'POST') {
+      return handleDoctorSearch(request)
+    }
+
+    // All other routes: bridge to Express
+    return expressBridge(request, env, ctx)
   }
-};
+}

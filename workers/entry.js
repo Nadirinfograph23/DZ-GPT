@@ -1,16 +1,15 @@
 /**
- * Cloudflare Workers entry point — DZ AGENT (REPAIRED 2026-09-30)
- * =========================================
+ * Cloudflare Workers entry point — DZ AGENT (FIXED 2026-09-30)
  * Direct bridge: CF Workers Request → Express (Node.js) → CF Workers Response
  *
- * Repairs applied:
- * - Doctor search now returns structured richType payload (doctor-results) with doctors, dirs, metadata.
+ * Repairs:
+ * - Doctor search returns structured richType payload (doctor-results).
  * - Each doctor includes googleMapsUrl that opens Google Maps automatically.
  * - YouTube results include stable thumbnail fallback via cleanThumb().
  */
 
 import { handleRequest as expressBridge } from './express-bridge.js'
-import { doctorSearch } from '../lib/doctorSearch.js'
+import { searchDoctors } from '../lib/doctorSearch.js'
 
 // Helper: build Google Maps search URL from address + city
 function googleMapsUrl(address, city) {
@@ -31,7 +30,7 @@ async function handleDoctorSearch(request) {
   const { speciality, city } = await request.json()
 
   // Call lib/doctorSearch.js logic
-  const doctorsRaw = await doctorSearch({ speciality, city })
+  const doctorsRaw = await searchDoctors({ speciality, city })
 
   const doctors = (doctorsRaw || []).map(d => ({
     name: d.name || 'طبيب',

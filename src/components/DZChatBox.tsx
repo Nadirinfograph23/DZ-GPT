@@ -2657,6 +2657,10 @@ function fmtViews(n: number): string {
   return `${n} مشاهدة`
 }
 
+const YOUTUBE_THUMBNAIL_PLACEHOLDER = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270" viewBox="0 0 480 270"><rect width="480" height="270" fill="#17171d"/><rect x="190" y="95" width="100" height="80" rx="18" fill="#ff4b4b"/><path d="M230 116v38l34-19z" fill="#fff"/></svg>',
+)}`
+
 // ===== YOUTUBE PANEL COMPONENT =====
 function YouTubePanel({
   video,
@@ -2820,43 +2824,56 @@ function YouTubePanel({
 
         {/* Results grid */}
         <div className="dzc-yt-grid">
-          {results.map((r, idx) => (
-            <button
-              key={r.id}
-              className={`dzc-yt-card${activeId === r.id ? ' active' : ''}`}
-              onClick={() => selectVideo(r)}
-            >
-              {/* Numbered index badge */}
-              <span className="dzc-yt-card-index">{idx + 1}</span>
+          {results.map((r, idx) => {
+            const thumbnails = Array.from(new Set([
+              r.thumbnail,
+              `https://i.ytimg.com/vi/${r.id}/hqdefault.jpg`,
+              `https://i.ytimg.com/vi/${r.id}/mqdefault.jpg`,
+              `https://i.ytimg.com/vi/${r.id}/default.jpg`,
+            ].filter(Boolean)))
 
-              <div className="dzc-yt-card-thumb-wrap">
-                <img
-                  src={`https://img.youtube.com/vi/${r.id}/hqdefault.jpg`}
-                  onError={(e) => {
-                    const img = e.currentTarget
-                    if (!img.dataset.fallback) {
-                      img.dataset.fallback = "1"
-                      img.src = `https://i.ytimg.com/vi/${r.id}/hqdefault.jpg`
-                    }
-                  }}
-                  alt={r.title}
-                  className="dzc-yt-card-thumb"
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                />
-                {r.duration > 0 && (
-                  <span className="dzc-yt-card-dur">{fmtDuration(r.duration)}</span>
-                )}
-                <div className="dzc-yt-card-play">
-                  <div className="dzc-yt-play-circle">▶ اختر</div>
+            return (
+              <button
+                key={r.id}
+                className={`dzc-yt-card${activeId === r.id ? ' active' : ''}`}
+                onClick={() => selectVideo(r)}
+              >
+                {/* Numbered index badge */}
+                <span className="dzc-yt-card-index">{idx + 1}</span>
+
+                <div className="dzc-yt-card-thumb-wrap">
+                  <img
+                    src={thumbnails[0] || YOUTUBE_THUMBNAIL_PLACEHOLDER}
+                    onError={(e) => {
+                      const img = e.currentTarget
+                      const nextIndex = Number(img.dataset.thumbnailIndex || 0) + 1
+                      const nextThumbnail = thumbnails[nextIndex]
+                      img.dataset.thumbnailIndex = String(nextIndex)
+                      if (nextThumbnail) img.src = nextThumbnail
+                      else {
+                        img.onerror = null
+                        img.src = YOUTUBE_THUMBNAIL_PLACEHOLDER
+                      }
+                    }}
+                    alt={r.title}
+                    className="dzc-yt-card-thumb"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                  {r.duration > 0 && (
+                    <span className="dzc-yt-card-dur">{fmtDuration(r.duration)}</span>
+                  )}
+                  <div className="dzc-yt-card-play">
+                    <div className="dzc-yt-play-circle">▶ اختر</div>
+                  </div>
                 </div>
-              </div>
-              <div className="dzc-yt-card-body">
-                <p className="dzc-yt-card-title">{r.title}</p>
-                <p className="dzc-yt-card-meta">{r.channel}</p>
-              </div>
-            </button>
-          ))}
+                <div className="dzc-yt-card-body">
+                  <p className="dzc-yt-card-title">{r.title}</p>
+                  <p className="dzc-yt-card-meta">{r.channel}</p>
+                </div>
+              </button>
+            )
+          })}
         </div>
 
         {/* Quick-pick ordinal buttons */}

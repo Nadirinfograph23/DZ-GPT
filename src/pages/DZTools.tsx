@@ -9,6 +9,7 @@ import { useMiniPlayer } from '../context/MiniPlayerContext'
 import DoctorResultsPanel, { DoctorResult, DirLink } from '../components/DoctorResultsPanel'
 import SpreadsheetTool from '../components/SpreadsheetTool'
 import '../styles/dz-tools.css'
+import '../styles/doctor-results.css'
 
 const NO_AI_MSG = '⚠️ خدمة الذكاء الاصطناعي غير متاحة مؤقتاً. يرجى المحاولة لاحقاً أو التواصل مع الدعم.'
 
@@ -1012,7 +1013,17 @@ function HealthTool() {
   const [city, setCity] = useState('الجزائر')
   const [specialty, setSpecialty] = useState('')
   const [result, setResult] = useState('')
-  const [doctorData, setDoctorData] = useState<{ doctors: DoctorResult[]; dirs: DirLink[]; meta: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; cached?: boolean } } | null>(null)
+  const [doctorData, setDoctorData] = useState<{
+    doctors: DoctorResult[]
+    dirs: DirLink[]
+    meta: {
+      speciality: { ar: string; fr: string }
+      city: { ar: string; fr: string }
+      cached?: boolean
+      sourceCount?: number
+      sourceErrors?: { source: string; error?: string }[]
+    }
+  } | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -1177,11 +1188,10 @@ function HealthTool() {
               speciality: { ar: specialty || 'طب عام', fr: specFr },
               city: { ar: city, fr: cityFr },
               cached: !!data.cached,
+              sourceCount: Array.isArray(data.sources) ? data.sources.length : undefined,
+              sourceErrors: Array.isArray(data.errors) ? data.errors : [],
             }
           })
-          if (realDocs.length === 0) {
-            setResult('لم يتم العثور على أطباء في قاعدة البيانات لهذا التخصص والمدينة. جرّب ولاية أخرى أو تخصصاً مختلفاً.')
-          }
         } else if (data.content) {
           setResult(data.content)
         } else {

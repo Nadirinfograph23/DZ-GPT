@@ -1,1 +1,2 @@
 - [Anti-Hallucination Architecture](anti-hallucination-architecture.md) — layer order critical: fictional-place pre-check must run BEFORE static-facts; Arabic ؟ (U+061F) breaks Arabic capture groups.
+- [DZ-GPT search guardrails](dz-gpt-search-guardrails.md) — Keep multi-source doctor results and explicit YouTube selection; require approval for production domain/routing changes.

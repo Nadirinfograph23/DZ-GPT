@@ -637,7 +637,7 @@ interface DZMessage {
   model?: string
   doctors?: DoctorResult[]
   dirs?: DirLink[]
-  doctorMeta?: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; hasGps?: boolean; cached?: boolean; byName?: boolean; queryName?: string }
+  doctorMeta?: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; hasGps?: boolean; cached?: boolean; byName?: boolean; queryName?: string; sourceCount?: number; sourceErrors?: { source: string; error?: string }[] }
   doctorSelection?: DoctorSelectionData
   dua?: string
   visitorAnalyticsData?: { period: string }
@@ -8241,6 +8241,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
             cached: !!data.cached,
             byName: !!data.byName,
             queryName: (data.queryName as string) || undefined,
+            sourceCount: typeof data.sourceCount === 'number' ? data.sourceCount : undefined,
+            sourceErrors: Array.isArray(data.sourceErrors)
+              ? data.sourceErrors as { source: string; error?: string }[]
+              : [],
           },
         })
       } else if ((data._imageSearch || data.mode === 'image-search') && Array.isArray(data.images) && (data.images as unknown[]).length > 0) {

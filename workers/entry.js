@@ -256,13 +256,13 @@ async function handleWorkerDoctorSearch(messages, lastUser, userLocation=null) {
   if (!city) return { content: workerDoctorFixedResponse(speciality), model: 'static-doctor' };
 
   try {
-    const { searchDoctors, formatResults } = await import('../lib/doctorSearch.js');
+    const { searchDoctors, formatResults, SOURCES } = await import('../lib/doctorSearch.js');
     const result = await searchDoctors({ speciality: speciality.search, city: city.fr, userLocation });
     const doctors = (result.results || []).filter(d => !d.directoryLink);
     const dirs = (result.results || []).filter(d => d.directoryLink);
     return {
       content: formatResults(result.results, speciality.label, city.ar, {
-        hasGps: !!userLocation, sourceCount: 2
+        hasGps: !!userLocation, sourceCount: SOURCES.length
       }),
       model: 'doctor-search',
       doctorSearch: true,
@@ -276,6 +276,8 @@ async function handleWorkerDoctorSearch(messages, lastUser, userLocation=null) {
       city: { ar: city.ar, fr: city.fr },
       hasGps: !!userLocation,
       cached: !!result.cached,
+      sourceCount: SOURCES.length,
+      sourceErrors: Array.isArray(result.errors) ? result.errors : [],
       dua: 'ربي يجيب الشفاء 🤍\nاللهم اشفي مرضانا ومرضى المسلمين أجمعين يا رب العالمين.',
       sources: result.results.flatMap(d => d.sourceUrls || []).filter(Boolean)
     };

@@ -170,3 +170,19 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - PR #53 سيبقى مفتوحاً؛ لا تدمجه ضمن هذا التحديث.
 - النشر والتحقق من النسخة الجديدة قيد التنفيذ. لا تعتبر المهمة مكتملة حتى يتطابق SHA الجديد في `/api/version` و`/version.json` وينجح smoke test لبحث الطبيب وYouTube.
 - لم يتم تغيير النطاق أو إعدادات التوجيه. لا ترفع تعديلات `.replit` أو بيانات `data/eddirasa_index.json` التي ولّدها التشغيل المحلي.
+
+## 2026-10-02 — Doctor search and YouTube production verification
+
+### Code fix
+- Repair commit: `dd2d2b6a2c2c49a971d537b53d12eb08262c8f70` on `devin/1774405518-init-dz-gpt`.
+- Root cause: `wrangler.toml` aliased `cheerio` to a lightweight Worker stub. Removing that alias restored the real multi-source parser in `lib/doctorSearch.js`; a local Worker-bundle check returned 15 doctors and 3 directory links across 7 sources.
+- The Worker now returns the structured doctor-results payload, source count, and source errors; `DZChatBox` passes those details to the existing doctor panel.
+- `scripts/compact-version-json.js` compacts the generated `public/version.json` during `npm run postinstall`. This preserves compatibility with the current workflow's grep-based static-version check. The GitHub connection has `repo` scope but not `workflow` scope, so the workflow-file update could not be committed; no production domain or routing settings were changed.
+
+### Verification
+- `npm run build` passed locally (existing large-chunk warning only); `node tests/basic.test.js` passed 32/32; `node --check workers/entry.js` passed.
+- GitHub Actions run 383 attempt 1 completed successfully, including Worker deployment, both version checks, and the YouTube production smoke test. Attempt 2 redeployed the same SHA and passed the API version check, but its static-version check ran before Cloudflare cache propagation and failed; the production endpoints subsequently converged.
+- Current `/api/version` and `/version.json` responses both serve `dd2d2b6a2c2c49a971d537b53d12eb08262c8f70` with `deployedAt` `2026-10-02T12:52:03.752Z`.
+- Production doctor smoke (`طبيب أسنان في عنابة`): 11 records, 7 complete records, 7 configured sources; `docteur360` and `sahadoc` reported source errors.
+- Production YouTube smoke (`شرح أدوات الفوتوشوب`): 8 results, all 8 with valid IDs, titles, and thumbnails.
+- Follow-up: add a doctor-search smoke test and retry the static-version check in the deployment workflow when workflow-file access is available.

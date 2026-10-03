@@ -386,11 +386,19 @@
 .dzd-prayer-date {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 5px;
   font-size: 11px;
   color: var(--dzd-accent);
   font-weight: 600;
   opacity: .9;
+}
+.dzd-prayer-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-start: 6px;
+  white-space: nowrap;
 }
 
 .dzd-prayer-grid {

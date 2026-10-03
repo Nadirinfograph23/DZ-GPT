@@ -317,20 +317,42 @@ async function fetchWeatherFree(city: string, coords?: { lat: number; lon: numbe
 
 const ALGERIA_CITY_COORDS: Record<string, { lat: number; lon: number }> = WILAYA_COORDS
 
+function formatPrayerClock(date: Date, timeZone?: string): string {
+  try {
+    return new Intl.DateTimeFormat('ar-DZ', {
+      calendar: 'gregory', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+      timeZone: timeZone || 'Africa/Algiers',
+    }).format(date)
+  } catch {
+    return new Intl.DateTimeFormat('ar-DZ', {
+      calendar: 'gregory', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+      timeZone: 'Africa/Algiers',
+    }).format(date)
+  }
+}
+
 async function fetchPrayerFree(city: string, coords?: { lat: number; lon: number }): Promise<PrayerData> {
   try {
     const c = coords || ALGERIA_CITY_COORDS[city] || ALGERIA_CITY_COORDS['Algiers']
     const resp = await fetch(
-      `https://api.aladhan.com/v1/timings/${new Date().toISOString().split('T')[0]}?latitude=${c.lat}&longitude=${c.lon}&method=3`,
+      `https://api.aladhan.com/v1/timings?latitude=${c.lat}&longitude=${c.lon}&method=3`,
       { signal: AbortSignal.timeout(8000) }
     )
     if (!resp.ok) throw new Error(`Aladhan: ${resp.status}`)
     const d = await resp.json()
     const t = d.data?.timings || {}
-    const dateStr = d.data?.date?.hijri || new Date().toLocaleDateString('ar-DZ')
+    const gregorian = d.data?.date?.gregorian
+    const timeZone = d.data?.meta?.timezone || 'Africa/Algiers'
+    const year = Number(gregorian?.year)
+    const month = Number(gregorian?.month?.number)
+    const day = Number(gregorian?.day)
+    const date = year > 0 && month > 0 && month <= 12 && day > 0
+      ? new Intl.DateTimeFormat('ar-DZ', { calendar: 'gregory', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(year, month - 1, day)))
+      : new Intl.DateTimeFormat('ar-DZ', { calendar: 'gregory', timeZone }).format(new Date())
     return {
       city,
-      date: `${dateStr} — ${d.data?.date?.readable || ''}`,
+      date,
+      timeZone,
       source: 'aladhan.com',
       times: {
         'الفجر': t.Fajr || '--',
@@ -377,6 +399,7 @@ interface WeatherData {
 interface PrayerData {
   city: string
   date: string
+  timeZone?: string
   source: string
   times: Record<string, string>
 }
@@ -755,6 +778,12 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   // Prayer
   const [prayerData, setPrayerData] = useState<PrayerData | null>(null)
   const [prayerLoading, setPrayerLoading] = useState(true)
+  const [clockNow, setClockNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setClockNow(new Date()), 30_000)
+    return () => window.clearInterval(interval)
+  }, [])
 
   // Geolocation
   const [geoLoading, setGeoLoading] = useState(false)
@@ -1142,6 +1171,9 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                 <div className="dzd-prayer-header">
                   <span className="dzd-prayer-date">
                     <MapPin size={11} /> {getArName(selectedCity)} — {prayerData.date}
+                    <span className="dzd-prayer-time" aria-label="الوقت المحلي" title="الوقت المحلي حسب المنطقة الزمنية للموقع">
+                      <Clock size={11} aria-hidden="true" /> {formatPrayerClock(clockNow, prayerData.timeZone)}
+                    </span>
                   </span>
                 </div>
                 <div className="dzd-prayer-grid">

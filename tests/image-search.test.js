@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { searchImages, formatImageSearchResponse } from '../lib/image-search/index.js'
+import { normalizeImageResults } from '../src/lib/image-results.js'
 
 const originalFetch = globalThis.fetch
 const requests = []
@@ -28,9 +29,28 @@ try {
   assert.equal(requests.length, 2, 'Pinterest mode must not call Wikimedia or other providers')
   assert.match(requests[1].headers.Cookie || '', /_b=ephemeral/, 'warm-up cookies should be scoped to the API request')
 
+  const beforeDefaultRequests = requests.length
+  const defaultResult = await searchImages({ query: 'historical archive image regression', limit: 4 })
+  assert.equal(defaultResult.preferredSource, 'pinterest', 'unqualified image searches should default to Pinterest')
+  assert.equal(defaultResult.images[0]?.source, 'Pinterest')
+  assert.equal(requests.length - beforeDefaultRequests, 2, 'default Pinterest mode must not call Wikimedia or other providers')
+  assert.ok(requests.slice(beforeDefaultRequests).every(request => request.url.startsWith('https://www.pinterest.com/')))
+
+  const normalized = normalizeImageResults([
+    { url: 'https://i.pinimg.com/originals/one.jpg', thumbnail: 'https://i.pinimg.com/236x/one.jpg', title: 'Valid' },
+    { url: 'javascript:alert(1)', title: 'Invalid scheme' },
+    { url: '', fullUrl: 'https://images.example/two.jpg', thumbnail: 'data:image/png;base64,broken' },
+  ], 9)
+  assert.equal(normalized.length, 2, 'image-grid normalization should discard results without a safe HTTP(S) URL')
+  assert.equal(normalized[0].url, 'https://i.pinimg.com/236x/one.jpg')
+  assert.equal(normalized[1].url, 'https://images.example/two.jpg')
+
   const emptyResponse = formatImageSearchResponse({ images: [], query: 'interior design', originalQuery: 'ديكور', preferredSource: 'pinterest' })
   assert.match(emptyResponse, /pinterest\.com\/search\/pins/)
   assert.doesNotMatch(emptyResponse, /commons\.wikimedia\.org/)
+  const defaultEmptyResponse = formatImageSearchResponse({ images: [], query: 'ancient architecture', originalQuery: 'ancient architecture', preferredSource: 'auto' })
+  assert.match(defaultEmptyResponse, /pinterest\.com\/search\/pins/)
+  assert.doesNotMatch(defaultEmptyResponse, /commons\.wikimedia\.org/)
   console.log('Pinterest image-search regression checks passed.')
 } finally {
   globalThis.fetch = originalFetch

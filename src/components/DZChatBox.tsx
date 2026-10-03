@@ -1,3 +1,4 @@
+import { normalizeImageResults } from '../lib/image-results.js'
 import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import DZToast, { type Toast } from './DZToast'
@@ -7333,8 +7334,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
       const IMAGE_FETCH_RE = /(?:^|\s)(?:صور\s*(?:ل[لـ]?|الـ|لـ|عن|من|حول)|صورة\s*(?:ل[لـ]?|الـ|لـ|عن|من)|أعطني\s*صور|اعطني\s*صور|أرني\s*صور|ارني\s*صور|وريني\s*صور|عارضلي\s*صور|ابحث\s*عن\s*صور|بحث\s*عن\s*صور|جيبلي\s*صور|fetch\s*images?(?:\s*of)?|show\s*me\s*(?:some\s*)?images?(?:\s*of)?|search\s*(?:for\s*)?images?\s*(?:of)?)\s*\S/i
       const isPinterestReq = PINTEREST_RE.test(text)
       const isWikiImgReq   = WIKIPEDIA_IMG_RE.test(text)
-      const imgSource = isPinterestReq ? 'pinterest' : isWikiImgReq ? 'wikipedia' : 'auto'
-      const imgSourceLabel = isPinterestReq ? '📌 Pinterest' : isWikiImgReq ? '📖 Wikipedia' : '🔍 بحث الويب'
+      const imgSource = isWikiImgReq ? 'wikipedia' : 'pinterest'
+      const imgSourceLabel = isWikiImgReq ? '📖 Wikipedia' : '📌 Pinterest'
 
       if ((IMAGE_FETCH_RE.test(text) || isPinterestReq) && !IMAGE_REQUEST_RE.test(text) && !dashboardContext) {
         const subject = text
@@ -7352,40 +7353,35 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           richType: 'text' as const, isStreaming: true,
         }])
         try {
-          const apiUrl = isPinterestReq || isWikiImgReq
-            ? `/api/images/search?q=${encodeURIComponent(subject)}&source=${imgSource}&limit=12`
-            : `/api/tools/image-search?q=${encodeURIComponent(subject)}`
+          const apiUrl = `/api/images/search?q=${encodeURIComponent(subject)}&source=${imgSource}&limit=12`
           const imgFetchRes = await fetch(apiUrl, { signal })
           const imgFetchData = await imgFetchRes.json() as { results?: Array<{ url: string; title: string; thumbnail?: string; source?: string; sourceUrl?: string; creator?: string }>; images?: Array<{ url: string; title: string; thumbnail?: string; source?: string; sourceUrl?: string; creator?: string }> }
           setMessages(prev => prev.filter(m => m.id !== loadingId))
           const results = imgFetchData.results || imgFetchData.images || []
-          if (results.length > 0) {
-            const fullImgs = results.slice(0, 9).map(r => ({
-              url: r.thumbnail || r.url,
-              fullUrl: r.url,
-              title: r.title || subject,
-              source: r.source,
-              sourceUrl: r.sourceUrl,
-              creator: r.creator,
-            })).filter(r => r.url)
-            addAssistantMessage({
-              content: `${imgSourceLabel.split(' ')[0]} **${results.length} صورة لـ "${subject}"** من ${imgSourceLabel} — اضغط للمعاينة`,
-              richType: 'imageGrid' as const,
-              imageGrid: fullImgs.map(i => i.url),
-              imageGridFull: fullImgs,
-              imagePrompt: subject,
-              imageModel: imgSourceLabel,
-              imageStyle: 'web',
-              quickSuggestions: [`صور أخرى لـ ${subject}`, `ارسم ${subject} بالذكاء الاصطناعي`, `معلومات عن ${subject}`],
-            })
-          } else {
-            addAssistantMessage({
-              content: `⚠️ لم أجد صوراً لـ "${subject}" في ${imgSourceLabel}.\nيمكنك توليد صورة بالذكاء الاصطناعي بدلاً من ذلك.`,
-              richType: 'text' as const,
-              quickSuggestions: [`ارسم ${subject}`, `توليد صورة ${subject}`, `إنشاء صورة ${subject}`],
-            })
-          }
-        } catch {
+          const fullImgs = normalizeImageResults(results, 9).map(image => ({
+                ...image,
+                title: image.title === 'Image result' ? subject : image.title,
+                source: image.source || (imgSource === 'pinterest' ? 'Pinterest' : 'Wikipedia'),
+              }))
+              if (fullImgs.length > 0) {
+                addAssistantMessage({
+                  content: `${imgSourceLabel.split(' ')[0]} **${fullImgs.length} صورة لـ "${subject}"** من ${imgSourceLabel} — اضغط للمعاينة`,
+                  richType: 'imageGrid' as const,
+                  imageGrid: fullImgs.map(i => i.url),
+                  imageGridFull: fullImgs,
+                  imagePrompt: subject,
+                  imageModel: imgSourceLabel,
+                  imageStyle: 'web',
+                  quickSuggestions: [`صور أخرى لـ ${subject}`, `ارسم ${subject} بالذكاء الاصطناعي`, `معلومات عن ${subject}`],
+                })
+              } else {
+                addAssistantMessage({
+                  content: `⚠️ لم أجد صوراً قابلة للعرض لـ "${subject}" في ${imgSourceLabel}؛ جرّب بحثاً آخر أو ولّد صورة بدلاً من ذلك.`,
+                  richType: 'text' as const,
+                  quickSuggestions: [`صور أخرى لـ ${subject}`, `ارسم ${subject} بالذكاء الاصطناعي`],
+                })
+              }
+            } catch {
           setMessages(prev => prev.filter(m => m.id !== loadingId))
           addAssistantMessage({ content: '⚠️ تعذّر البحث عن الصورة. تحقق من الاتصال.', richType: 'text', isError: true })
         }
@@ -8248,19 +8244,29 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
               : [],
           },
         })
-      } else if ((data._imageSearch || data.mode === 'image-search') && Array.isArray(data.images) && (data.images as unknown[]).length > 0) {
-        const fullImgs = (data.images as Array<{ url: string; fullUrl?: string; title: string; source?: string; sourceUrl?: string; creator?: string }>).slice(0, 12)
-        addAssistantMessage({
-          content: (data.content as string) || `🔍 **${fullImgs.length} صورة** — اضغط للمعاينة`,
-          richType: 'imageGrid',
-          imageGrid: fullImgs.map(i => i.url),
-          imageGridFull: fullImgs,
-          imagePrompt: text,
-          imageModel: 'بحث الصور',
-          imageStyle: 'web',
-          quickSuggestions: [`صور أخرى لـ ${text.slice(0, 30)}`, `ارسم ${text.slice(0, 30)} بالذكاء الاصطناعي`],
-        })
-      } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
+      } else if ((data._imageSearch || data.mode === 'image-search') && Array.isArray(data.images)) {
+            const fullImgs = normalizeImageResults(data.images, 12).map(image => ({
+              ...image,
+              title: image.title === 'Image result' ? text.slice(0, 30) : image.title,
+            }))
+            if (fullImgs.length > 0) {
+              addAssistantMessage({
+                content: (data.content as string) || `🔍 **${fullImgs.length} صورة** — اضغط للمعاينة`,
+                richType: 'imageGrid',
+                imageGrid: fullImgs.map(i => i.url),
+                imageGridFull: fullImgs,
+                imagePrompt: text,
+                imageModel: (data.imageSource as string) === 'wikipedia' ? 'Wikipedia' : 'Pinterest',
+                imageStyle: 'web',
+                quickSuggestions: [`صور أخرى لـ ${text.slice(0, 30)}`, `ارسم ${text.slice(0, 30)} بالذكاء الاصطناعي`],
+              })
+            } else {
+              addAssistantMessage({
+                content: `⚠️ لم أجد صوراً قابلة للعرض لـ "${text.slice(0, 30)}". جرّب صياغة أخرى أو بحثاً جديداً.`,
+                richType: 'text',
+              })
+            }
+          } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
         addAssistantMessage({
           content: (data.content as string) || '✅ تم إنشاء موقعك!',

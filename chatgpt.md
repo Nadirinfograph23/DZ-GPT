@@ -207,3 +207,25 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 4. Select a returned video and ask a follow-up question; confirm the conversation remains attached to that selected video and its hydrated metadata/captions. Recheck the doctor search/table smoke test if deployment or adjacent Worker behavior changed.
 5. If any verification fails, fix only the demonstrated cause on this branch, preserve all newer commits, then repeat the workflow and relevant live checks.
 6. Append the verified deployed SHA, run URL/result, endpoint values, and smoke-test results here. Mark the work complete only when the live SHA matches and required smoke tests pass.
+
+## Pinterest image search and doctor results table (2026-10-03)
+
+### Verified starting point
+- Target: `devin/1774405518-init-dz-gpt`. Starting HEAD was verified as `c8e9fe8771d5f162276ea5c903c4ac4ed0f1b409` before edits.
+- `lib/image-search/index.js` previously made Pinterest one of several merged providers, and the cache key did not include the selected source.
+- `src/components/DoctorResultsPanel.tsx` combined address and phone in a three-column results table.
+
+### Changes prepared
+1. Resolve the selected image source before cache lookup and include it in the cache key. Explicit/classified Pinterest searches return only Pinterest image URLs; empty results retain a Pinterest search link rather than directing users to Wikimedia.
+2. Warm up the Pinterest search page before requesting its search resource. The request sequence was informed by the MIT-licensed `iamatulsingh/pinscrape` project. Cookies are request-scoped and are not hard-coded or persisted. This endpoint behavior remains an implementation hypothesis until a real Pinterest request is verified.
+3. Split doctor table fields into number, doctor, specialty, address/map, and phone columns, retaining RTL, profile/map/phone links and pagination.
+4. Add `tests/image-search.test.js` and the `npm run test:image-search` script.
+
+### Verification status and ordered next steps
+- Changes are prepared but not yet pushed or verified. Local JavaScript syntax checks could not run because Node.js is unavailable in the conversation execution environment. Do not describe the build or deployment as successful until CI and live checks pass.
+1. Commit these changes directly to this branch, then record the resulting commit SHA and GitHub Actions run.
+2. Run `npm run test:image-search` and `npm run build`; inspect the complete workflow result for the exact pushed HEAD.
+3. Verify the production version endpoint(s) against the exact deployed HEAD; a successful Worker deploy step alone is insufficient.
+4. Smoke-test a Pinterest-selected search: returned image URLs should be from `i.pinimg.com`, with no Wikimedia results, and the empty-state link should lead to Pinterest. Confirm the actual Pinterest endpoint responds rather than treating the mocked regression test as proof of live access.
+5. Smoke-test the doctor results table in RTL and on a narrow viewport; check all five headers, profile/map/phone actions, and pagination.
+6. Append commit, CI, production version, Pinterest and doctor smoke-test evidence here. If a check fails, record the demonstrated cause and fix only that issue before repeating verification.

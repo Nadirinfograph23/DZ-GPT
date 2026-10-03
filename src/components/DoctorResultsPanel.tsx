@@ -194,12 +194,14 @@ function TableView({ doctors, cityLabel, showScore }: {
 
   return (
     <div className="dr-table-wrap">
-      <table className="dr-table" dir="rtl" style={{ minWidth: 620 }}>
+      <table className="dr-table" dir="rtl">
         <thead>
           <tr>
             <th className="dr-th dr-th--num">#</th>
             <th className="dr-th dr-th--name">الطبيب</th>
-            <th className="dr-th dr-th--contact">📍 الموقع &amp; 📞 الهاتف</th>
+            <th className="dr-th dr-th--specialty">التخصص</th>
+            <th className="dr-th dr-th--address">العنوان</th>
+            <th className="dr-th dr-th--phone">الهاتف</th>
           </tr>
         </thead>
         <tbody>
@@ -209,11 +211,13 @@ function TableView({ doctors, cityLabel, showScore }: {
             const gender = guessGender(doc.name)
             const cityAr = doc.cityAr || cityLabel || ''
             const addrAr = doc.addressAr || doc.address || ''
+            const locationLabel = [addrAr, cityAr].filter(Boolean).join('، ')
+            const speciality = doc.specialityAr || doc.speciality || ''
             const score = doc.nameScore ?? 0
             const match = showScore && score > 0 ? matchLabel(score) : null
 
             return (
-              <tr key={i} className="dr-tr">
+              <tr key={doc.profileUrl || displayName + '-' + i} className="dr-tr">
                 <td className="dr-td dr-td--num">{i + 1}</td>
                 <td className="dr-td dr-td--name">
                   <div className="dr-name-cell">
@@ -221,7 +225,7 @@ function TableView({ doctors, cityLabel, showScore }: {
                     <div className="dr-name-info">
                       <span className="dr-name-text">{displayName}</span>
                       {match && (
-                        <span className={`dr-match-badge ${match.cls}`}>{match.label}</span>
+                        <span className={'dr-match-badge ' + match.cls}>{match.label}</span>
                       )}
                       {doc.profileUrl && !doc.directoryLink && (
                         <a
@@ -237,23 +241,20 @@ function TableView({ doctors, cityLabel, showScore }: {
                     </div>
                   </div>
                 </td>
-                <td className="dr-td dr-td--contact">
-                  <div className="dr-contact-cell">
-                    <AddressCell
-                      name={displayName}
-                      address={addrAr}
-                      city={cityAr}
-                      lat={doc.lat}
-                      lng={doc.lng}
-                    />
+                <td className="dr-td dr-td--specialty">{speciality || <span className="dr-cell-muted">—</span>}</td>
+                <td className="dr-td dr-td--address">
+                  <div className="dr-address-cell">
+                    <span className="dr-address-text">{locationLabel || <span className="dr-cell-muted">—</span>}</span>
+                    {locationLabel && (
+                      <AddressCell name={displayName} address={addrAr} city={cityAr} lat={doc.lat} lng={doc.lng} />
+                    )}
                     {typeof doc.distanceKm === 'number' && (
                       <span className="dr-distance-badge">~{doc.distanceKm} كم</span>
                     )}
-                    {doc.phone
-                      ? <PhoneCell phone={doc.phone} />
-                      : <span className="dr-cell-muted">—</span>
-                    }
                   </div>
+                </td>
+                <td className="dr-td dr-td--phone">
+                  {doc.phone ? <PhoneCell phone={doc.phone} /> : <span className="dr-cell-muted">—</span>}
                 </td>
               </tr>
             )

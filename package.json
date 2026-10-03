@@ -9,7 +9,8 @@
     "start": "NODE_ENV=production node server.js",
     "lint": "eslint .",
     "preview": "vite preview",
-    "postinstall": "node scripts/patch-cf-compat.js && node scripts/patch-doctor-search.js && node scripts/compact-version-json.js"
+    "postinstall": "node scripts/patch-cf-compat.js && node scripts/patch-doctor-search.js && node scripts/compact-version-json.js",
+    "test:image-search": "node tests/image-search.test.js"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",

@@ -1,5 +1,22 @@
 # DZ Agent — ChatGPT Continuation Notes
 
+## Current handoff — 2026-10-03 (read first; supersedes older snapshots)
+
+- Repository: `Nadirinfograph23/DZ-GPT`; work only on `devin/1774405518-init-dz-gpt`.
+- Current branch HEAD: `00900f1ffbc6a37966dea7eac7758159dcf4874b` (`fix: isolate Pinterest image search and clarify doctor table`). This commit includes the Pinterest source-isolation/cache work, a regression test, and the doctor-results table clarification.
+- GitHub Actions run [37135423925](https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/37135423925) completed successfully for that SHA: build, Cloudflare Worker deploy, production API version check, static version fallback, and production YouTube smoke test all passed. The workflow did not run `npm run test:image-search`.
+- Cloudflare’s account API lists the production domain `dzagent.app` bound to Worker service `dzagent`; its newest recorded deployment is at 100% traffic (deployment `a044a973-bb37-4fa2-b103-bcb1f09aa699`, version `007b0680-2100-4d63-ab67-86c4e88f6d44`).
+- **Live mismatch—do not call the current HEAD deployed:** a direct no-cache request at 2026-10-03 16:42 UTC returned commit `86d45f591cbf97083cdc43fdac68ec78a913be26` from both `/api/version` and `/version.json`, dated 2026-09-21. The API response had a fresh server time and `no-store`; the static response reported Cloudflare cache `HIT` despite a unique query parameter. This conflicts with the successful workflow version checks and requires diagnosis. No production routing/settings changes have been made.
+
+### Ordered continuation steps
+1. Reconcile run 37135423925’s successful version-check steps with the current live SHA and Cloudflare’s active Worker/version records. Determine whether the mismatch is in Worker code, the `ASSETS` binding/static asset deployment, or which origin is serving the public URL; keep these as hypotheses until verified.
+2. Do not change Cloudflare routes, domains, Worker settings, or roll back to an older commit while diagnosing. Ask before any production routing/configuration change.
+3. Run `npm run test:image-search`; record its result. This is mocked regression coverage, not proof that Pinterest’s live endpoint works.
+4. After the live version mismatch is resolved, verify `/api/version` and `/version.json` against the exact current HEAD, then smoke-test actual Pinterest search (Pinterest image URLs only, no Wikimedia results, Pinterest empty-state link) and the doctor table (RTL, narrow viewport, map/profile/phone actions, pagination). Recheck YouTube only if the repair changes its path.
+5. Append exact SHA, run/deployment IDs, live endpoint values, and test results here. Mark production complete only when live SHA matches and the feature-specific smoke tests pass.
+
+---
+
 ## Current objective
 Make DZ Agent understand and speak natural Algerian Darija, including Arabic-script Darija, Franco-Arabic, mixed French/English technical speech, spelling variants, and regional vocabulary.
 
@@ -208,7 +225,7 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 5. If any verification fails, fix only the demonstrated cause on this branch, preserve all newer commits, then repeat the workflow and relevant live checks.
 6. Append the verified deployed SHA, run URL/result, endpoint values, and smoke-test results here. Mark the work complete only when the live SHA matches and required smoke tests pass.
 
-## Pinterest image search and doctor results table (2026-10-03)
+## Pinterest image search and doctor results table — initial work snapshot (2026-10-03; superseded by Current handoff above)
 
 ### Verified starting point
 - Target: `devin/1774405518-init-dz-gpt`. Starting HEAD was verified as `c8e9fe8771d5f162276ea5c903c4ac4ed0f1b409` before edits.

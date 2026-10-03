@@ -12,6 +12,7 @@
 
 import { Readable } from 'node:stream'
 import { lookupStaticFact } from '../lib/static-facts.js'
+import { searchImages, isImageSearchQuery, formatImageSearchResponse } from '../lib/image-search/index.js'
 
 let expressApp = null
 
@@ -376,6 +377,52 @@ async function fetchChatDirect(request, env = {}) {
           'Access-Control-Allow-Headers': 'Content-Type',
         },
       })
+    }
+
+    // Natural-language image search must run in this Worker-native route too;
+    // production chat requests do not always pass through the Express server.
+    if (isImageSearchQuery(lastUser)) {
+      const isPinterestRequest = /(?:pinterest|بينتريست|بنتريست)/i.test(lastUser)
+      const isWikimediaRequest = /(?:ويكيبيديا|wikipedia|wikimedia|موسوعي)/i.test(lastUser)
+      const preferredSource = isPinterestRequest ? 'pinterest' : isWikimediaRequest ? 'wikipedia' : 'auto'
+      try {
+        const imageAiGenerate = async ({ messages: imageMessages, max_tokens }) => {
+          injectEnv(env)
+          const { callAIRouter } = await import('../lib/ai-router/index.js')
+          return callAIRouter(imageMessages, {
+            max_tokens: Math.min(Number(max_tokens) || 200, 4096),
+            taskHint: 'retrieval',
+          })
+        }
+        const imageResult = await searchImages({
+          query: lastUser,
+          aiGenerate: imageAiGenerate,
+          limit: 8,
+          preferredSource,
+        })
+        return new Response(JSON.stringify({
+          content: formatImageSearchResponse({
+            images: imageResult.images,
+            query: imageResult.query,
+            originalQuery: imageResult.originalQuery,
+            translated: imageResult.translated,
+            preferredSource: imageResult.preferredSource,
+          }),
+          mode: 'image-search',
+          _imageSearch: true,
+          imageSource: preferredSource,
+          images: imageResult.images,
+          totalFound: imageResult.total,
+        }), { headers: {
+          'content-type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        } })
+      } catch (e) {
+        // Provider errors stay invisible; continue through the ordinary chat flow.
+        console.warn('[Worker:ImageSearch] image search failed:', e?.message || e)
+      }
     }
 
     // Weather intent

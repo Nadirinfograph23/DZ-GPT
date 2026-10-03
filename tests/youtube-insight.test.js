@@ -1,8 +1,21 @@
 import assert from 'node:assert/strict'
 import { YouTube as workerYouTube } from '../workers/stubs/youtube-sr.js'
 import { handleVideoDiscussion } from '../modules/youtube_insight_module/controller.js'
+import { isYouTubeResponse } from '../src/lib/youtube-response.js'
 
 const originalFetch = globalThis.fetch
+
+function testWorkerResponseRendersYouTubePanel() {
+  const response = {
+    model: 'youtube-insight',
+    richType: 'youtube',
+    youtubeFlow: 'search',
+    youtubeResults: [{ id: 'yt000000001', thumbnail: 'https://i.ytimg.com/vi/yt000000001/hqdefault.jpg' }],
+  }
+  assert.equal(isYouTubeResponse(response), true, 'Worker richType responses should enter the YouTube panel')
+  assert.equal(isYouTubeResponse({ isYouTube: true }), true, 'legacy YouTube flags should remain supported')
+  assert.equal(isYouTubeResponse({ model: 'static-fact', richType: 'text' }), false)
+}
 
 async function testWorkerSearchFillsEightDistinctCards() {
   globalThis.fetch = async input => {
@@ -100,6 +113,8 @@ async function testSelectedVideoDiscussionLoadsCaptions() {
 }
 
 try {
+  testWorkerResponseRendersYouTubePanel()
+  console.log('✅ Worker YouTube responses enter the rich thumbnail panel')
   await testWorkerSearchFillsEightDistinctCards()
   console.log('✅ YouTube worker search returns eight distinct thumbnail cards')
   await testSelectedVideoDiscussionLoadsCaptions()

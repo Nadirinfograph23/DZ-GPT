@@ -1,0 +1,1 @@
+export function isYouTubeResponse(data: Record<string, unknown>): boolean

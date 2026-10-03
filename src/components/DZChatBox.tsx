@@ -28,6 +28,7 @@ import VoicePanel from './VoicePanel'
 import AgentStepsPanel from './AgentStepsPanel'
 import type { AgentStep } from './AgentStepsPanel'
 import SearchStepsPanel from './SearchStepsPanel'
+import { isYouTubeResponse } from '../lib/youtube-response'
 import GitHubReActPanel from './GitHubReActPanel'
 import type { ReActStep } from './GitHubReActPanel'
 import SmartRepoSuggestion from './SmartRepoSuggestion'
@@ -8206,7 +8207,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           executionLang: (data.executionLang as string) || 'javascript',
           executionCode: data.executionCode as string,
         })
-      } else if (data.isYouTube) {
+      } else if (isYouTubeResponse(data)) {
         trackFeatureUsage('youtube-insight')
         addAssistantMessage({
           content: (data.content as string) || '🎬 YouTube',

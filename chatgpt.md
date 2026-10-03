@@ -1,6 +1,31 @@
 # DZ Agent — ChatGPT Continuation Notes
 
-## Current handoff — 2026-10-03 (read first; supersedes older snapshots)
+## Current handoff — 2026-10-04 — Natural-language image search
+
+- Repository: `Nadirinfograph23/DZ-GPT`.
+- Production source/PR target: `devin/1774405518-init-dz-gpt`. Starting branch SHA observed for this task: `54b53ab50de399205ca126382a8e7129da781750`.
+- Work is isolated on `agent/natural-language-image-search`. Local verification commit: `4a2a8ecf3d47643450ca27d0533153e3a0c15063`; GitHub feature commit prepared for the PR branch: `2fa79b0f86b8ff44e0ac9fca9c378f652f64de65`. Do not push to or merge into the production branch directly.
+- Feature: route visual requests in Arabic, French, and English without requiring “Pinterest” or an explicit image noun; preserve the requested subject; keep ordinary questions, code requests, and image-generation prompts out of image search.
+- `lib/image-search/index.js` now uses Pinterest first and only Openverse/Wikimedia Commons as silent fallbacks. Bing, DuckDuckGo, Google, Unsplash, Pexels, and Pixabay are not used. Wikimedia requests identify the app with a User-Agent. Results are relevance-ranked, deduplicated, URL-safety checked, and returned in the existing structured gallery format.
+- `workers/entry.js` handles the Cloudflare-native `/api/dz-agent-chat` path and returns `mode: image-search`, `_imageSearch`, and structured `images`, so the existing chat gallery can render them.
+- `tests/image-search.test.js` covers all eight required positive examples, ordinary “من هو رياض محرز؟” routing, generation/code exclusions, subject extraction (including avoiding accidental removal of the first letter in `لبنان`), Pinterest success/empty/403 fallback, ranking/deduplication, the Worker response, and image URL safety.
+
+### Verification at this handoff
+- `npm run test:image-search` passed. `node --check lib/image-search/index.js`, `node --check workers/entry.js`, `git diff --check`, and the image-provider allowlist check passed.
+- Live Pinterest: `Riyad Mahrez` returned 4 Pinterest images; `صور مسجد الفرقان في عنابة` became `Al Furqan Mosque Annaba Algeria` and returned 4 Pinterest images.
+- Live keyless fallbacks: with Pinterest deliberately blocked, Openverse returned results; Wikimedia Commons API requests returned HTTP 200. A direct Wikimedia-priority search returned 4 Commons images.
+- Full `npm run build` was not run because this checkout has no `node_modules` / local `tsc`. This is an unverified full-build step, not a source-build failure.
+- No production branch push, Cloudflare workflow run, or deployment occurred. The live version mismatch recorded below remains unresolved; do not treat this feature commit as deployed.
+
+### Ordered continuation
+1. Push this feature branch and open a **draft PR** targeting `devin/1774405518-init-dz-gpt`; record the PR URL/number here. The Cloudflare workflow only deploys pushes to `devin/1774405518-init-dz-gpt` or `main`, so do not merge or push to either without explicit approval.
+2. Do not change Cloudflare production routes/settings or claim deployment. First reconcile the live SHA mismatch documented below.
+3. When a safe full-build environment is available, run the repository build and record its result; do not install dependencies into the wrong workspace root.
+4. After any separately approved production release, require exact live SHA verification and a real image-search gallery smoke test before marking this feature deployed.
+
+---
+
+## Historical handoff — 2026-10-03 (superseded by the 2026-10-04 section above)
 
 - Repository: `Nadirinfograph23/DZ-GPT`; work only on `devin/1774405518-init-dz-gpt`.
 - Latest application-code commit at this checkpoint: `00900f1ffbc6a37966dea7eac7758159dcf4874b` (`fix: isolate Pinterest image search and clarify doctor table`). It includes Pinterest source-isolation/cache work, a regression test, and the doctor-results table clarification. This handoff is documentation-only and uses `[skip ci]`; at the start of each new session, resolve the branch’s current HEAD from GitHub and distinguish later documentation-only commits from the latest application-code commit.

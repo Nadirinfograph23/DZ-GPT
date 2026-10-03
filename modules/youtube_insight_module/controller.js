@@ -156,32 +156,37 @@ async function fetchCaptionsFromTracks(tracks = []) {
     ...tracks.filter(t => !priority.some(p => t.lang === p || t.lang.startsWith(p))),
   ]
 
-  for (const track of sorted.slice(0, 4)) {
-    try {
+  const attempts = sorted.slice(0, 4).map(async track => {
       const ctrl = new AbortController()
-      const tmt = setTimeout(() => ctrl.abort(), 8000)
+      const tmt = setTimeout(() => ctrl.abort(), 5500)
       // Try JSON3 format first, then XML
       const url = track.url + '&fmt=json3'
-      const r = await fetch(url, { headers: { 'User-Agent': YT_HEADERS['User-Agent'] }, signal: ctrl.signal })
-      clearTimeout(tmt)
-      if (!r.ok) continue
-      const ct = r.headers.get('content-type') || ''
-      if (!ct.includes('json') && !ct.includes('text')) continue
-      const data = await r.json().catch(() => null)
-      if (!data?.events) continue
-      const text = data.events
-        .filter(e => e.segs && Array.isArray(e.segs))
-        .map(e => e.segs.map(s => s.utf8 || '').join(''))
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-      if (text.length > 100) {
+      try {
+        const r = await fetch(url, { headers: { 'User-Agent': YT_HEADERS['User-Agent'] }, signal: ctrl.signal })
+        if (!r.ok) throw new Error(`Caption request failed (${r.status})`)
+        const ct = r.headers.get('content-type') || ''
+        if (!ct.includes('json') && !ct.includes('text')) throw new Error('Unsupported caption response')
+        const data = await r.json().catch(() => null)
+        if (!data?.events) throw new Error('No caption events')
+        const text = data.events
+          .filter(e => e.segs && Array.isArray(e.segs))
+          .map(e => e.segs.map(s => s.utf8 || '').join(''))
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+        if (text.length <= 100) throw new Error('Caption track is empty')
         console.log(`[YouTube:captions] ✅ Got ${text.length} chars in "${track.lang}" for video`)
         return { text: text.slice(0, 3500), lang: track.lang, name: track.name }
+      } finally {
+        clearTimeout(tmt)
       }
-    } catch {}
+  })
+
+  try {
+    return await Promise.any(attempts)
+  } catch {
+    return null
   }
-  return null
 }
 
 // ── Invidious fallback for metadata (when page scrape fails) ──────────────
@@ -261,6 +266,21 @@ function cleanThumb(id, rawUrl) {
 
 // ── Search YouTube (youtube-sr primary → Invidious fallback) ──────────────
 async function searchYouTube(query, limit = 8) {
+  const results = []
+  const seen = new Set()
+  const addResults = (items = []) => {
+    for (const item of items) {
+      if (!item?.id || !item?.title || seen.has(item.id)) continue
+      seen.add(item.id)
+      results.push({
+        ...item,
+        url: item.url || `https://www.youtube.com/watch?v=${item.id}`,
+        thumbnail: cleanThumb(item.id, item.thumbnail),
+      })
+      if (results.length >= limit) break
+    }
+  }
+
   try {
     const raw = await YouTube.search(query, { limit, type: 'video', safeSearch: false })
     const mapped = (Array.isArray(raw) ? raw : []).map(v => ({
@@ -273,24 +293,29 @@ async function searchYouTube(query, limit = 8) {
       channel: v.channel?.name || v.author?.name || '',
       description: (v.description || '').slice(0, 200),
     })).filter(v => v.id && v.title)
-    if (mapped.length) {
-      console.log(`[YouTube:search] youtube-sr OK — ${mapped.length} results for "${query}"`)
-      return mapped
+    addResults(mapped)
+    if (results.length >= limit) {
+      console.log(`[YouTube:search] youtube-sr OK — ${results.length} results for "${query}"`)
+      return results.slice(0, limit)
     }
   } catch (err) {
     console.warn('[YouTube:search] youtube-sr failed:', err.message)
   }
 
-  console.log(`[YouTube:search] Falling back to Invidious for "${query}"`)
-  const inv = await searchInvidious(query, limit)
-  if (inv.length) return inv
+  if (results.length < limit) {
+    console.log(`[YouTube:search] Topping up with Invidious for "${query}"`)
+    const inv = await searchInvidious(query, limit)
+    addResults(inv)
+  }
 
-  console.log(`[YouTube:search] Trying Jina reader fallback for "${query}"`)
-  const jinaResults = await searchYouTubeViaJina(query, limit)
-  if (jinaResults.length) return jinaResults
+  if (results.length < limit) {
+    console.log(`[YouTube:search] Topping up with Jina reader for "${query}"`)
+    const jinaResults = await searchYouTubeViaJina(query, limit)
+    addResults(jinaResults)
+  }
 
-  console.error(`[YouTube:search] All methods failed for "${query}"`)
-  return []
+  if (!results.length) console.error(`[YouTube:search] All methods failed for "${query}"`)
+  return results.slice(0, limit)
 }
 
 // ── Jina reader fallback — scrapes YouTube search page via r.jina.ai ──────
@@ -627,7 +652,8 @@ export async function handleYouTubeInput(urlOrQuery, opts = {}) {
 // handleVideoDiscussion — Answer questions about an active video
 // ═══════════════════════════════════════════════════════════════════════════
 export async function handleVideoDiscussion(youtubeContext, question, history = [], aiGenerate) {
-  const { id: videoId, title = '', channel = '', description = '', captionText = '' } = youtubeContext || {}
+  const source = youtubeContext || {}
+  const videoId = source.id || extractVideoId(source.url || '')
 
   if (!videoId) {
     return { reply: '⚠️ لا يوجد فيديو نشط للنقاش. أرسل رابط YouTube أولاً.', quickSuggestions: [] }
@@ -635,13 +661,43 @@ export async function handleVideoDiscussion(youtubeContext, question, history = 
 
   console.log(`[YouTube Discussion] videoId=${videoId} question="${question?.slice(0, 60)}"`)
 
+  let metadata = null
+  if (!source.captionText || !source.description || !(source.channel || source.author)) {
+    metadata = await scrapeYouTubePage(videoId)
+    if (!metadata && (!source.description || !(source.channel || source.author))) {
+      metadata = await fetchVideoMetaInvidious(videoId)
+    }
+  }
+
+  const video = {
+    ...metadata,
+    ...source,
+    id: videoId,
+    url: source.url || metadata?.url || `https://www.youtube.com/watch?v=${videoId}`,
+    title: source.title || metadata?.title || 'فيديو YouTube',
+    channel: source.channel || source.author || metadata?.author || '',
+    author: source.author || source.channel || metadata?.author || '',
+    description: source.description || metadata?.description || '',
+    duration: Number(source.duration) || Number(metadata?.duration) || 0,
+    views: Number(source.views) || Number(metadata?.views) || 0,
+    thumbnail: source.thumbnail || metadata?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    captionTracks: Array.isArray(source.captionTracks) && source.captionTracks.length
+      ? source.captionTracks
+      : metadata?.captionTracks || [],
+  }
+  let captionText = String(source.captionText || '').trim()
+  if (!captionText && video.captionTracks.length) {
+    const captions = await fetchCaptionsFromTracks(video.captionTracks)
+    captionText = captions?.text || ''
+  }
+
   const systemMsg = [
     `أنت DZ AGENT 🤖🇩🇿 — محلّل فيديوهات ذكي ومتخصص. مهمتك مناقشة هذا الفيديو وتحليله بعمق حقيقي.`,
     ``,
     `## الفيديو قيد النقاش`,
-    `- **العنوان:** ${title}`,
-    channel ? `- **القناة:** ${channel}` : null,
-    description ? `- **الوصف:**\n${description.slice(0, 1000)}` : null,
+    `- **العنوان:** ${video.title}`,
+    video.channel ? `- **القناة:** ${video.channel}` : null,
+    video.description ? `- **الوصف:**\n${video.description.slice(0, 1000)}` : null,
     captionText
       ? `\n## نص حقيقي مستخرج من الفيديو (captions)\n> استخدم هذا النص كمرجع أساسي — هو المحتوى الفعلي للفيديو\n${captionText.slice(0, 3500)}`
       : `\n> ℹ️ النص الكامل للفيديو غير متاح — استنتج من العنوان والوصف والسياق`,
@@ -682,9 +738,24 @@ export async function handleVideoDiscussion(youtubeContext, question, history = 
   }
 
   const quickSuggestions = await buildAISuggestions(
-    { title, description: description || '', keywords: [] },
+    { title: video.title, description: video.description || '', keywords: [] },
     aiGenerate,
   )
 
-  return { reply, quickSuggestions }
+  return {
+    reply,
+    quickSuggestions,
+    video: {
+      id: video.id,
+      url: video.url,
+      title: video.title,
+      channel: video.channel,
+      duration: video.duration,
+      views: video.views,
+      thumbnail: video.thumbnail,
+      description: video.description,
+    },
+    captionText: captionText || null,
+    captionNote: captionText ? null : 'لا تتوفر ترجمة لهذا الفيديو؛ الإجابة مبنية على العنوان والوصف والسياق.',
+  }
 }

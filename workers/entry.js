@@ -514,11 +514,14 @@ async function fetchChatDirect(request, env = {}) {
     }
 
     // ── YouTube selected-video discussion path ─────────────────────────────
-    // The YouTube results card stores the selected video in youtubeContext.
-    // When the user clicks "تحليل و مناقشة الفيديو", do NOT treat the follow-up
-    // sentence as a fresh YouTube keyword search. Re-enter the native discussion
-    // flow with the selected video's metadata/context.
-    if (payload?.youtubeContext?.id && /(?:حلل|حلّل|تحليل|ناقش|مناقشة|اشرح|شرح).*(?:الفيديو|هذا الفيديو|محتوى الفيديو)/i.test(lastUser)) {
+    // Keep the user's selected video as the source of truth, hydrate its
+    // metadata/captions, and route follow-up questions back to that context.
+    const explicitVideoDiscussion = /(?:حلل|حلّل|تحليل|ناقش|مناقشة|اشرح|شرح).*(?:الفيديو|هذا الفيديو|محتوى الفيديو)/i.test(lastUser);
+    const freshVideoSearch = /(?:ابحث|بحث|جيبلي|عطيني|شوفلي|search|find).{0,32}(?:فيديو|فيديوهات|يوتيوب|يوتيب|youtube)|^(?:فيديو|فيديوهات|يوتيوب|يوتيب|youtube)\s+(?:عن|حول|بخصوص|for|about)/i.test(lastUser);
+    const videoFollowUp = /[؟?]/.test(lastUser)
+      || /^(?:ما|ماذا|من|متى|أين|اين|كيف|لماذا|علاش|واش|شكون|وقتاش|كيفاش)(?:\s|$)/i.test(lastUser)
+      || /^(?:اشرح|لخص|لخّص|استخرج|وضح|وضّح|قارن|أكمل|اكمل)(?:\s|$)/i.test(lastUser);
+    if (payload?.youtubeContext?.id && !freshVideoSearch && (explicitVideoDiscussion || videoFollowUp)) {
       try {
         const { handleVideoDiscussion } = await import('../modules/youtube_insight_module/controller.js');
         const youtubeAiGenerate = async ({ messages, max_tokens }) => {
@@ -536,29 +539,32 @@ async function fetchChatDirect(request, env = {}) {
           youtubeAiGenerate,
         );
         const ctx = payload.youtubeContext;
+        const video = discussion?.video || ctx;
+        const captionText = discussion?.captionText || video.captionText || null;
         return new Response(JSON.stringify({
-          content: discussion?.reply || '',
+          content: discussion?.reply || 'لم أتمكن من تحليل الفيديو الآن. حاول مرة أخرى.',
           model: 'youtube-insight',
           richType: 'youtube',
           youtubeFlow: 'url',
           youtubeVideo: {
-            id: ctx.id,
-            url: ctx.url || `https://www.youtube.com/watch?v=${ctx.id}`,
-            title: ctx.title || 'فيديو YouTube',
-            channel: ctx.channel || '',
-            duration: Number(ctx.duration) || 0,
-            views: Number(ctx.views) || 0,
-            thumbnail: ctx.thumbnail || `https://i.ytimg.com/vi/${ctx.id}/hqdefault.jpg`,
-            description: ctx.description || '',
-            captionText: ctx.captionText || null,
+            id: video.id || ctx.id,
+            url: video.url || ctx.url || `https://www.youtube.com/watch?v=${ctx.id}`,
+            title: video.title || ctx.title || 'فيديو YouTube',
+            channel: video.channel || video.author || ctx.channel || '',
+            duration: Number(video.duration || ctx.duration) || 0,
+            views: Number(video.views || ctx.views) || 0,
+            thumbnail: video.thumbnail || ctx.thumbnail || `https://i.ytimg.com/vi/${ctx.id}/hqdefault.jpg`,
+            description: video.description || ctx.description || '',
+            captionText,
           },
           youtubeAnalysis: {
             ok: true,
             summary: discussion?.reply || '',
-            captionAvailable: !!ctx.captionText,
+            captionAvailable: !!captionText,
           },
           youtubeSuggestions: discussion?.quickSuggestions || [],
-          captionText: ctx.captionText || null,
+          captionText,
+          captionNote: discussion?.captionNote || null,
         }), { headers: {
           'content-type': 'application/json',
           'Access-Control-Allow-Origin': '*',

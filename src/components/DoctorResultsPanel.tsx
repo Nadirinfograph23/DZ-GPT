@@ -164,24 +164,24 @@ function PhoneCell({ phone }: { phone: string }) {
 function AddressCell({ name, address, city, lat, lng }: { name: string; address: string; city: string; lat?: number; lng?: number }) {
   const loc = address || city || ''
   if (!loc) return <span className="dr-cell-muted">—</span>
+  const locationLabel = [address, city].filter(Boolean).join('، ') || loc
   return (
     <a
       className="dr-addr-link"
       href={mapsUrl(name, address, city, lat, lng)}
       target="_blank"
       rel="noopener noreferrer"
-      title="فتح في Google Maps"
+      title={`فتح موقع ${name} في Google Maps${locationLabel ? `: ${locationLabel}` : ''}`}
+      aria-label={`فتح موقع ${name} في Google Maps: ${locationLabel}`}
+      style={{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(167,243,208,.08)' }}
     >
-      <MapPin size={12} />
-      <span>{loc}</span>
-      <ExternalLink size={9} className="dr-addr-ext" />
+      <MapPin size={16} aria-hidden="true" />
     </a>
   )
 }
 
-function TableView({ doctors, specLabel, cityLabel, showScore }: {
+function TableView({ doctors, cityLabel, showScore }: {
   doctors: DoctorResult[]
-  specLabel: string
   cityLabel: string
   showScore: boolean
 }) {
@@ -194,14 +194,12 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
 
   return (
     <div className="dr-table-wrap">
-      <table className="dr-table" dir="rtl">
+      <table className="dr-table" dir="rtl" style={{ minWidth: 620 }}>
         <thead>
           <tr>
             <th className="dr-th dr-th--num">#</th>
             <th className="dr-th dr-th--name">الطبيب</th>
-            <th className="dr-th dr-th--contact">📍 العنوان &amp; 📞 الهاتف</th>
-            <th className="dr-th dr-th--spec">التخصص</th>
-            <th className="dr-th dr-th--sources">المصادر</th>
+            <th className="dr-th dr-th--contact">📍 الموقع &amp; 📞 الهاتف</th>
           </tr>
         </thead>
         <tbody>
@@ -209,7 +207,6 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
             const i = start + localIndex
             const displayName = cleanName(doc.name)
             const gender = guessGender(doc.name)
-            const specAr = doc.specialityAr || specLabel || ''
             const cityAr = doc.cityAr || cityLabel || ''
             const addrAr = doc.addressAr || doc.address || ''
             const score = doc.nameScore ?? 0
@@ -257,41 +254,6 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
                       : <span className="dr-cell-muted">—</span>
                     }
                   </div>
-                </td>
-                <td className="dr-td dr-td--spec">
-                  {specAr
-                    ? <span className="dr-spec-cell">{getSpecEmoji(specAr)} {specAr}</span>
-                    : <span className="dr-cell-muted">—</span>
-                  }
-                </td>
-                <td className="dr-td dr-td--sources">
-                  {doc.sources && doc.sources.length > 0 ? (
-                    <div className="dr-source-list">
-                      {doc.sources.map((s, sourceIndex) => {
-                        const sourceUrl = doc.sourceUrls?.[sourceIndex] || (doc.profileUrl && sourceIndex === 0 ? doc.profileUrl : '')
-                        return sourceUrl ? (
-                          <a
-                            key={s}
-                            className="dr-source-badge dr-source-badge--link"
-                            href={sourceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={'فتح مصدر ' + (SOURCE_LABELS[s] || s)}
-                          >
-                            {SOURCE_LABELS[s] || s}
-                          </a>
-                        ) : (
-                          <span key={s} className="dr-source-badge">{SOURCE_LABELS[s] || s}</span>
-                        )
-                      })}
-                    </div>
-                  ) : doc.profileUrl && !doc.directoryLink ? (
-                    <a className="dr-source-profile" href={doc.profileUrl} target="_blank" rel="noopener noreferrer" title="فتح مصدر الطبيب">
-                      <Globe size={11} /> المصدر
-                    </a>
-                  ) : (
-                    <span className="dr-cell-muted">—</span>
-                  )}
                 </td>
               </tr>
             )
@@ -519,12 +481,11 @@ export default function DoctorResultsPanel({ doctors, dirs = [], meta }: Props) 
           <div className="dr-tip-banner">
             <span className="dr-tip-banner-icon">💡</span>
             <span className="dr-tip-banner-text">
-              <strong>ملاحظة:</strong> اضغط على <span className="dr-tip-highlight"><MapPin size={12} className="dr-tip-inline-icon" /> العنوان</span> لمعرفة تفاصيل أكثر عن الطبيب وموقعه على الخريطة
+              <strong>ملاحظة:</strong> اضغط على <span className="dr-tip-highlight"><MapPin size={12} className="dr-tip-inline-icon" /> الموقع</span> لفتح عنوان الطبيب في Google Maps
             </span>
           </div>
           <TableView
             doctors={doctors}
-            specLabel={isNameSearch ? '' : meta.speciality.ar}
             cityLabel={meta.city.ar}
             showScore={isNameSearch}
           />

@@ -138,17 +138,31 @@ async function search(query, options = {}) {
     () => jina(q, limit),
     () => google(q, limit),
   ]
-  const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('all YouTube providers timed out')), 14000))
 
-  try {
-    const result = await Promise.race([Promise.any(providers.map(fn => fn())), deadline])
-    if (Array.isArray(result) && result.length) {
-      console.log(`[DZ YouTube] ${result.length} results for: ${q}`)
-      return result
+  // A fast provider may return only one or two matches. Collect all sources
+  // before responding so the API can reliably return up to the requested 8
+  // distinct cards instead of committing to the first partial result.
+  const collected = new Map()
+  const providerResults = await Promise.allSettled(providers.map(provider => provider()))
+  for (const outcome of providerResults) {
+    if (outcome.status !== 'fulfilled' || !Array.isArray(outcome.value)) continue
+    for (const item of outcome.value) {
+      if (!ID_RE.test(item?.id || '') || !item?.title || collected.has(item.id)) continue
+      collected.set(item.id, {
+        ...item,
+        url: `https://www.youtube.com/watch?v=${item.id}`,
+        thumbnail: `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
+      })
+      if (collected.size >= limit) break
     }
-  } catch (e) {
-    console.warn('[DZ YouTube] providers failed:', e?.message || e)
   }
+
+  const results = [...collected.values()].slice(0, limit)
+  if (results.length) {
+    console.log(`[DZ YouTube] ${results.length} results for: ${q}`)
+    return results
+  }
+  console.warn(`[DZ YouTube] all providers failed for: ${q}`)
   return []
 }
 

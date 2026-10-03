@@ -186,3 +186,24 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Production doctor smoke (`طبيب أسنان في عنابة`): 11 records, 7 complete records, 7 configured sources; `docteur360` and `sahadoc` reported source errors.
 - Production YouTube smoke (`شرح أدوات الفوتوشوب`): 8 results, all 8 with valid IDs, titles, and thumbnails.
 - Follow-up: add a doctor-search smoke test and retry the static-version check in the deployment workflow when workflow-file access is available.
+
+## 2026-10-03 — YouTube response rendering handoff
+
+### Current source of truth
+- Repository: Nadirinfograph23/DZ-GPT; production work branch: devin/1774405518-init-dz-gpt.
+- Branch HEAD observed: 51684308c476e27d0f03bc6243c1dbfc49ca3ec1 (fix: render YouTube search cards from Worker responses). Parent: 2d414ebecbcdf10e0c5177942afcdedb7a94e8bd.
+- The latest commit changes src/components/DZChatBox.tsx, adds src/lib/youtube-response.js and its declaration, and adds response-classification coverage to tests/youtube-insight.test.js. The UI now recognizes Worker payloads identified by richType: youtube as well as the legacy isYouTube flag.
+
+### Deployment evidence (do not conflate deploy with verification)
+- GitHub Actions run 384 (ID 37127763706) completed successfully for 2d414ebecbcdf10e0c5177942afcdedb7a94e8bd, including Worker deploy, production version checks, and YouTube smoke test.
+- Run 385 (ID 37128319126) targets the current HEAD 51684308c476e27d0f03bc6243c1dbfc49ca3ec1. Install, compatibility patches, YouTube intent patch, build, and Deploy Worker all succeeded; Verify production deployment version failed. Static version fallback and YouTube smoke test were skipped.
+- Therefore, the deployment step ran, but production serving the exact current HEAD is NOT yet verified. Do not mark this commit deployed or the YouTube UI fix complete based on the deploy step alone.
+- Run 385: https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/37128319126. Run 384: https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/37127763706.
+
+### Ordered continuation steps
+1. Inspect run 385 logs for the exact reason Verify production deployment version failed; establish whether this is stale propagation/cache, a version payload mismatch, or a real deploy issue.
+2. Query the live /api/version and /version.json endpoints and record the returned SHA and deployedAt. Compare both values with 51684308c476e27d0f03bc6243c1dbfc49ca3ec1; do not infer the result from GitHub's Deploy Worker step.
+3. If production serves the exact HEAD, run the production YouTube search smoke test and confirm multiple cards render from the Worker richType payload, with valid IDs, titles, and thumbnails.
+4. Select a returned video and ask a follow-up question; confirm the conversation remains attached to that selected video and its hydrated metadata/captions. Recheck the doctor search/table smoke test if deployment or adjacent Worker behavior changed.
+5. If any verification fails, fix only the demonstrated cause on this branch, preserve all newer commits, then repeat the workflow and relevant live checks.
+6. Append the verified deployed SHA, run URL/result, endpoint values, and smoke-test results here. Mark the work complete only when the live SHA matches and required smoke tests pass.

@@ -267,3 +267,25 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - The deploy-cloudflare-worker workflow runs on every push to devin/1774405518-init-dz-gpt and deploys production after build. The requested change is being delivered as one atomic commit to avoid deploying an intermediate state.
 - Local Node.js is unavailable in the conversation execution environment; Worker source and the extracted player callback passed syntax checks here, but no local build has been claimed. The GitHub workflow build/deploy result and live smoke tests remain authoritative.
 - After the workflow, verify its exact commit SHA against /api/version; verify the Algeria endpoint returns a non-empty JSON array; verify /api/radio/stream/chaine1 returns an audio response (not JSON/empty); and test playback in a browser if available. A successful deploy alone does not prove a user's specific device/network can play every station.
+
+
+## 2026-10-04 — Radio Browser refresh and DZ Chat secret status
+
+### Radio repair — verified state
+- The upstream `segler-alex/radiobrowser-api-rust` README says the project moved to GitLab and identifies the official hosted API at `https://api.radio-browser.info`; the service regularly checks station availability. DZ-GPT consumes the Radio Browser JSON API through its Cloudflare Worker.
+- Commit `49f87081424a535d5dd27801d6978c55c524dc42` updates `RadioPlayerContext.tsx`: when the API returns current stations, those records now replace the static Algerian station list; the static list is retained for API outage fallback. The normalized station name prevents static entries from overriding refreshed records. Playback now tries `url_resolved`/`url` before the legacy Worker proxy.
+- GitHub Actions run #391 (`37171676001`) completed successfully for the exact commit, including application asset build, Worker deployment, production version checks, static-version fallback check, and YouTube production smoke test: https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/37171676001
+- Live `/api/version` and `/version.json` both report commit `49f87081424a535d5dd27801d6978c55c524dc42`. `/api/radio/browser/algeria` returns HTTP 200 with 75 records; all 75 had `lastcheckok=1` at verification time.
+- `/api/radio/stream/chaine1` still returns HTTP 502. The current browser-first player no longer blocks on this proxy before trying the direct catalog URL. Five representative direct station URLs on distinct hosts returned HTTP 200 with `audio/mpeg` on bounded Range probes; response bodies were cancelled after headers.
+- The Radio Browser entry for `Algérie Chaine 1` is marked healthy (`lastcheckok=1`), but a direct diagnostic fetch to its host from this execution environment failed with a network `TypeError`; this does not prove playback fails in a user's browser. End-to-end browser playback, especially Chaine 1, remains unverified.
+
+### DZ Chat admin credential — verified configuration
+- On 2026-10-04, Cloudflare Worker `dzagent` received a `DZ_CHAT_ADMIN_PASSWORD` `secret_text` binding. Cloudflare returned success and a name-only secret listing confirmed it exists. Never read, print, commit, or store its value.
+- The current server code reads this runtime setting (legacy fallback `CHAT_ADMIN_SECRET`), derives a `scrypt` hash, and uses a timing-safe comparison. No password was added to source or docs. `DEPLOY_ADMIN_TOKEN` was not changed.
+- No production admin-login test was run because `/api/chat-room/join` creates a session and broadcasts a join event. Verify owner login in a controlled browser/non-broadcast path and verify a guest cannot obtain admin privileges.
+
+### Ordered continuation
+1. Refresh the live radio page and play several fresh catalog entries; pay special attention to Chaine 1 because its proxy still returns 502 even though Radio Browser marks the station healthy.
+2. If direct playback fails in a normal browser, inspect that station's current Radio Browser record and choose a working catalog entry or an authorized alternative stream; do not claim all stations play based only on API health checks.
+3. Verify DZ Chat admin login and guest denial in a controlled path that does not create an unintended public join event; record the outcome without exposing the password.
+4. Keep this file as the continuation map; never store the secret value here.

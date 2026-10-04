@@ -362,3 +362,13 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 3. After deployment, check /api/version and /version.json against the exact commit SHA. If either is stale, investigate the version-marker path; do not manually change Cloudflare routes, bindings, or secrets.
 4. Verify the radio page: All shows global and Algerian stations, Algeria shows only stations classified as DZ, category chips filter the current country view, and search intersects with both filters.
 5. Append exact commit/run IDs and verification results here.
+
+
+## 2026-10-04 — Radio filters: production verification
+
+- Code commit `8bb9a920bf27c04f1e9b3ff2c390e56f92ec20e7` on `devin/1774405518-init-dz-gpt`.
+- GitHub Actions run [37190176292](https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/37190176292) completed with `success` for that exact SHA. Install, application build, Worker deploy, production version checks, and the YouTube search smoke step all succeeded.
+- Live GET `/api/version` returned HTTP 200 and the exact commit SHA `8bb9a920bf27c04f1e9b3ff2c390e56f92ec20e7`; deployedAt was `2026-10-04T08:49:55.883Z`.
+- Live GET `/version.json` returned HTTP 200 and the same exact commit SHA. Cloudflare reported `CF-Cache-Status: HIT`, but the cached content matched the deployed SHA.
+- The pure radio-filter helper passed 8 synthetic assertions in the assistant JavaScript runtime. The GitHub workflow did not include a `npm run test:radio-filters` step, and the local shell lacks Node.js, so the committed Node test file was not run by Node. The full Vite/TypeScript build did pass.
+- Browser interaction testing of the radio filter buttons was not performed; do not claim manual UI verification.

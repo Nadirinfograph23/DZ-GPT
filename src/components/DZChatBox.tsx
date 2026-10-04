@@ -1,4 +1,5 @@
 import { normalizeImageResults } from '../lib/image-results.js'
+import { getToolRedirectIntent } from '../lib/tool-redirect-intents.js'
 import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import DZToast, { type Toast } from './DZToast'
@@ -7499,23 +7500,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         return
       }
 
-      // ── QR Code → redirect to DZTools QR generator ───────────────────────────
-      const QR_RE = /(?:اعمل|أنشئ|انشئ|ولد|اصنع|create|generate|make|faire)\s*(?:كود\s*)?qr|qr\s*code\s*(?:ل|لـ|of|pour|for)|رمز\s*(?:الـ\s*)?qr|qr\s*كود/i
-      const QR_ACTION_RE = /(?:\b(?:create|generate|make|build|design|créer|crée|creer|cree|générer|generer|génère|genere|faire)\b|أنشئ|انشئ|إنشاء|انشاء|اعمل|أعمل|عمل|اصنع|صنع|ولّد|ولد|توليد|دير|ندير|صمّم|صمم|(?:أريد|اريد|حاب|نحب|بغيت)\s+(?:أنشئ|انشئ|إنشاء|انشاء|اعمل|أعمل|عمل|ندير|دير|اصنع|صنع|نصنع|نولد|توليد|qr|كود|رمز)|\b(?:want|need)\s+(?:to\s+)?(?:create|generate|make)\b|je\s+(?:veux|voudrais)\s+(?:créer|creer|faire))/i
-      const QR_TARGET_RE = /(?:\bqr(?:[\s-]*code)?\b|\bcode\s*qr\b|كود\s*(?:الـ\s*)?qr|qr\s*كود|رمز\s*(?:(?:الـ\s*)?qr|الاستجابة\s*السريعة))/i
-      const QR_IMPLICIT_REQUEST_RE = /\bqr(?:[\s-]*code)?\s*(?:for|of|pour)\b|\bqr\s*ل(?:ـ)?/i
-      if (QR_RE.test(text) || QR_IMPLICIT_REQUEST_RE.test(text) || (QR_ACTION_RE.test(text) && QR_TARGET_RE.test(text))) {
+      // ── Conservative tool routing: image handlers above keep priority ────────
+      const toolIntent = getToolRedirectIntent(text)
+      if (toolIntent) {
         addAssistantMessage({
-          content: 'لإنشاء رمز QR، استخدم أداة QR Code المخصصة في DZ Tools — إنشاء سريع ومجاني.',
+          content: toolIntent.message,
           richType: 'tool-redirect',
-          toolRedirect: {
-            toolName: 'مولّد QR Code',
-            toolUrl: '/tools?tool=qrcode',
-            toolIcon: '📲',
-            toolDesc: 'أنشئ QR Code فورياً من أي رابط أو نص أو بيانات تواصل — تحميل PNG مجاناً بدون انتظار.',
-            message: 'لإنشاء رمز QR، استخدم أداة QR Code المخصصة في DZ Tools.',
-          },
-          quickSuggestions: ['اعمل QR لرابط موقعي', 'QR لرقم هاتفي', 'QR لواتساب'],
+          toolRedirect: toolIntent,
+          ...(toolIntent.quickSuggestions ? { quickSuggestions: toolIntent.quickSuggestions } : {}),
         })
         setIsLoading(false)
         return

@@ -1495,6 +1495,93 @@ async function handleWithExpress(app, cfRequest) {
   })
 }
 
+const WORKER_RADIO_BROWSER_HOSTS = [
+  'https://de1.api.radio-browser.info',
+  'https://nl1.api.radio-browser.info',
+  'https://fi1.api.radio-browser.info',
+]
+
+const WORKER_RADIO_STREAMS = Object.freeze({
+  chaine1: ['https://radiochaine1.ice.infomaniak.ch/chaine1.mp3', 'http://webcast.eppRadioAlger.dz/Chaine1/AAC'],
+  chaine2: ['https://radiochaine2.ice.infomaniak.ch/chaine2.mp3', 'http://webcast.eppRadioAlger.dz/Chaine2/AAC'],
+  chaine3: ['https://radiochaine3.ice.infomaniak.ch/chaine3.mp3', 'http://webcast.eppRadioAlger.dz/Chaine3/AAC'],
+  coran: ['https://radiocoran.ice.infomaniak.ch/coran.mp3', 'https://n0a.radiojar.com/0tpy1h0kxtzuv', 'http://webcast.eppRadioAlger.dz/Coran/AAC'],
+  jil: ['https://radiojeunesse.ice.infomaniak.ch/jeunesse.mp3', 'http://jil-fm.ice.infomaniak.ch/jil-fm-128.mp3'],
+  bahdja: ['https://radioelbahdja.ice.infomaniak.ch/elbahdja.mp3', 'http://el-bahdja.ice.infomaniak.ch/el-bahdja-128.mp3'],
+  alger_chaines: ['https://radiointernationale.ice.infomaniak.ch/internationale.mp3', 'http://radio-algerie-inter.ice.infomaniak.ch/radio-algerie-inter-128.mp3'],
+})
+
+function workerRadioJson(payload, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET, OPTIONS',
+      'access-control-allow-headers': 'Content-Type, Range',
+    },
+  })
+}
+
+async function fetchWorkerRadioBrowser(path) {
+  for (const host of WORKER_RADIO_BROWSER_HOSTS) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+    try {
+      const response = await fetch(host + '/json/' + path, {
+        headers: { accept: 'application/json', 'user-agent': 'DZ-GPT-Radio/2.0' },
+        signal: controller.signal,
+      })
+      if (!response.ok) continue
+      const data = await response.json()
+      if (Array.isArray(data)) return data
+    } catch {
+      // Try the next Radio Browser mirror.
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+  throw new Error('Radio Browser mirrors unavailable')
+}
+
+async function fetchWorkerRadioStream(request, stationKey) {
+  const sources = Object.prototype.hasOwnProperty.call(WORKER_RADIO_STREAMS, stationKey) ? WORKER_RADIO_STREAMS[stationKey] : null
+  if (!Array.isArray(sources)) return workerRadioJson({ error: 'Station not found' }, 404)
+
+  for (const source of sources) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+    let upstream
+    const headers = { accept: request.headers.get('accept') || 'audio/*,*/*;q=0.8', 'user-agent': 'DZ-GPT-Radio/2.0' }
+    const range = request.headers.get('range')
+    if (range) headers.range = range
+    try {
+      upstream = await fetch(source, { headers, redirect: 'follow', signal: controller.signal })
+    } catch {
+      clearTimeout(timeout)
+      continue
+    }
+    clearTimeout(timeout)
+    if (!upstream.ok || !upstream.body) {
+      try { await upstream.body?.cancel() } catch {}
+      continue
+    }
+
+    const responseHeaders = new Headers()
+    for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'icy-metaint', 'icy-name']) {
+      const value = upstream.headers.get(name)
+      if (value) responseHeaders.set(name, value)
+    }
+    if (!responseHeaders.has('content-type')) responseHeaders.set('content-type', 'audio/mpeg')
+    responseHeaders.set('cache-control', 'no-store')
+    responseHeaders.set('access-control-allow-origin', '*')
+    return new Response(upstream.body, { status: upstream.status === 206 ? 206 : 200, headers: responseHeaders })
+  }
+
+  return workerRadioJson({ error: 'Radio stream unavailable' }, 502)
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
@@ -1616,6 +1703,30 @@ export default {
             },
           })
         }
+      }
+
+      if (url.pathname === '/api/radio/browser/algeria' && request.method === 'GET') {
+        try {
+          const data = await fetchWorkerRadioBrowser('stations/bycountry/algeria?hidebroken=true&order=votes&reverse=true&limit=80')
+          return workerRadioJson(data)
+        } catch (error) {
+          return workerRadioJson({ error: 'Radio Browser unavailable', message: error?.message || 'Radio Browser mirrors unavailable' }, 503)
+        }
+      }
+      if (url.pathname === '/api/radio/browser/search' && request.method === 'GET') {
+        const name = (url.searchParams.get('name') || '').trim()
+        if (!name) return workerRadioJson({ error: 'name query param required' }, 400)
+        try {
+          const data = await fetchWorkerRadioBrowser('stations/search?name=' + encodeURIComponent(name) + '&hidebroken=true&order=votes&reverse=true&limit=30')
+          return workerRadioJson(data)
+        } catch (error) {
+          return workerRadioJson({ error: 'Radio Browser unavailable', message: error?.message || 'Radio Browser mirrors unavailable' }, 503)
+        }
+      }
+      const radioStreamPrefix = '/api/radio/stream/'
+      if (url.pathname.startsWith(radioStreamPrefix) && request.method === 'GET') {
+        const stationKey = decodeURIComponent(url.pathname.slice(radioStreamPrefix.length)).toLowerCase()
+        return fetchWorkerRadioStream(request, stationKey)
       }
 
       if (url.pathname === '/api/dz-agent/weather' && request.method === 'GET') {

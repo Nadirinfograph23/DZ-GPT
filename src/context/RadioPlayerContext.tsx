@@ -46,6 +46,16 @@ export function useRadioPlayer() {
 
 const RADIO_STORAGE_KEY = 'dz-radio-state'
 const PROXY_BASE = '/api/radio/browser'
+const RADIO_STREAM_PROXY_KEYS: Record<string, string> = {
+  'dz-chaine1': 'chaine1',
+  'dz-chaine2': 'chaine2',
+  'dz-chaine3': 'chaine3',
+  'dz-coran': 'coran',
+  'dz-radiocoran': 'coran',
+  'dz-jilfm': 'jil',
+  'dz-bahdja': 'bahdja',
+  'dz-internat': 'alger_chaines',
+}
 
 function mk(id: string, name: string, url: string, tags: string, country: string, lang: string, bitrate: number, cat: RadioStation['category']): RadioStation {
   return { stationuuid: id, name, url, url_resolved: url, favicon: '', tags, country, language: lang, votes: 0, codec: 'MP3', bitrate, category: cat }
@@ -147,6 +157,10 @@ export function RadioPlayerProvider({ children }: { children: ReactNode }) {
   const [muted, setMutedState] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<RadioStation[]>([])
+  const playbackGenerationRef = useRef(0)
+  const playbackIndexRef = useRef(0)
+  const failedPlaybackIndicesRef = useRef<Set<number>>(new Set())
+  const failCurrentPlaybackRef = useRef<() => void>(() => {})
 
   // All available stations for local search
   const allStations = useMemo(() => {
@@ -168,7 +182,7 @@ export function RadioPlayerProvider({ children }: { children: ReactNode }) {
     const onPlaying = () => { setPlaying(true); setLoading(false); setError(null) }
     const onWaiting  = () => setLoading(true)
     const onStalled  = () => setLoading(true)
-    const onError    = () => { setPlaying(false); setLoading(false); setError('تعذّر الاتصال — جرّب إذاعة أخرى') }
+    const onError    = () => failCurrentPlaybackRef.current()
     const onPause = () => setPlaying(false)
 
     audio.addEventListener('playing', onPlaying)
@@ -334,28 +348,52 @@ export function RadioPlayerProvider({ children }: { children: ReactNode }) {
     if (!audio) return
 
     if (currentStation?.stationuuid === station.stationuuid && (playing || loading)) {
+      playbackGenerationRef.current += 1
+      failCurrentPlaybackRef.current = () => {}
       audio.pause(); setPlaying(false); setLoading(false); return
     }
 
+    const generation = ++playbackGenerationRef.current
+    failedPlaybackIndicesRef.current = new Set()
+    failCurrentPlaybackRef.current = () => {}
     audio.pause()
     setCurrentStation(station); setPlaying(false); setLoading(true); setError(null)
     try { localStorage.setItem(RADIO_STORAGE_KEY, JSON.stringify(station)) } catch {}
 
-    const url = station.url_resolved || station.url
-    audio.src = url; audio.volume = muted ? 0 : volume; audio.load()
-    audio.play().catch(() => {
-      if (url !== station.url) {
-        audio.src = station.url; audio.load()
-        audio.play().catch(() => { setLoading(false); setError('تعذّر الاتصال — جرّب إذاعة أخرى') })
-      } else {
-        setLoading(false); setError('تعذّر الاتصال — جرّب إذاعة أخرى')
+    const directUrl = station.url_resolved || station.url
+    const proxyKey = RADIO_STREAM_PROXY_KEYS[station.stationuuid]
+    const sources = Array.from(new Set([
+      proxyKey ? '/api/radio/stream/' + encodeURIComponent(proxyKey) : '',
+      directUrl,
+      station.url,
+    ].filter((source): source is string => Boolean(source))))
+
+    const failSource = (index: number) => {
+      if (generation !== playbackGenerationRef.current || playbackIndexRef.current !== index || failedPlaybackIndicesRef.current.has(index)) return
+      failedPlaybackIndicesRef.current.add(index)
+      startSource(index + 1)
+    }
+    const startSource = (index: number) => {
+      if (generation !== playbackGenerationRef.current) return
+      if (index >= sources.length) {
+        failCurrentPlaybackRef.current = () => {}
+        setPlaying(false); setLoading(false); setError('تعذّر الاتصال — جرّب إذاعة أخرى')
+        return
       }
-    })
+      playbackIndexRef.current = index
+      failCurrentPlaybackRef.current = () => failSource(index)
+      setLoading(true); setError(null)
+      audio.src = sources[index]; audio.volume = muted ? 0 : volume; audio.load()
+      audio.play().catch(() => failSource(index))
+    }
+    startSource(0)
   }, [currentStation, playing, loading, volume, muted])
 
   const stop = useCallback(() => {
     const audio = audioRef.current
     if (!audio) return
+    playbackGenerationRef.current += 1
+    failCurrentPlaybackRef.current = () => {}
     audio.pause(); audio.src = ''
     setPlaying(false); setLoading(false); setCurrentStation(null)
     try { localStorage.removeItem(RADIO_STORAGE_KEY) } catch {}
@@ -365,7 +403,7 @@ export function RadioPlayerProvider({ children }: { children: ReactNode }) {
     const audio = audioRef.current
     if (!audio || !currentStation) return
     if (playing) audio.pause()
-    else audio.play().catch(() => setError('تعذّر الاتصال'))
+    else audio.play().catch(() => failCurrentPlaybackRef.current())
   }, [playing, currentStation])
 
   const setVolume = useCallback((v: number) => {

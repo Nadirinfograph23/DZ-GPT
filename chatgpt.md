@@ -246,3 +246,24 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 4. Smoke-test a Pinterest-selected search: returned image URLs should be from `i.pinimg.com`, with no Wikimedia results, and the empty-state link should lead to Pinterest. Confirm the actual Pinterest endpoint responds rather than treating the mocked regression test as proof of live access.
 5. Smoke-test the doctor results table in RTL and on a narrow viewport; check all five headers, profile/map/phone actions, and pagination.
 6. Append commit, CI, production version, Pinterest and doctor smoke-test evidence here. If a check fails, record the demonstrated cause and fix only that issue before repeating verification.
+
+
+## DZ Radio — Cloudflare playback repair (2026-10-04)
+
+### Confirmed live findings
+- GET https://dzagent.app/api/radio/browser/algeria and GET https://dzagent.app/api/radio/stream/chaine1 both returned HTTP 200 with Content-Length: 0 and no Content-Type; the expected station JSON/audio payload was absent.
+- Cloudflare account worker dzagent had 100% traffic on version 9e87a725-909b-438a-a277-569b2dfa58e6, deployed 2026-10-03 23:51 UTC. The deployed Worker bundle contains Express radio handlers, while workers/entry.js did not handle radio paths natively and forwarded them through the Express bridge.
+- GET https://dzagent.app/api/version reported commit 86d45f591cbf97083cdc43fdac68ec78a913be26 and deployedAt 2026-09-21, so its version marker is older than the active Worker deployment; verify the exact post-deploy commit rather than assuming the marker is current.
+- Radio Browser returned 75 Algerian station records; the main official stream records were marked lastcheckok=1. Fetch failures from the diagnostic sandbox are not evidence that those streams fail in a user's browser.
+- RadioPlayerContext played url_resolved/url directly; Promise rejection could try station.url, but a later media error stopped playback immediately. Built-in official channels did not use the existing same-origin stream path.
+
+### Changes in this repair
+- Added Worker-native Radio Browser Algeria/search endpoints with explicit JSON and 503 responses when provider mirrors are unavailable.
+- Added a fixed allowlist streaming proxy for seven official channel keys (eight built-in station IDs), passing audio/range headers and streaming the upstream body without buffering. Unknown keys return 404.
+- Updated RadioPlayerContext to try the same-origin proxy for the built-in national stations, then retry resolved/direct station URLs on either play() rejection or media error; generation guards ignore failures from a previous selection.
+- No Cloudflare zone route, domain, or Worker settings were changed.
+
+### Deployment and verification
+- The deploy-cloudflare-worker workflow runs on every push to devin/1774405518-init-dz-gpt and deploys production after build. The requested change is being delivered as one atomic commit to avoid deploying an intermediate state.
+- Local Node.js is unavailable in the conversation execution environment; Worker source and the extracted player callback passed syntax checks here, but no local build has been claimed. The GitHub workflow build/deploy result and live smoke tests remain authoritative.
+- After the workflow, verify its exact commit SHA against /api/version; verify the Algeria endpoint returns a non-empty JSON array; verify /api/radio/stream/chaine1 returns an audio response (not JSON/empty); and test playback in a browser if available. A successful deploy alone does not prove a user's specific device/network can play every station.

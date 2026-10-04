@@ -321,4 +321,24 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Live checks after deployment: /api/radio/browser/all returned 250 stations (250 reported healthy); /api/radio/browser/algeria returned 75 stations, all countrycode DZ; a bounded Range request to /api/radio/stream/chaine1 returned 206 audio/mpeg. The new DZRadio-Dq-TN3VG.js asset contains the added All/Algeria labels. Browser playback itself remains unverified.
 - Cause: /version.json returned the old 86d45f591cbf97083cdc43fdac68ec78a913be26 marker with CF-Cache-Status: HIT even after unique query strings. The completed Wrangler log showed /version.json and the new radio asset were uploaded, so this is a reused static-path CDN cache issue, not a missing build output.
 - Follow-up changes route /version.json through the Worker and serve both version endpoints from CI-generated data/build-info.json embedded in the Worker, with no-store headers. The CI already writes this metadata before building; wrangler.toml now sends /version.json through the Worker first.
-- Next: verify the follow-up commit's exact Actions run passes both version checks; confirm /api/version and /version.json report that commit, recheck the radio feeds and Chaine 1 audio response, and keep browser playback marked unverified unless tested in a real browser.
+- Follow-up verification was completed on 2026-10-04 after the subsequent radio commit; see the chronological result below. Browser playback remains unverified.
+
+
+## 2026-10-04 — Official Algerian radio stream repair verification
+
+### Code and deployment
+- Commit be31f9875c1ce6c681b67d059acf9c5e26da9ad7 was pushed only to Nadirinfograph23/DZ-GPT branch devin/1774405518-init-dz-gpt. It updates workers/entry.js with current official TDA stream sources/aliases and src/context/RadioPlayerContext.tsx to map recognized Algerian station names to the Worker proxy before attempting the station's direct URL. No main merge, Cloudflare configuration change, DNS change, or secret change was made.
+- GitHub Actions run #394 (37189297037) completed successfully for that exact SHA; both “Build and deploy dzagent” and Cloudflare “Workers Builds: dzagent” checks succeeded.
+- Name matching covered all 56 station records in the supplied JSON against the Worker route keys. The JSON's sampled old source URLs returned 404 and were not adopted. Separately, 59 current official TDA stream URLs/aliases passed bounded direct Range checks with 206 audio/mpeg before deployment. Official player reference: https://radioalgerie.dz/player/fr/live-player.
+
+### Live post-deploy smoke results
+- Range probes through https://dzagent.app/api/radio/stream/ returned audio/mpeg for 13 checked keys after retry: bahdja, alger_chaines, culture, oumelbouaghi, relizane, jijel, bejaia, tiziouzou, coran, jil, chaine1, chaine2, chaine3. bahdja, alger_chaines, culture, oumelbouaghi, relizane, jijel, bejaia, and tiziouzou returned 200 audio/mpeg; coran, jil, chaine2, and chaine3 returned 206 audio/mpeg. chaine1 returned one initial 502, then three consecutive requests returned 206 audio/mpeg. These are HTTP stream checks with the response body canceled after a tiny Range request; they do not prove playback in a browser.
+- A direct bounded check of Chaine 1's primary TDA URL https://webradio1.tda.dz:8001/Chaine1_64K.mp3 returned 206 audio/mpeg. Its legacy Infomaniak fallback returned 404 and the old HTTP webcast candidate failed to fetch. The initial Worker 502 was transient in the subsequent probes, but its exact cause is unconfirmed.
+- Version markers remain a separate unresolved issue: after the successful new deployment, both /api/version and /version.json still report commit 86d45f591cbf97083cdc43fdac68ec78a913be26 rather than the deployed radio commit; /version.json reports CF-Cache-Status: HIT. This does not undo the verified radio routes; do not claim version consistency.
+- Real-browser audio playback was not tested. Do not claim all radios are playable on the user's device from these HTTP responses alone.
+
+### Ordered next actions
+1. In a real browser, hard-refresh and play Chaine 1, Bahdja, Algeria International, and one local station; record whether audio actually starts.
+2. If Chaine 1 still fails in the browser, capture the browser network/console result and investigate the Worker/origin intermittency; do not change Cloudflare settings manually.
+3. Diagnose the stale /api/version and /version.json commit markers separately, and verify both report the intended deployed SHA before closing that issue.
+4. Keep main untouched and continue recording checks here in chronological order.

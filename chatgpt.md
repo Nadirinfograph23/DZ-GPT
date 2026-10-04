@@ -386,3 +386,16 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 2. Inspect the matching Cloudflare GitHub Actions result; a push to this production-source branch may deploy automatically.
 3. Verify the live commit SHA, test QR requests in Arabic/Darija/English/French and confirm the card opens the QR tool, then test an ayah-based Quran question and confirm approved tafsir context is preserved through fallback.
 4. Record exact test, workflow, and live-smoke results here; do not claim deployment or live behavior until verified.
+
+
+### Verification result — 2026-10-04
+- Application commit `ae66b654104ea373efaa88296e20d3e9dd655c97` passed GitHub Actions run [37200348416](https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/37200348416) for that exact SHA: install, build, Worker deploy, both production version checks, and YouTube production smoke all succeeded.
+- Live `/api/version` and `/version.json` returned HTTP 200 with commit `ae66b654104ea373efaa88296e20d3e9dd655c97`, deployedAt `2026-10-04T11:55:33.619Z`.
+- Live Quran context for 1:1 returned HTTP 200 with tafsirs ابن كثير and التفسير الميسر. A bounded live `/api/chat/stream` probe returned HTTP 200 but emitted `فشل الاتصال بالنموذج` and no tokens, reproducing the empty-stream failure path. The same ayah question through `/api/dz-agent-chat`, with the source context and Quran rules included, returned HTTP 200 and a 658-character answer naming both tafsir sources.
+- QR request-trigger assertions passed for Arabic, Algerian Darija, English, and French creation requests; the informational query `ما هو QR code؟` did not trigger. The live `/tools?tool=qrcode` deep link returned HTTP 200. No browser click-through was performed.
+- The React UI interaction itself remains pending browser verification; do not claim it was manually tested. No Cloudflare zones, routes, settings, or secrets were changed.
+
+### Remaining focused checks
+1. In a browser, submit a QR creation prompt and click the redirect card; confirm the QR generator opens selected.
+2. In the Quran page, submit an ayah question and verify the empty/error SSE case invokes the fallback and renders the source-grounded answer; if provider error persists, the UI should show the fallback result or the Arabic connection message, not `حدث خطأ، حاول مجدداً.`
+3. The following branch update is documentation-only and uses `[skip ci]`; the app build deployed SHA remains `ae66b654104ea373efaa88296e20d3e9dd655c97`.

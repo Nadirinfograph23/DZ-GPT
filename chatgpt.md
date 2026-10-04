@@ -1,22 +1,21 @@
 # DZ Agent — ChatGPT Continuation Notes
 
-## Current handoff — 2026-10-03 (read first; supersedes older snapshots)
+## Current handoff — 2026-10-04 (read first; supersedes older snapshots)
 
-- Repository: `Nadirinfograph23/DZ-GPT`; work only on `devin/1774405518-init-dz-gpt`.
-- Latest application-code commit at this checkpoint: `00900f1ffbc6a37966dea7eac7758159dcf4874b` (`fix: isolate Pinterest image search and clarify doctor table`). It includes Pinterest source-isolation/cache work, a regression test, and the doctor-results table clarification. This handoff is documentation-only and uses `[skip ci]`; at the start of each new session, resolve the branch’s current HEAD from GitHub and distinguish later documentation-only commits from the latest application-code commit.
-- GitHub Actions run [37135423925](https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/37135423925) completed successfully for that SHA: build, Cloudflare Worker deploy, production API version check, static version fallback, and production YouTube smoke test all passed. The workflow did not run `npm run test:image-search`.
-- Cloudflare’s account API lists the production domain `dzagent.app` bound to Worker service `dzagent`; its newest recorded deployment is at 100% traffic (deployment `a044a973-bb37-4fa2-b103-bcb1f09aa699`, version `007b0680-2100-4d63-ab67-86c4e88f6d44`).
-- **Live mismatch—do not call the current HEAD deployed:** a direct no-cache request at 2026-10-03 16:42 UTC returned commit `86d45f591cbf97083cdc43fdac68ec78a913be26` from both `/api/version` and `/version.json`, dated 2026-09-21. The API response had a fresh server time and `no-store`; the static response reported Cloudflare cache `HIT` despite a unique query parameter. This conflicts with the successful workflow version checks and requires diagnosis. No production routing/settings changes have been made.
+- Repository: `Nadirinfograph23/DZ-GPT`; work only on branch `devin/1774405518-init-dz-gpt`. Current branch HEAD is documentation-only commit `2096665f3a8f5c9bb4bbe4303de12c9a5c1e6a8b`; latest application-code commit is `ae66b654104ea373efaa88296e20d3e9dd655c97`. Do not confuse the branch HEAD with the deployed application SHA.
+- QR restoration is present in `src/components/DZChatBox.tsx`: creation requests in Arabic/Darija/English/French become a `tool-redirect` message for `/tools?tool=qrcode`. The existing general redirect card button navigates to the supplied `toolUrl`. `src/pages/DZTools.tsx` registers `qrcode`, renders `QRCodeTool`, and supports `?tool=<id>` deep links.
+- GitHub Actions run [37200348416](https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/37200348416) completed successfully for application SHA `ae66b654104ea373efaa88296e20d3e9dd655c97`; build, Worker deploy, production version checks, and the recorded YouTube smoke step passed.
+- Live checks at 2026-10-04 14:15 UTC: `/api/version` returned HTTP 200 with application SHA `ae66b654104ea373efaa88296e20d3e9dd655c97`; `/version.json` returned HTTP 200 with the same SHA; `/tools?tool=qrcode` returned HTTP 200. The QR intent rules passed source-level cases for Arabic, Algerian Darija, English, and French creation requests; the informational prompt `ما هو QR code؟` did not match. **A real browser click-through of the card has not been performed.**
+- Cloudflare MCP is connected and read checks for `GET /accounts` and `GET /zones?name=dzagent.app` succeeded; one account and the active `dzagent.app` zone were visible. Only read access was tested, so do not claim full write permissions. No Cloudflare resource, route, setting, or secret was changed.
 
 ### Ordered continuation steps
-1. Reconcile run 37135423925’s successful version-check steps with the current live SHA and Cloudflare’s active Worker/version records. Determine whether the mismatch is in Worker code, the `ASSETS` binding/static asset deployment, or which origin is serving the public URL; keep these as hypotheses until verified.
-2. Do not change Cloudflare routes, domains, Worker settings, or roll back to an older commit while diagnosing. Ask before any production routing/configuration change.
-3. Run `npm run test:image-search`; record its result. This is mocked regression coverage, not proof that Pinterest’s live endpoint works.
-4. After the live version mismatch is resolved, verify `/api/version` and `/version.json` against the exact current HEAD, then smoke-test actual Pinterest search (Pinterest image URLs only, no Wikimedia results, Pinterest empty-state link) and the doctor table (RTL, narrow viewport, map/profile/phone actions, pagination). Recheck YouTube only if the repair changes its path.
-5. Append exact SHA, run/deployment IDs, live endpoint values, and test results here. Mark production complete only when live SHA matches and the feature-specific smoke tests pass.
+1. If browser access is available, enter a QR creation request in DZ Agent, confirm the redirect card appears, click it, and confirm DZ Tools opens with the QR generator selected. Do not report the click as verified until this is done.
+2. If the browser path fails, inspect the current branch code and loaded production asset; patch only the failing intent/card/deep-link behavior on this branch.
+3. For any application-code patch, run the project build and relevant regression checks, require the matching GitHub Actions Cloudflare deployment to pass, then verify both live version endpoints report the exact application SHA and repeat the QR UI check. A commit or successful workflow alone is not live verification.
+4. For another Tools-page tool, confirm its `ToolId`, catalog entry, and renderer in `src/pages/DZTools.tsx`, then add a focused intent-to-`/tools?tool=<id>` redirect only for an explicit creation/use request; avoid redirecting informational questions.
+5. Append exact SHAs, run IDs, endpoint results, and test limits here. Never record credentials or claim Cloudflare write access without testing an authorized write in an explicitly approved task.
 
 ---
-
 ## Current objective
 Make DZ Agent understand and speak natural Algerian Darija, including Arabic-script Darija, Franco-Arabic, mixed French/English technical speech, spelling variants, and regional vocabulary.
 

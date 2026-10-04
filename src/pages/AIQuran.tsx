@@ -610,6 +610,7 @@ ${devInfoSection}`
         const dec = new TextDecoder()
         let buf = ''
         let full = ''
+        let streamFailed = false
 
         while (true) {
           const { done, value } = await reader.read()
@@ -630,17 +631,13 @@ ${devInfoSection}`
                     return next
                   })
                 }
-                if (d.message) { // error event
-                  setAiMessages(prev => {
-                    const next = [...prev]
-                    next[streamingMsgIndex] = { role: 'assistant', content: 'تعذر الاتصال، حاول لاحقاً.' }
-                    return next
-                  })
-                }
+                if (d.error || d.message) streamFailed = true
               } catch {}
             }
           }
         }
+        if (streamFailed || !full.trim()) throw new Error('Quran stream returned no answer')
+
         // Mark streaming done — apply Arabic-only filter
         setAiMessages(prev => {
           const next = [...prev]
@@ -650,13 +647,16 @@ ${devInfoSection}`
       } catch {
         // Fallback: use dz-agent-chat if streaming fails
         try {
+          const fallbackMessages = [messages[0], ...messages.filter(m => m.role !== 'system').slice(-5)]
           const fb = await fetch('/api/dz-agent-chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: messages.slice(-6), lang: 'ar' }),
+            body: JSON.stringify({ messages: fallbackMessages, lang: 'ar' }),
           })
+          if (!fb.ok) throw new Error(`Quran fallback failed: ${fb.status}`)
           const fd = await fb.json()
-          const fallbackText = stripNonArabic(fd.content || fd.text || 'تعذر الاتصال، حاول لاحقاً.')
+          const fallbackText = stripNonArabic(String(fd.content || fd.text || ''))
+          if (!fallbackText) throw new Error('Quran fallback returned no answer')
           setAiMessages(prev => {
             const next = [...prev]
             if (next[streamingMsgIndex]) next[streamingMsgIndex] = { role: 'assistant', content: fallbackText }

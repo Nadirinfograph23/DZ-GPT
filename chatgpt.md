@@ -372,3 +372,17 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Live GET `/version.json` returned HTTP 200 and the same exact commit SHA. Cloudflare reported `CF-Cache-Status: HIT`, but the cached content matched the deployed SHA.
 - The pure radio-filter helper passed 8 synthetic assertions in the assistant JavaScript runtime. The GitHub workflow did not include a `npm run test:radio-filters` step, and the local shell lacks Node.js, so the committed Node test file was not run by Node. The full Vite/TypeScript build did pass.
 - Browser interaction testing of the radio filter buttons was not performed; do not claim manual UI verification.
+
+
+## 2026-10-04 — QR tool redirect and Quran assistant recovery
+
+### Changes on `devin/1774405518-init-dz-gpt`
+- Keep the existing QR generator in `src/pages/DZTools.tsx` and its direct route `/tools?tool=qrcode`; broaden the DZ Agent trigger to recognize common Arabic, Algerian Darija, English, and French creation requests and keep the existing clickable redirect card.
+- In `src/pages/AIQuran.tsx`, treat the SSE `error` event and an empty stream as a failed primary response, then use the existing chat fallback. Preserve the Quran system prompt and verified tafsir context in that fallback, and surface the connection message only if fallback also fails.
+- Retain the Quran page’s source guardrails: use Quran text and approved tafasir; do not invent citations, verses, or rulings; state when the provided sources are insufficient.
+
+### Ordered verification
+1. Run `npm run build` and relevant QR/Quran regression checks on this exact branch commit.
+2. Inspect the matching Cloudflare GitHub Actions result; a push to this production-source branch may deploy automatically.
+3. Verify the live commit SHA, test QR requests in Arabic/Darija/English/French and confirm the card opens the QR tool, then test an ayah-based Quran question and confirm approved tafsir context is preserved through fallback.
+4. Record exact test, workflow, and live-smoke results here; do not claim deployment or live behavior until verified.

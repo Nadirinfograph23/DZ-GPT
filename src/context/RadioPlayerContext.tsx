@@ -8,6 +8,7 @@ export interface RadioStation {
   favicon: string
   tags: string
   country: string
+  countrycode?: string
   language: string
   votes: number
   codec: string
@@ -63,6 +64,68 @@ function mk(id: string, name: string, url: string, tags: string, country: string
 
 function radioStationNameKey(name: string): string {
   return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g, '')
+}
+
+const RADIO_STREAM_PROXY_NAME_KEYS: Record<string, string> = {
+  algeriechaine1: 'chaine1',
+  algeriechaine2: 'chaine2',
+  algeriechaine3: 'chaine3',
+  alquranradio: 'coran',
+  radiocoran: 'coran',
+  radiocoranenrs: 'coran',
+  اذاعةالقرانالكريم: 'coran',
+  jilfm: 'jil',
+  radioelbahdja: 'bahdja',
+  radioalgerieinternationale: 'alger_chaines',
+  algerieinternationaleالجزائرالدولية: 'alger_chaines',
+}
+
+function getRadioStreamProxyKey(station: RadioStation): string | undefined {
+  return RADIO_STREAM_PROXY_KEYS[station.stationuuid] || RADIO_STREAM_PROXY_NAME_KEYS[radioStationNameKey(station.name)]
+}
+
+export function isAlgerianStation(station: RadioStation): boolean {
+  const country = (station.country || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  return station.category === 'algeria' || (station.countrycode || '').trim().toUpperCase() === 'DZ' || country === 'algeria'
+}
+
+function radioStationCountryKey(station: RadioStation): string {
+  if (isAlgerianStation(station)) return 'dz'
+  return (station.countrycode || '').trim().toLowerCase()
+    || (station.country || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
+function normalizeRadioStations(data: RadioStation[]): RadioStation[] {
+  const seen = new Set<string>()
+  const normalized: RadioStation[] = []
+  for (const station of data) {
+    if (!station || typeof station.name !== 'string' || !station.name.trim()) continue
+    const resolved = typeof station.url_resolved === 'string' && /^https?:\/\//i.test(station.url_resolved.trim()) ? station.url_resolved.trim() : ''
+    const direct = typeof station.url === 'string' && /^https?:\/\//i.test(station.url.trim()) ? station.url.trim() : ''
+    const streamUrl = resolved || direct
+    if (!streamUrl) continue
+    const category: RadioStation['category'] = isAlgerianStation(station)
+      ? 'algeria'
+      : /arabic|arab|العربية/i.test((station.language || '') + ' ' + (station.tags || ''))
+        ? 'arabic'
+        : 'international'
+    const item: RadioStation = { ...station, name: station.name.trim(), url: direct || streamUrl, url_resolved: streamUrl, category }
+    const key = radioStationNameKey(item.name) + '|' + radioStationCountryKey(item)
+    if (!radioStationNameKey(item.name) || seen.has(key)) continue
+    seen.add(key)
+    normalized.push(item)
+  }
+  return normalized
+}
+
+function mergeRadioStations(preferred: RadioStation[], fallback: RadioStation[]): RadioStation[] {
+  const seen = new Set<string>()
+  return [...preferred, ...fallback].filter(station => {
+    const key = radioStationNameKey(station.name) + '|' + radioStationCountryKey(station)
+    if (!radioStationNameKey(station.name) || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 const BUILTIN_STATIONS: RadioStation[] = [
@@ -166,13 +229,8 @@ export function RadioPlayerProvider({ children }: { children: ReactNode }) {
   const failedPlaybackIndicesRef = useRef<Set<number>>(new Set())
   const failCurrentPlaybackRef = useRef<() => void>(() => {})
 
-  // Prefer fresh Radio Browser records; keep static Algeria stations only as API fallback.
-  const allStations = useMemo(() => {
-    if (!apiStations.length) return BUILTIN_STATIONS
-    const apiNames = new Set(apiStations.map(s => radioStationNameKey(s.name)))
-    const international = BUILTIN_STATIONS.filter(s => s.category !== 'algeria' && !apiNames.has(radioStationNameKey(s.name)))
-    return [...apiStations, ...international]
-  }, [apiStations])
+  // Prefer fresh Algeria and global Radio Browser records; retain built-ins as outage fallbacks.
+  const allStations = useMemo(() => mergeRadioStations(apiStations, BUILTIN_STATIONS), [apiStations])
 
   // Create audio element once
   useEffect(() => {
@@ -206,42 +264,41 @@ export function RadioPlayerProvider({ children }: { children: ReactNode }) {
     if (audioRef.current) audioRef.current.volume = muted ? 0 : volume
   }, [volume, muted])
 
-  // Try fetching from API with 5s timeout — if it fails, use builtins
+  // Fetch the dedicated Algeria feed and popular global catalog together; retain built-ins if either source is down.
   useEffect(() => {
     let cancelled = false
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 5000)
+    const timer = setTimeout(() => controller.abort(), 8000)
 
-    fetch(`${PROXY_BASE}/algeria`, { signal: controller.signal })
-      .then(r => { if (!r.ok) throw new Error('bad status'); return r.json() })
-      .then((data: RadioStation[]) => {
+    const fetchCatalog = async (endpoint: string): Promise<RadioStation[]> => {
+      try {
+        const response = await fetch(PROXY_BASE + '/' + endpoint, { signal: controller.signal })
+        if (!response.ok) return []
+        const data = await response.json()
+        return Array.isArray(data) ? data as RadioStation[] : []
+      } catch {
+        return []
+      }
+    }
+
+    Promise.all([fetchCatalog('algeria'), fetchCatalog('all')])
+      .then(([algeriaData, globalData]) => {
         if (cancelled) return
-        const seenNames = new Set<string>()
-        const valid = data
-          .filter(s => s.url_resolved && /^https?:\/\//i.test(s.url_resolved) && s.name?.trim())
-          .filter(s => {
-            const key = radioStationNameKey(s.name)
-            if (!key || seenNames.has(key)) return false
-            seenNames.add(key)
-            return true
-          })
-          .map(s => ({ ...s, category: 'algeria' as const }))
-        if (valid.length > 0) {
-          setApiStations(valid)
-          const apiNames = new Set(valid.map(s => radioStationNameKey(s.name)))
-          const international = BUILTIN_STATIONS.filter(s => s.category !== 'algeria' && !apiNames.has(radioStationNameKey(s.name)))
-          setStations([...valid, ...international])
-          setCurrentStation(previous => {
-            if (!previous) return previous
-            const refreshed = valid.find(s => s.stationuuid === previous.stationuuid)
-              || valid.find(s => radioStationNameKey(s.name) === radioStationNameKey(previous.name))
-            if (!refreshed) return previous
-            try { localStorage.setItem(RADIO_STORAGE_KEY, JSON.stringify(refreshed)) } catch {}
-            return refreshed
-          })
-        }
+        const algeriaRecords = algeriaData.map(station => ({ ...station, countrycode: station.countrycode || 'DZ' }))
+        const valid = normalizeRadioStations([...algeriaRecords, ...globalData])
+        if (!valid.length) return
+        setApiStations(valid)
+        setStations(mergeRadioStations(valid, BUILTIN_STATIONS))
+        setCurrentStation(previous => {
+          if (!previous) return previous
+          const refreshed = valid.find(station => station.stationuuid === previous.stationuuid)
+            || valid.find(station => radioStationNameKey(station.name) === radioStationNameKey(previous.name)
+              && radioStationCountryKey(station) === radioStationCountryKey(previous))
+          if (!refreshed) return previous
+          try { localStorage.setItem(RADIO_STORAGE_KEY, JSON.stringify(refreshed)) } catch {}
+          return refreshed
+        })
       })
-      .catch(() => {})
       .finally(() => { clearTimeout(timer); if (!cancelled) setLoadingStations(false) })
 
     return () => { cancelled = true; controller.abort(); clearTimeout(timer) }
@@ -370,7 +427,7 @@ export function RadioPlayerProvider({ children }: { children: ReactNode }) {
     try { localStorage.setItem(RADIO_STORAGE_KEY, JSON.stringify(station)) } catch {}
 
     const directUrl = station.url_resolved || station.url
-    const proxyKey = RADIO_STREAM_PROXY_KEYS[station.stationuuid]
+    const proxyKey = getRadioStreamProxyKey(station)
     const sources = Array.from(new Set([
       directUrl,
       station.url,

@@ -289,3 +289,28 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 2. If direct playback fails in a normal browser, inspect that station's current Radio Browser record and choose a working catalog entry or an authorized alternative stream; do not claim all stations play based only on API health checks.
 3. Verify DZ Chat admin login and guest denial in a controlled path that does not create an unintended public join event; record the outcome without exposing the password.
 4. Keep this file as the continuation map; never store the secret value here.
+
+
+## 2026-10-04 — Radio all-station catalog and official stream repair
+
+### Verified before the patch
+- Target repository and branch remained Nadirinfograph23/DZ-GPT and devin/1774405518-init-dz-gpt; branch HEAD was 80af198208d402acafe7c923f2589e5d07eef5c3, and existing PR #53 is still the release PR. Update that PR; do not create a duplicate.
+- The live Algeria Radio Browser endpoint returns 75 station records. A global healthy-station query with hidebroken=true and limit=250 returned 250 stations. The user's Online World Radio API endpoints remained unavailable and returned 404 HTML, so it is not used as a production dependency.
+- The official Radio Algérie Chaine 1 page embeds my.radioalgerie.dz/player/chaine1.html. Its audio source, and the corresponding official Chaine 2, Chaine 3 and Quran player pages, point to TDA hosts under webradio1/2.tda.dz:8001. Bounded HEAD checks returned 200 audio/mpeg for all four official channels, plus the TDA Jil candidate.
+- The deployed /api/radio/stream/chaine1 endpoint returned 502 before the patch. The Worker allowlist had only older Infomaniak/webcast candidates, not the current TDA sources. The tests support replacing the stale fallbacks; the post-deploy Worker response still needs verification.
+- Cloudflare read-only inspection confirmed the active dzagent.app zone and dzagent Worker. No DNS, route, Worker setting or secret was read or changed during this repair.
+
+### Implementation in this change
+- Add a Worker-native /api/radio/browser/all endpoint for the top 250 healthy Radio Browser stations; continue loading the dedicated Algeria feed so the global cap does not omit the Algerian catalog.
+- Merge both feeds with built-in fallbacks, classify Algerian records by DZ country code/country/category, and keep stream relay aliases for refreshed API station names so national records can use the fixed allowlisted Worker proxy after direct playback fails.
+- Update the DZ Radio page to open on the All view and provide explicit All and Algeria-only tabs. Search stays available; clearing a search returns to All.
+- Put current TDA stream URLs first in the fixed Worker fallback list for Chaine 1, 2, 3, Quran and Jil, retaining previous candidates behind them.
+- No production configuration or secret changes. Push was authorized and triggers the existing Cloudflare deployment workflow automatically. The implementation and this handoff entry are in the same atomic commit.
+
+### Ordered post-push verification
+1. Resolve the exact new branch HEAD and its GitHub Actions run; do not cite the older 49f87081424a535d5dd27801d6978c55c524dc42 run as verification for this change.
+2. Require the workflow's application build/tests and Worker deploy to pass for this exact SHA. Then compare /api/version and /version.json with the committed SHA.
+3. Check /api/radio/browser/all returns a non-empty JSON array (up to 250 healthy stations) and /api/radio/browser/algeria still returns Algerian entries with countrycode DZ.
+4. Send a bounded Range GET to /api/radio/stream/chaine1. Confirm the response has an audio content type and is not the previous JSON 502; cancel the body without downloading the stream.
+5. In a real browser, check direct and proxy playback for Chaine 1/2/3 and a few fresh global records. API health and a proxy response do not prove playback in every user's browser/network.
+6. Append the exact commit, workflow run and live smoke results when this handoff is next updated. If any check fails, capture the observed response and repair only that issue.

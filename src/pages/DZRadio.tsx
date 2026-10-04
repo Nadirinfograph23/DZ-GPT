@@ -4,10 +4,10 @@ import {
   ArrowLeft, Radio, Play, Pause, Volume2, VolumeX,
   Loader2, Search, RefreshCw, Wifi, WifiOff, X, Globe
 } from 'lucide-react'
-import { useRadioPlayer, RadioStation } from '../context/RadioPlayerContext'
+import { useRadioPlayer, RadioStation, isAlgerianStation } from '../context/RadioPlayerContext'
 import '../styles/dz-radio.css'
 
-type Tab = 'algeria' | 'arabic' | 'search'
+type Tab = 'all' | 'algeria' | 'search'
 
 function getStationEmoji(station: RadioStation): string {
   const n = station.name.toLowerCase()
@@ -112,7 +112,7 @@ export default function DZRadio() {
   } = useRadioPlayer()
 
   const [bars, setBars] = useState<number[]>([])
-  const [tab, setTab] = useState<Tab>('algeria')
+  const [tab, setTab] = useState<Tab>('all')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -124,31 +124,29 @@ export default function DZRadio() {
   const handleSearch = useCallback((q: string) => {
     setSearchQuery(q)
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-    if (!q.trim()) { clearSearch(); return }
+    if (!q.trim()) { clearSearch(); setTab('all'); return }
     setTab('search')
     searchTimerRef.current = setTimeout(() => searchStations(q), 300)
   }, [setSearchQuery, searchStations, clearSearch])
 
   const handleClearSearch = () => {
     clearSearch()
-    setTab('algeria')
+    setTab('all')
   }
 
-  // Filter stations by category tab
-  const algeriaStations = stations.filter(s => !s.category || s.category === 'algeria')
-  const arabicIntlStations = stations.filter(s => s.category === 'arabic' || s.category === 'international')
+  const algeriaStations = stations.filter(isAlgerianStation)
 
   const displayStations = tab === 'search'
     ? searchResults
-    : tab === 'arabic'
-      ? arabicIntlStations
-      : algeriaStations
+    : tab === 'algeria'
+      ? algeriaStations
+      : stations
 
-  const tabLabel = tab === 'algeria'
-    ? `🇩🇿 ${algeriaStations.length} إذاعة جزائرية`
-    : tab === 'arabic'
-      ? `🌍 ${arabicIntlStations.length} إذاعة عربية ودولية`
-      : `🔍 ${searchResults.length} نتيجة للبحث عن "${searchQuery}"`
+  const tabLabel = tab === 'all'
+    ? '🌐 ' + stations.length + ' إذاعة متاحة'
+    : tab === 'algeria'
+      ? '🇩🇿 ' + algeriaStations.length + ' إذاعة جزائرية'
+      : '🔍 ' + searchResults.length + ' نتيجة للبحث عن "' + searchQuery + '"'
 
   return (
     <div className="dzr-page">
@@ -191,18 +189,19 @@ export default function DZRadio() {
         {/* Category tabs */}
         <div className="dzr-tabs">
           <button
-            className={`dzr-tab ${tab === 'algeria' ? 'dzr-tab--active' : ''}`}
-            onClick={() => { setTab('algeria'); handleClearSearch() }}
-          >
-            🇩🇿 جزائر
-            <span className="dzr-tab-count">{algeriaStations.length}</span>
-          </button>
-          <button
-            className={`dzr-tab ${tab === 'arabic' ? 'dzr-tab--active' : ''}`}
-            onClick={() => { setTab('arabic'); handleClearSearch() }}
+            className={'dzr-tab ' + (tab === 'all' ? 'dzr-tab--active' : '')}
+            onClick={handleClearSearch}
           >
             <Globe size={12} />
-            عربية
+            الكل
+            <span className="dzr-tab-count">{stations.length}</span>
+          </button>
+          <button
+            className={'dzr-tab ' + (tab === 'algeria' ? 'dzr-tab--active' : '')}
+            onClick={() => { clearSearch(); setTab('algeria') }}
+          >
+            🇩🇿 الجزائر
+            <span className="dzr-tab-count">{algeriaStations.length}</span>
           </button>
           {searchQuery.trim() && (
             <button className={`dzr-tab ${tab === 'search' ? 'dzr-tab--active' : ''}`} onClick={() => setTab('search')}>

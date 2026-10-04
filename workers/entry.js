@@ -1502,11 +1502,11 @@ const WORKER_RADIO_BROWSER_HOSTS = [
 ]
 
 const WORKER_RADIO_STREAMS = Object.freeze({
-  chaine1: ['https://radiochaine1.ice.infomaniak.ch/chaine1.mp3', 'http://webcast.eppRadioAlger.dz/Chaine1/AAC'],
-  chaine2: ['https://radiochaine2.ice.infomaniak.ch/chaine2.mp3', 'http://webcast.eppRadioAlger.dz/Chaine2/AAC'],
-  chaine3: ['https://radiochaine3.ice.infomaniak.ch/chaine3.mp3', 'http://webcast.eppRadioAlger.dz/Chaine3/AAC'],
-  coran: ['https://radiocoran.ice.infomaniak.ch/coran.mp3', 'https://n0a.radiojar.com/0tpy1h0kxtzuv', 'http://webcast.eppRadioAlger.dz/Coran/AAC'],
-  jil: ['https://radiojeunesse.ice.infomaniak.ch/jeunesse.mp3', 'http://jil-fm.ice.infomaniak.ch/jil-fm-128.mp3'],
+  chaine1: ['https://webradio1.tda.dz:8001/Chaine1_64K.mp3', 'https://radiochaine1.ice.infomaniak.ch/chaine1.mp3', 'http://webcast.eppRadioAlger.dz/Chaine1/AAC'],
+  chaine2: ['https://webradio2.tda.dz:8001/Chaine2_64K.mp3', 'https://radiochaine2.ice.infomaniak.ch/chaine2.mp3', 'http://webcast.eppRadioAlger.dz/Chaine2/AAC'],
+  chaine3: ['https://webradio1.tda.dz:8001/Chaine3_64K.mp3', 'https://radiochaine3.ice.infomaniak.ch/chaine3.mp3', 'http://webcast.eppRadioAlger.dz/Chaine3/AAC'],
+  coran: ['https://webradio1.tda.dz:8001/Coran_64K.mp3', 'https://radiocoran.ice.infomaniak.ch/coran.mp3', 'https://n0a.radiojar.com/0tpy1h0kxtzuv', 'http://webcast.eppRadioAlger.dz/Coran/AAC'],
+  jil: ['https://webradio1.tda.dz:8001/Jeunesse_64K.mp3', 'https://radiojeunesse.ice.infomaniak.ch/jeunesse.mp3', 'http://jil-fm.ice.infomaniak.ch/jil-fm-128.mp3'],
   bahdja: ['https://radioelbahdja.ice.infomaniak.ch/elbahdja.mp3', 'http://el-bahdja.ice.infomaniak.ch/el-bahdja-128.mp3'],
   alger_chaines: ['https://radiointernationale.ice.infomaniak.ch/internationale.mp3', 'http://radio-algerie-inter.ice.infomaniak.ch/radio-algerie-inter-128.mp3'],
 })
@@ -1708,6 +1708,14 @@ export default {
       if (url.pathname === '/api/radio/browser/algeria' && request.method === 'GET') {
         try {
           const data = await fetchWorkerRadioBrowser('stations/bycountry/algeria?hidebroken=true&order=votes&reverse=true&limit=80')
+          return workerRadioJson(data)
+        } catch (error) {
+          return workerRadioJson({ error: 'Radio Browser unavailable', message: error?.message || 'Radio Browser mirrors unavailable' }, 503)
+        }
+      }
+      if (url.pathname === '/api/radio/browser/all' && request.method === 'GET') {
+        try {
+          const data = await fetchWorkerRadioBrowser('stations?hidebroken=true&order=votes&reverse=true&limit=250')
           return workerRadioJson(data)
         } catch (error) {
           return workerRadioJson({ error: 'Radio Browser unavailable', message: error?.message || 'Radio Browser mirrors unavailable' }, 503)

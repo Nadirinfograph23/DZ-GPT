@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo, ReactNode } from 'react'
+import { isAlgerianRadioStation } from '../lib/radio-filters.js'
 
 export interface RadioStation {
   stationuuid: string
@@ -125,8 +126,7 @@ function getRadioStreamProxyKey(station: RadioStation): string | undefined {
 }
 
 export function isAlgerianStation(station: RadioStation): boolean {
-  const country = (station.country || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-  return station.category === 'algeria' || (station.countrycode || '').trim().toUpperCase() === 'DZ' || country === 'algeria'
+  return isAlgerianRadioStation(station)
 }
 
 function radioStationCountryKey(station: RadioStation): string {

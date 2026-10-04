@@ -160,6 +160,28 @@
 }
 .dzr-tabs::-webkit-scrollbar { display: none; }
 
+.dzr-filter-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.dzr-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.dzr-filter-label {
+  flex: 0 0 52px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+.dzr-filter-row .dzr-tabs {
+  flex: 1;
+  min-width: 0;
+}
+
 .dzr-tab {
   display: flex;
   align-items: center;

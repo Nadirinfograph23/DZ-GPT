@@ -342,3 +342,23 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 2. If Chaine 1 still fails in the browser, capture the browser network/console result and investigate the Worker/origin intermittency; do not change Cloudflare settings manually.
 3. Diagnose the stale /api/version and /version.json commit markers separately, and verify both report the intended deployed SHA before closing that issue.
 4. Keep main untouched and continue recording checks here in chronological order.
+
+## 2026-10-04 — Radio country and category filters
+
+### Change in this commit
+- Repository: Nadirinfograph23/DZ-GPT; branch: devin/1774405518-init-dz-gpt. Confirm the current branch SHA before any follow-up; this handoff is written in the same commit as the application change.
+- Separate the country selector (all stations / Algeria only) from the category selector. Country filtering uses one shared station classifier (countrycode DZ, normalized country Algeria, or category algeria); All resets to the full catalog and clears search/category state.
+- Add category filters derived from station name, tags, and language: Quran/religion, news, music, sports, culture/Amazigh, and talk/programs. Category counts are scoped to the selected country. Search results honor both country and category.
+- Add node tests for All, Algeria-only, category matching, combined filters, and country normalization; expose npm run test:radio-filters.
+- Update the radio filter layout to two horizontally scrollable rows with accessible pressed-state buttons.
+
+### Deployment and access notes
+- The user explicitly approved committing to this production-source branch; the existing push workflow may deploy to Cloudflare automatically. Wait for the exact commit's Actions result and live version markers before saying it is deployed.
+- Cloudflare MCP token verification returned Error 1000 (Invalid API Token); full Cloudflare access is not verified. No Cloudflare resources or settings were changed manually. Do not print or request credential values.
+
+### Ordered continuation
+1. Confirm the exact branch commit and matching GitHub Actions run; distinguish the code commit from handoff-only updates and older deployments.
+2. Require the build and npm run test:radio-filters to pass; record failures without treating a queued or skipped run as success.
+3. After deployment, check /api/version and /version.json against the exact commit SHA. If either is stale, investigate the version-marker path; do not manually change Cloudflare routes, bindings, or secrets.
+4. Verify the radio page: All shows global and Algerian stations, Algeria shows only stations classified as DZ, category chips filter the current country view, and search intersects with both filters.
+5. Append exact commit/run IDs and verification results here.

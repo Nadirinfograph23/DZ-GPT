@@ -58,6 +58,8 @@ const RADIO_STREAM_PROXY_KEYS: Record<string, string> = {
   'dz-internat': 'alger_chaines',
 }
 
+const RADIO_STREAM_PROXY_ROUTE_KEYS = new Set<string>(["adrar","aindefla","aintemouchent","alger","alger_chaines","annaba","bahdja","batna","bechar","bejaia","biskra","blida","bordjbouarreridj","bouira","boumerdes","chaine1","chaine2","chaine3","chlef","constantine","coran","culture","djelfa","elbayadh","eloued","eltarf","ghardaia","guelma","illizi","internationale","jijel","jil","jilfm","khenchela","laghouat","mascara","medea","mila","mostaganem","msila","naama","oran","ouargla","oumelbouaghi","rai","relizane","saida","setif","sidibelabbes","skikda","soukahras","tamanrasset","tebessa","tiaret","tindouf","tipaza","tissemsilt","tiziouzou","tlemcen"])
+
 function mk(id: string, name: string, url: string, tags: string, country: string, lang: string, bitrate: number, cat: RadioStation['category']): RadioStation {
   return { stationuuid: id, name, url, url_resolved: url, favicon: '', tags, country, language: lang, votes: 0, codec: 'MP3', bitrate, category: cat }
 }
@@ -67,6 +69,12 @@ function radioStationNameKey(name: string): string {
 }
 
 const RADIO_STREAM_PROXY_NAME_KEYS: Record<string, string> = {
+  algerchaine1: 'chaine1',
+  algerchaine2: 'chaine2',
+  algerchaine3: 'chaine3',
+  radioalgerchaine1: 'chaine1',
+  radioalgerchaine2: 'chaine2',
+  radioalgerchaine3: 'chaine3',
   algeriechaine1: 'chaine1',
   algeriechaine2: 'chaine2',
   algeriechaine3: 'chaine3',
@@ -75,13 +83,45 @@ const RADIO_STREAM_PROXY_NAME_KEYS: Record<string, string> = {
   radiocoranenrs: 'coran',
   اذاعةالقرانالكريم: 'coran',
   jilfm: 'jil',
+  radiojilfm: 'jil',
   radioelbahdja: 'bahdja',
+  radiooumbouaghi: 'oumelbouaghi',
+  radiooumelbouaghi: 'oumelbouaghi',
+  radioculture: 'culture',
+  radioalger: 'alger',
   radioalgerieinternationale: 'alger_chaines',
+  radioalgerieinternationalerai: 'alger_chaines',
+  radiointernationale: 'alger_chaines',
+  rai: 'alger_chaines',
   algerieinternationaleالجزائرالدولية: 'alger_chaines',
 }
 
 function getRadioStreamProxyKey(station: RadioStation): string | undefined {
-  return RADIO_STREAM_PROXY_KEYS[station.stationuuid] || RADIO_STREAM_PROXY_NAME_KEYS[radioStationNameKey(station.name)]
+  const explicit = RADIO_STREAM_PROXY_KEYS[station.stationuuid]
+  if (explicit) return explicit
+
+  const nameKey = radioStationNameKey(station.name)
+  const named = RADIO_STREAM_PROXY_NAME_KEYS[nameKey]
+  if (named) return named
+  if (!isAlgerianStation(station)) return undefined
+
+  const idKey = station.stationuuid.toLowerCase().startsWith('dz-') ? station.stationuuid.slice(3).toLowerCase() : ''
+  if (idKey && RADIO_STREAM_PROXY_ROUTE_KEYS.has(idKey)) return idKey
+
+  let candidate = nameKey.match(/^[a-z0-9]+/)?.[0] || nameKey
+  const prefixes = ['radioalgerie', 'radio', 'algerie', 'alger']
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const prefix of prefixes) {
+      if (candidate.startsWith(prefix) && candidate.length > prefix.length) {
+        candidate = candidate.slice(prefix.length)
+        changed = true
+        break
+      }
+    }
+  }
+  return RADIO_STREAM_PROXY_ROUTE_KEYS.has(candidate) ? candidate : undefined
 }
 
 export function isAlgerianStation(station: RadioStation): boolean {
@@ -429,9 +469,9 @@ export function RadioPlayerProvider({ children }: { children: ReactNode }) {
     const directUrl = station.url_resolved || station.url
     const proxyKey = getRadioStreamProxyKey(station)
     const sources = Array.from(new Set([
+      proxyKey ? '/api/radio/stream/' + encodeURIComponent(proxyKey) : '',
       directUrl,
       station.url,
-      proxyKey ? '/api/radio/stream/' + encodeURIComponent(proxyKey) : '',
     ].filter((source): source is string => Boolean(source))))
 
     const failSource = (index: number) => {

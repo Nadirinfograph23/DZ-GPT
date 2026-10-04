@@ -314,3 +314,11 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 4. Send a bounded Range GET to /api/radio/stream/chaine1. Confirm the response has an audio content type and is not the previous JSON 502; cancel the body without downloading the stream.
 5. In a real browser, check direct and proxy playback for Chaine 1/2/3 and a few fresh global records. API health and a proxy response do not prove playback in every user's browser/network.
 6. Append the exact commit, workflow run and live smoke results when this handoff is next updated. If any check fails, capture the observed response and repair only that issue.
+
+
+### Follow-up: first deployment result and cache-safe version markers (2026-10-04)
+- Initial radio fix commit: 6fa346c81abdeabff0eb0adeb91b35efffacbd5e; existing PR #53 still targets this branch. GitHub Actions run 37185651926 built assets and deployed Worker successfully, but failed only at the production version-marker check.
+- Live checks after deployment: /api/radio/browser/all returned 250 stations (250 reported healthy); /api/radio/browser/algeria returned 75 stations, all countrycode DZ; a bounded Range request to /api/radio/stream/chaine1 returned 206 audio/mpeg. The new DZRadio-Dq-TN3VG.js asset contains the added All/Algeria labels. Browser playback itself remains unverified.
+- Cause: /version.json returned the old 86d45f591cbf97083cdc43fdac68ec78a913be26 marker with CF-Cache-Status: HIT even after unique query strings. The completed Wrangler log showed /version.json and the new radio asset were uploaded, so this is a reused static-path CDN cache issue, not a missing build output.
+- Follow-up changes route /version.json through the Worker and serve both version endpoints from CI-generated data/build-info.json embedded in the Worker, with no-store headers. The CI already writes this metadata before building; wrangler.toml now sends /version.json through the Worker first.
+- Next: verify the follow-up commit's exact Actions run passes both version checks; confirm /api/version and /version.json report that commit, recheck the radio feeds and Chaine 1 audio response, and keep browser playback marked unverified unless tested in a real browser.

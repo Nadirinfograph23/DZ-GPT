@@ -28,6 +28,9 @@ fallthrough = true
 [vars]
 NODE_ENV = "production"
 CF_PAGES = "1"
+# Live free-model pool. IDs are public model names; no credentials are stored here.
+# The router merges this list with its built-in defaults and rotates across models.
+OPENROUTER_FREE_MODELS = "openrouter/free,nvidia/nemotron-3-ultra-550b-a55b:free,nvidia/nemotron-3.5-lightning:free,poolside/laguna-s-2.1:free,poolside/laguna-xs-2.1:free,google/gemma-4-26b-a4b-it:free,google/gemma-4-31b-it:free,qwen/qwen3.8-27b:free,nvidia/nemotron-3-super-120b-a12b:free,dots-studio/dots-3-note-preview:free,stealth/space-bunny-alpha"
 
 # ── Define: replace import.meta.url so fileURLToPath() doesn't crash ──────────
 # In CF Workers the bundled import.meta.url is undefined; give it a valid

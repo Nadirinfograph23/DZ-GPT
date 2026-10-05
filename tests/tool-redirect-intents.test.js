@@ -3,6 +3,14 @@ import { getToolRedirectIntent } from '../src/lib/tool-redirect-intents.js'
 
 const positiveCases = [
   [
+    "open the Visual AI image tool",
+    "image"
+  ],
+  [
+    "افتح أداة الصور",
+    "image"
+  ],
+  [
     "أنشئ لي سيرة ذاتية احترافية",
     "cv"
   ],
@@ -135,6 +143,7 @@ const negativeCases = [
   "I want to know about CVs",
   "Please write an email for me",
   "Create an image of a CV page",
+  "Create an image of a cat",
   "ما النص في هذه الصورة؟",
   "extract text from this photo using OCR",
   "open the image generator tool",
@@ -156,7 +165,7 @@ for (const text of negativeCases) {
 }
 
 assert.equal(getToolRedirectIntent('create a CV for me', { hasImageAttachment: true }), null)
-assert.equal(getToolRedirectIntent('open the Visual AI image tool'), null)
+assert.equal(getToolRedirectIntent('open the Visual AI image tool')?.toolUrl, '/tools?tool=image')
 assert.deepEqual(getToolRedirectIntent('أنشئ QR code لرابط موقعي')?.quickSuggestions, ['اعمل QR لرابط موقعي', 'QR لرقم هاتفي', 'QR لواتساب'])
 
 console.log(`Tool redirect intent tests passed (${positiveCases.length} positive, ${negativeCases.length} negative, plus image and QR safeguards).`)

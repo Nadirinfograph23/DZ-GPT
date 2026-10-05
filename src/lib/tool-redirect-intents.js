@@ -8,6 +8,7 @@ const CONVERT_RE = /(?:\b(?:convert|transform|turn)\b|حوّل|حول|تحويل
 const UPLOAD_SHARE_RE = /(?:\b(?:upload|share|send)\b|ارفع|أرفع|رفع|شارك|أرسل|ارسل)/i
 const CAPTURE_RE = /(?:\b(?:capture|take|get)\b|التقط|خذ|صوّر|صور)/i
 const IMAGE_CONTEXT_RE = /(?:\b(?:images?|photos?|pictures?|drawings?|illustrations?|artwork|wallpapers?|png|jpe?g|webp|draw|sketch|paint|illustrate|dessine)\b|صورة|صور|صوره|الصورة|الصوره|صورلي|صوري|رسم\s*لي|ارسم|أرسم|ارسملي|ارسم\s+لي|تصميم\s*صورة)/i
+const IMAGE_TOOL_TARGET_RE = /(?:\b(?:visual\s+ai|images?\s+tool|picture\s+tool|photo\s+tool)\b|أداة\s*(?:الصور|الذكاء\s+البصري)|الذكاء\s+البصري)/i
 const INFO_QUESTION_RE = /^\s*(?:ما\s+(?:هو|هي|معنى|المقصود|الفرق)|ماهو(?:\s|$)|ماهي(?:\s|$)|ماذا(?:\s|$)|من(?:\s|$)|متى(?:\s|$)|أين(?:\s|$)|اين(?:\s|$)|كيف(?:\s|$)|لماذا(?:\s|$)|ليش(?:\s|$)|علاش(?:\s|$)|واش(?:\s|$)|وش(?:\s|$)|هل\s+(?:توجد|يوجد|هناك|يعني|هو|هي)|what\s+(?:is|are|does|do|means?)\b|what'?s\b|how\s+(?:does|do|to|can\s+i|could\s+i)\b|why\b|where\b|who\b|when\b|which\b|explain\b|define\b|do\s+you\s+know\b|can\s+you\s+explain\b|qu['’]?est-ce\b|comment\s+(?:fonctionne|marche|utiliser)\b|pourquoi\b)/i
 const WANT_INFO_RE = /(?:\b(?:i\s+want|i\s+need|je\s+veux|j'ai\s+besoin)\b|أريد|اريد|بغيت|نحب|حاب|نحتاج).{0,40}(?:\b(?:to\s+know|information|details|learn\s+about)\b|معلومات|شرح|معرفة|نفهم|نعرف|savoir|comprendre)/i
 
@@ -17,6 +18,7 @@ const READ_ALOUD_RE = /(?:\b(?:read\s+(?:this\s+)?aloud|speak|voice)\b|اقرأ|
 const ACTIONS = { create: CREATE_OR_DESIGN_RE, want: WANT_RE, open: OPEN_TOOL_RE, calculate: CALCULATE_RE, search: SEARCH_RE, analyze: ANALYZE_RE, convert: CONVERT_RE, uploadShare: UPLOAD_SHARE_RE, capture: CAPTURE_RE, qr: QR_CREATE_RE, plan: PLAN_ACTION_RE, readAloud: READ_ALOUD_RE }
 
 const TOOL_SPECS = [
+  { id: 'image', toolName: 'Visual AI — صور', toolIcon: '🖼️', toolDesc: 'بحث عن صور • بحث عكسي • تحليل AI • OCR من الصور', target: IMAGE_TOOL_TARGET_RE, actions: ['open'] },
   { id: 'cv', toolName: 'مولّد السيرة الذاتية', toolIcon: '📄', toolDesc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ', target: /(?:\bcv\b|\bresume\b|\brésumé\b|\bcurriculum\s+vitae\b|السيرة\s+الذاتية|سيرة\s+ذاتية|سي\s*في)/i, actions: ['create', 'want'] },
   { id: 'planner', toolName: 'مخطط المشاريع', toolIcon: '📋', toolDesc: 'حوّل فكرتك إلى خطة عمل تفصيلية مع مهام وجدول زمني', target: /(?:project\s+(?:plan|planner)|project\s+planning|plan\s+(?:a\s+)?project|خطة\s+(?:مشروع|المشروع)|مخطط\s*(?:المشروع|المشاريع))/i, actions: ['create', 'want', 'plan'] },
   { id: 'docs', toolName: 'وثائق تجارية', toolIcon: '📑', toolDesc: 'عقود عمل • مراسلات • عروض أسعار • محاضر اجتماعات', target: /(?:\b(?:contract|contrat|quotation|quote|devis|business\s+document|business\s+letter)\b|عقد(?:\s+(?:عمل|تجاري|إيجار))?|عرض\s+سعر|مراسلة\s+تجارية|وثائق?\s+تجارية)/i, actions: ['create', 'want'] },
@@ -42,7 +44,12 @@ const TOOL_SPECS = [
 
 export function getToolRedirectIntent(text, options = {}) {
   const value = typeof text === 'string' ? text.trim() : ''
-  if (!value || options.hasImageAttachment || IMAGE_CONTEXT_RE.test(value) || INFO_QUESTION_RE.test(value) || WANT_INFO_RE.test(value)) return null
+  if (!value || options.hasImageAttachment || INFO_QUESTION_RE.test(value) || WANT_INFO_RE.test(value)) return null
+
+  const imageTool = TOOL_SPECS.find(spec => spec.id === 'image')
+  const imageToolRequested = imageTool && imageTool.actions.some(action => ACTIONS[action].test(value)) && imageTool.target.test(value)
+  if (!imageToolRequested && IMAGE_CONTEXT_RE.test(value)) return null
+  if (imageToolRequested) return toRedirect(imageTool)
 
   const qr = TOOL_SPECS.find(spec => spec.id === 'qrcode')
   const qrRequested = qr && (qr.actions.some(action => ACTIONS[action].test(value)) && qr.target.test(value) || qr.implicit.test(value))

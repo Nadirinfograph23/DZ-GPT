@@ -398,3 +398,13 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 1. In a browser, submit a QR creation prompt and click the redirect card; confirm the QR generator opens selected.
 2. In the Quran page, submit an ayah question and verify the empty/error SSE case invokes the fallback and renders the source-grounded answer; if provider error persists, the UI should show the fallback result or the Arabic connection message, not `حدث خطأ، حاول مجدداً.`
 3. The following branch update is documentation-only and uses `[skip ci]`; the app build deployed SHA remains `ae66b654104ea373efaa88296e20d3e9dd655c97`.
+
+### Verification — tool-intent redirect rollout (2026-10-05)
+
+- Commit `734f395daefc2f492a0c7f5475b7d1e59a575eb3` adds conservative redirects for the catalog tools while leaving image-related requests, informational questions, and how-to requests on the normal chat path. The diff is limited to five files.
+- The committed regression test source passed in the conversation JavaScript harness: 30 positive cases, 18 negative cases, image and QR safeguards, 81 assertions total.
+- GitHub Actions run [37213863456](https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/37213863456) completed successfully for that exact SHA: dependency install, asset build, Cloudflare Worker deploy, production API/static version checks, and production YouTube smoke test.
+- Cloudflare read-only API state maps `dzagent.app` to Worker `dzagent` in `production`; its latest deployment is 100% on version 299. Cloudflare version metadata does not expose the source commit.
+- The deployment workflow logged `/api/version` serving the new SHA at 2026-10-04 15:41:15Z. However, an independent probe at Cloudflare POP `ORD` on 2026-10-05 07:15:28Z returned old commit `86d45f591cbf97083cdc43fdac68ec78a913be26` from both `dzagent.app` and `dzagent.nadirfortest44.workers.dev`. `/api/version` had a fresh `serverTime` and `no-store` headers; `/version.json` returned the same old commit with `CF-Cache-Status: HIT`.
+- No later GitHub deployment run was found. Therefore the build and deployment workflow succeeded, but the live runtime and Cloudflare control-plane state disagree at the checked POP. Do not claim the new SHA is consistently live until the mismatch is resolved and production `/api/version` returns `734f395daefc2f492a0c7f5475b7d1e59a575eb3`.
+- No Cloudflare routes, DNS, Worker settings, or cache configuration were changed. This handoff update is documentation-only and its commit message uses `[skip ci]`.

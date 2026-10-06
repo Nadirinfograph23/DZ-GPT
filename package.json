@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "build": "tsc -b && vite build",
+    "build": "node tests/generate-build-info.test.js && node scripts/generate-build-info.js && tsc -b && vite build",
     "start": "NODE_ENV=production node server.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "postinstall": "node scripts/patch-cf-compat.js && node scripts/patch-doctor-search.js && node scripts/compact-version-json.js",
     "test:image-search": "node tests/image-search.test.js",
     "test:radio-filters": "node tests/radio-filters.test.js",
-    "test:tool-redirect-intents": "node tests/tool-redirect-intents.test.js"
+    "test:tool-redirect-intents": "node tests/tool-redirect-intents.test.js",
+    "test:build-info": "node tests/generate-build-info.test.js"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",

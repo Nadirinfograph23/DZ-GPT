@@ -411,3 +411,16 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - The deployment workflow logged `/api/version` serving the new SHA at 2026-10-04 15:41:15Z. However, an independent probe at Cloudflare POP `ORD` on 2026-10-05 07:15:28Z returned old commit `86d45f591cbf97083cdc43fdac68ec78a913be26` from both `dzagent.app` and `dzagent.nadirfortest44.workers.dev`. `/api/version` had a fresh `serverTime` and `no-store` headers; `/version.json` returned the same old commit with `CF-Cache-Status: HIT`.
 - No later GitHub deployment run was found. Therefore the build and deployment workflow succeeded, but the live runtime and Cloudflare control-plane state disagree at the checked POP. Do not claim the new SHA is consistently live until the mismatch is resolved and production `/api/version` returns `734f395daefc2f492a0c7f5475b7d1e59a575eb3`.
 - No Cloudflare routes, DNS, Worker settings, or cache configuration were changed. This handoff update is documentation-only and its commit message uses `[skip ci]`.
+
+## 2026-10-08 — QR/CV and catalog tool redirects: current verification
+
+### Current implementation
+- No source-code patch was needed: `src/components/DZChatBox.tsx` calls `getToolRedirectIntent()` before the normal chat fallback; the returned card's `فتح الأداة` button navigates to `/tools?tool=<id>`. `src/pages/DZTools.tsx` accepts the deep link and selects the requested tool.
+- All 22 tool IDs in the DZ Tools catalog match the redirect-intent catalog, including `qrcode` and `cv`.
+
+### Ordered continuation and evidence
+1. Regression check on this branch: run `npm run test:tool-redirect-intents`. The checked-in test source was executed against the current helper: 32 positive cases, 19 negative cases, image/QR safeguards, 86 assertions passed.
+2. Current HEAD is `a07cdb86fe549cdfe407cd5b1e918f25a9ec0dac`. GitHub Actions run [37429380529](https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/37429380529) passed dependency install, asset build, Worker deployment, and `/api/version` verification; the static-version check failed because `/version.json` returned an empty object at that time, so the workflow skipped its YouTube smoke step. Do not label that workflow run fully successful.
+3. Read-only live verification on 2026-10-08: `/api/version` and `/version.json` both returned HTTP 200 with the exact HEAD SHA above. `/tools?tool=qrcode` and `/tools?tool=cv` each returned HTTP 200. The static-version discrepancy was not present in this later probe.
+4. Remaining browser-only check: submit a QR creation request and a CV creation request in DZ Agent, click each card, and confirm the matching tool opens selected. This UI click-through was not available in this session; do not claim it was manually verified.
+5. No Cloudflare zone, DNS, Worker configuration, cache, or secret settings were changed. For any later source edits, inspect the exact branch SHA first, run the focused test and build, then verify both version endpoints against the deployed SHA and record the exact run result.

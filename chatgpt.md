@@ -424,3 +424,18 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 3. Read-only live verification on 2026-10-08: `/api/version` and `/version.json` both returned HTTP 200 with the exact HEAD SHA above. `/tools?tool=qrcode` and `/tools?tool=cv` each returned HTTP 200. The static-version discrepancy was not present in this later probe.
 4. Remaining browser-only check: submit a QR creation request and a CV creation request in DZ Agent, click each card, and confirm the matching tool opens selected. This UI click-through was not available in this session; do not claim it was manually verified.
 5. No Cloudflare zone, DNS, Worker configuration, cache, or secret settings were changed. For any later source edits, inspect the exact branch SHA first, run the focused test and build, then verify both version endpoints against the deployed SHA and record the exact run result.
+
+
+## 2026-10-10 — QR/CV tool redirects: production re-check
+
+- Repository: Nadirinfograph23/DZ-GPT; target branch: devin/1774405518-init-dz-gpt. Current branch HEAD when checked: bafca67110425adffa352d5a05b8c9825ea5419e. The application deployment SHA remains a07cdb86fe549cdfe407cd5b1e918f25a9ec0dac; the newer branch commits are documentation-only.
+- No application-code change was needed for the reported QR/CV redirect behavior: src/components/DZChatBox.tsx invokes getToolRedirectIntent() and renders the clickable فتح الأداة card; src/pages/DZTools.tsx recognizes ?tool=<id> and selects the requested tool. The redirect catalog covers all 22 current DZ Tools IDs.
+- Regression verification: executed the checked-in redirect helper and test cases in the session JavaScript harness (not a local Node/npm run): 32 positive cases, 19 negative cases, existing image/QR safeguards, plus the exact Arabic prompts إنشاء كود QR and إنشاء سيرة ذاتية; 88 assertions passed.
+- Production check on 2026-10-10: https://dzagent.app/api/version returned HTTP 200 and commit a07cdb86fe549cdfe407cd5b1e918f25a9ec0dac, branch devin/1774405518-init-dz-gpt. /tools?tool=qrcode rendered the QR generator selected; /tools?tool=cv rendered the CV generator selected. This verifies the live deep links, not an interactive DZ Agent browser click-through.
+- GitHub Actions run 37429380529 for a07cdb86fe549cdfe407cd5b1e918f25a9ec0dac: Worker deployment and production /api/version check succeeded; the static /version.json fallback check failed, and the YouTube smoke step was skipped. The app SHA is live despite the later static-fallback failure; do not report that workflow as fully successful.
+- Cloudflare: read-only zone listing returned active zone dzagent.app and permissions metadata including Worker and DNS read/write. A follow-up token verification returned HTTP 401 / code 1000 (Invalid API Token); the connected credential type is api_key, so full Cloudflare credential validity is not confirmed. Update the Cloudflare API key/permissions in the existing Replit connection (never paste keys in chat), then verify again. No DNS, Worker, cache, or secret settings were changed.
+
+### Ordered continuation
+1. Update/reconnect the Cloudflare API key in the existing Replit connection; verify the token and intended account/zone access before any Cloudflare change.
+2. Diagnose why the current /version.json endpoint serves the SPA page / fails the workflow's static-version fallback check; fix only the version path, then require the exact deployed SHA from both version endpoints and a fully green Actions run. Keep DNS and unrelated Cloudflare settings untouched.
+3. When a real browser is available, submit QR and CV creation prompts in DZ Agent and click each redirect card to confirm the tool opens selected.

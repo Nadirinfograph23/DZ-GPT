@@ -496,3 +496,18 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 2. If either card is absent or opens the wrong tool, capture the exact prompt, assistant response, resulting URL, and browser console/network error; patch only the reproduced failure and add that prompt to the regression suite.
 3. Update the Cloudflare API-key connection in Replit with a valid credential/permissions (never paste a key into chat), then recheck token validity before any Cloudflare control-plane action.
 4. If a source commit is later required, run npm run test:tool-redirect-intents and npm run build, inspect the matching GitHub Actions run, then verify the exact deployed SHA from both live version endpoints and repeat the browser click-through.
+
+
+## 2026-10-10 — Fix LLM bypass for DZ Agent tool requests in /chat
+
+- The user reported that exact QR/CV tool requests received an LLM answer instead of a redirect. This supersedes the earlier source-only/browser-unverified conclusion above.
+- A concrete bypass was confirmed in the route map and send handlers: /dz-agent uses DZChatBox and has local tool-intent interception, while /chat uses src/App.tsx and its sendMessage can call fetchAIResponse without a tool-intent check or redirect-card renderer when modelId is dz-agent. The exact browser path from the user’s reproduction is not available, so the bypass is fixed defensively rather than claimed as the only path involved.
+- Fix prepared: for modelId dz-agent, src/App.tsx now checks getToolRedirectIntent before starting the LLM request, appends a dedicated assistant tool card with a Tools link, and returns without calling fetchAIResponse. The new-message history is preserved. The other models remain unchanged.
+- Added exact regression prompts for إنشاء كود QR / انشاء كود QR and إنشاء سيرة ذاتية / انشاء سيرة ذاتية. The existing 22-tool catalog mapping and no-redirect informational cases remain intact.
+- Source/API tests and production deployment verification: pending this commit; add exact commit, workflow, and deployed SHA here after checking.
+
+### Ordered continuation
+1. Run the tool intent regression suite and build; inspect the push-triggered GitHub Actions run.
+2. Verify /api/version and /version.json report the new app SHA, and check /tools?tool=qrcode and /tools?tool=cv.
+3. Ask the user to test in the exact path where they saw the LLM answer; if it was /dz-agent rather than /chat, capture the exact prompt, response and browser URL/console before changing that already-early interception.
+4. Do not alter Cloudflare control-plane settings. The Cloudflare API-key integration still reports an invalid token; rely on the repository's deployment workflow and the read-only Cloudflare MCP evidence already recorded.

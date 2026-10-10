@@ -15,6 +15,14 @@ const positiveCases = [
     "cv"
   ],
   [
+    "إنشاء سيرة ذاتية",
+    "cv"
+  ],
+  [
+    "انشاء سيرة ذاتية",
+    "cv"
+  ],
+  [
     "Create a resume for a software engineer",
     "cv"
   ],
@@ -108,6 +116,14 @@ const positiveCases = [
   ],
   [
     "أنشئ QR code لرابط موقعي",
+    "qrcode"
+  ],
+  [
+    "إنشاء كود QR",
+    "qrcode"
+  ],
+  [
+    "انشاء كود QR",
     "qrcode"
   ],
   [

@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 import * as pdfjsLib from 'pdfjs-dist'
 import Tesseract from 'tesseract.js'
 import { DeveloperCard } from './components/DeveloperCard'
+import { getToolRedirectIntent } from './lib/tool-redirect-intents.js'
 import BreakingNewsBanner from './components/BreakingNewsBanner'
 import './App.css'
 import './styles/dz-agent.css'
@@ -36,6 +37,7 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   showDevCard?: boolean
+  toolRedirect?: NonNullable<ReturnType<typeof getToolRedirectIntent>>
 }
 
 interface Chat {
@@ -683,6 +685,22 @@ function App() {
       }
       return c
     })
+    // Route DZ Agent tool requests locally before starting any LLM request.
+    const toolIntent = selectedModel === 'dz-agent' ? getToolRedirectIntent(text) : null
+    if (toolIntent) {
+      const toolMessage: Message = {
+        id: generateId(),
+        role: 'assistant',
+        content: toolIntent.message,
+        toolRedirect: toolIntent,
+      }
+      setChats(updatedChats.map(c =>
+        c.id === currentChatId ? { ...c, messages: [...c.messages, toolMessage] } : c
+      ))
+      setInput('')
+      return
+    }
+
     setChats(updatedChats)
     setInput('')
     setIsLoading(true)
@@ -1418,6 +1436,44 @@ function App() {
                         message.content
                       )}
                     </div>
+                    {message.toolRedirect && (
+                      <div
+                        dir="rtl"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          marginTop: 12,
+                          padding: 12,
+                          borderRadius: 12,
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          background: 'rgba(16, 185, 129, 0.08)',
+                        }}
+                      >
+                        <span style={{ fontSize: 26 }} aria-hidden="true">{message.toolRedirect.toolIcon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700 }}>{message.toolRedirect.toolName}</div>
+                          <div style={{ fontSize: 13, opacity: 0.78 }}>{message.toolRedirect.toolDesc}</div>
+                        </div>
+                        <a
+                          href={message.toolRedirect.toolUrl}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '9px 12px',
+                            borderRadius: 9,
+                            background: '#0f766e',
+                            color: '#fff',
+                            textDecoration: 'none',
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          فتح الأداة ←
+                        </a>
+                      </div>
+                    )}
                     {message.role === 'assistant' && (
                       <div className="message-actions">
                         <button
@@ -1427,7 +1483,7 @@ function App() {
                           {copiedId === message.id ? <Check size={14} /> : <Copy size={14} />}
                           {copiedId === message.id ? 'Copied' : 'Copy'}
                         </button>
-                        {message.id === activeChat.messages[activeChat.messages.length - 1]?.id && (
+                        {message.id === activeChat.messages[activeChat.messages.length - 1]?.id && !message.toolRedirect && (
                           <button className="action-btn" onClick={regenerate}>
                             <RotateCcw size={14} />
                             Regenerate

@@ -479,3 +479,20 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - This explains why GET /zones/{zone_id}/workers/routes returned an empty list: the app is attached by Worker Custom Domain, not by a zone Worker Route. GET /accounts/{account_id}/pages/projects also returned an empty list; do not diagnose the app as Pages based on this account.
 - Workers versions/deployments list endpoints returned HTTP 200 with empty result sets in these queries, but the custom-domain mapping plus live /api/version and /version.json checks confirms the current public Worker serves the app SHA a07cdb86fe549cdfe407cd5b1e918f25a9ec0dac.
 - No Cloudflare changes were made. Remaining verification is real-browser click-through of the QR and CV redirect cards; no source change is indicated unless that reproduces a failure.
+
+## 2026-10-10 — Tool redirect re-check (current session)
+
+### Verified findings
+- Repository: Nadirinfograph23/DZ-GPT; work branch: devin/1774405518-init-dz-gpt. Branch HEAD at this check: f1cb4ec0b8fce1e8d553ad2f176c3263710e64da; the latest application-code commit remains a07cdb86fe549cdfe407cd5b1e918f25a9ec0dac. The later branch commits are documentation-only.
+- Source inspection confirms src/pages/DZAgent.tsx mounts src/components/DZChatBox.tsx; that component calls getToolRedirectIntent before the normal chat fallback and renders the tool-redirect card button to the returned toolUrl. src/pages/DZTools.tsx reads ?tool= and selects only catalog IDs.
+- Executed the checked-in tests/tool-redirect-intents.test.js cases against the current helper in the session JavaScript harness (not a local npm/Node run): 32 positive, 19 negative, zero failures. Exact requests إنشاء كود QR / انشاء كود QR route to /tools?tool=qrcode; إنشاء سيرة ذاتية / انشاء سيرة ذاتية route to /tools?tool=cv. All 22 DZ Tools catalog IDs have redirect specifications; no missing or extra IDs.
+- Production probes at 2026-10-10 13:15 UTC: /api/version and /version.json both returned HTTP 200 and the same app SHA a07cdb86fe549cdfe407cd5b1e918f25a9ec0dac. /tools?tool=qrcode, /tools?tool=cv, and live DZAgent/DZTools JavaScript assets returned HTTP 200; the live DZAgent bundle contains the tool-redirect handler, /tools?tool navigation, and QR/CV IDs. These probes do not simulate a browser click-through.
+- GitHub Actions list shows the latest workflow run for app SHA a07cdb86 ended with conclusion failure (run 37429380529); the previously recorded failure was the static-version fallback check. The two live version endpoints are currently consistent, but the workflow run is not green.
+- Cloudflare API token verification returned HTTP 401 (Invalid API Token); zone read returned HTTP 403 (Invalid access token). Connected credential type is api_key. No Cloudflare write, deployment, DNS, Worker, cache, or secret changes were attempted.
+- No application source change was made because the inspected source, checked-in regression cases, deployed bundle, and live route probes all include the requested behavior. A real browser click-through remains unverified.
+
+### Ordered continuation
+1. In a real browser at /dz-agent, submit the exact prompts إنشاء كود QR and إنشاء سيرة ذاتية; confirm each displays the matching redirect card, click it, and confirm the corresponding tool opens selected.
+2. If either card is absent or opens the wrong tool, capture the exact prompt, assistant response, resulting URL, and browser console/network error; patch only the reproduced failure and add that prompt to the regression suite.
+3. Update the Cloudflare API-key connection in Replit with a valid credential/permissions (never paste a key into chat), then recheck token validity before any Cloudflare control-plane action.
+4. If a source commit is later required, run npm run test:tool-redirect-intents and npm run build, inspect the matching GitHub Actions run, then verify the exact deployed SHA from both live version endpoints and repeat the browser click-through.

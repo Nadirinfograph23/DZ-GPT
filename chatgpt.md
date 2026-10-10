@@ -439,3 +439,9 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 1. Update/reconnect the Cloudflare API key in the existing Replit connection; verify the token and intended account/zone access before any Cloudflare change.
 2. Diagnose why the current /version.json endpoint serves the SPA page / fails the workflow's static-version fallback check; fix only the version path, then require the exact deployed SHA from both version endpoints and a fully green Actions run. Keep DNS and unrelated Cloudflare settings untouched.
 3. When a real browser is available, submit QR and CV creation prompts in DZ Agent and click each redirect card to confirm the tool opens selected.
+
+
+### 2026-10-10 — Cloudflare credential retest after user update
+
+- The user reported updating the Cloudflare credential in the existing Replit connection. Retest: GET /v4/user/tokens/verify still returned HTTP 401, code 1000, Invalid API Token; GET /v4/zones?name=dzagent.app returned HTTP 200 and the active, unpaused zone.
+- This mismatch means full credential validity and Cloudflare write access remain unconfirmed. Do not attempt DNS, Worker, cache, or secret changes until the credential is verified; the user must not paste the token into chat or project Secrets.

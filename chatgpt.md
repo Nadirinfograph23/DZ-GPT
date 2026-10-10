@@ -473,3 +473,9 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - GET /accounts/{account_id}/workers/scripts/dzagent/deployments returned HTTP 200 with an empty result in this query. Do not infer that the Worker is undeployed from this alone; the public production version endpoints already report app SHA a07cdb86fe549cdfe407cd5b1e918f25a9ec0dac.
 - The separate Cloudflare REST API-key connection still returns HTTP 403 / error 9109 Invalid access token. Cloudflare MCP now works for authorized reads; no Cloudflare settings, DNS records, deployments, or secrets were changed in this session.
 - Remaining product check: interactive QR and CV card click-through in a real browser is still not verified. If a Cloudflare mutation becomes necessary, inspect its exact target/state, explain the change, and obtain approval before writing.
+## 2026-10-10 — Cloudflare production hostname mapping confirmed
+
+- Cloudflare MCP read-only check: GET /accounts/{account_id}/workers/domains returned dzagent.app mapped to Worker service dzagent in the production environment. This is the active Workers Custom Domain mapping for the zone.
+- This explains why GET /zones/{zone_id}/workers/routes returned an empty list: the app is attached by Worker Custom Domain, not by a zone Worker Route. GET /accounts/{account_id}/pages/projects also returned an empty list; do not diagnose the app as Pages based on this account.
+- Workers versions/deployments list endpoints returned HTTP 200 with empty result sets in these queries, but the custom-domain mapping plus live /api/version and /version.json checks confirms the current public Worker serves the app SHA a07cdb86fe549cdfe407cd5b1e918f25a9ec0dac.
+- No Cloudflare changes were made. Remaining verification is real-browser click-through of the QR and CV redirect cards; no source change is indicated unless that reproduces a failure.

@@ -445,3 +445,10 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 
 - The user reported updating the Cloudflare credential in the existing Replit connection. Retest: GET /v4/user/tokens/verify still returned HTTP 401, code 1000, Invalid API Token; GET /v4/zones?name=dzagent.app returned HTTP 200 and the active, unpaused zone.
 - This mismatch means full credential validity and Cloudflare write access remain unconfirmed. Do not attempt DNS, Worker, cache, or secret changes until the credential is verified; the user must not paste the token into chat or project Secrets.
+
+
+### 2026-10-10 — Cloudflare MCP read access and Worker rollout
+
+- A separate Cloudflare MCP connection became ready. Its identity, account list, zone list, Worker-script list, and deployment list were read successfully. Account/zone resolved to the active, unpaused dzagent.app zone; the account exposes one Worker script, dzagent.
+- Worker deployment history reports 302 total deployments. The latest returned deployment is source=wrangler, strategy=percentage, with one version at 100%; created 2026-10-06T07:24:57.202443Z. Its Cloudflare version UUID is 75345880-42b4-452a-ad68-67f8ec405951. The live /api/version check separately reports application SHA a07cdb86fe549cdfe407cd5b1e918f25a9ec0dac. Do not infer a source-SHA mapping from the Cloudflare version UUID.
+- This verifies current Cloudflare MCP read access only; no write was needed or attempted. No Worker, DNS, cache, or secret setting was changed. The separate REST connector's token verification had returned 401, so prefer the working MCP connection for further read-only Cloudflare inspection and recheck before any future writes.

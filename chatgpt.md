@@ -466,3 +466,10 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 1. If QR/CV redirect still fails for a user, reproduce in a real browser with إنشاء كود QR and إنشاء سيرة ذاتية; verify the card appears, click it, and confirm the matching tool is selected. Capture browser console/network evidence if it fails.
 2. Renew the existing Cloudflare API-key connection before any Cloudflare control-plane inspection or write. Do not alter DNS/Worker/cache settings unless the exact failure and required change are established.
 3. Keep source unchanged if the browser flows work; record exact browser result and date here.
+## 2026-10-10 — Cloudflare MCP access verified after browser connection
+
+- After the user connected Cloudflare from the browser, Cloudflare MCP became available and read-only checks succeeded: identity lookup returned an authenticated profile; GET /accounts returned one account; GET /zones?name=dzagent.app returned the active, unpaused dzagent.app zone.
+- The zone response reports the relevant permissions #worker:edit, #dns_records:edit, and #zone:edit. GET /accounts/{account_id}/workers/scripts returned the dzagent Worker script, modified 2026-10-06T07:24:58Z.
+- GET /accounts/{account_id}/workers/scripts/dzagent/deployments returned HTTP 200 with an empty result in this query. Do not infer that the Worker is undeployed from this alone; the public production version endpoints already report app SHA a07cdb86fe549cdfe407cd5b1e918f25a9ec0dac.
+- The separate Cloudflare REST API-key connection still returns HTTP 403 / error 9109 Invalid access token. Cloudflare MCP now works for authorized reads; no Cloudflare settings, DNS records, deployments, or secrets were changed in this session.
+- Remaining product check: interactive QR and CV card click-through in a real browser is still not verified. If a Cloudflare mutation becomes necessary, inspect its exact target/state, explain the change, and obtain approval before writing.

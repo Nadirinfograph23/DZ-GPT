@@ -123,6 +123,10 @@ const positiveCases = [
     "qrcode"
   ],
   [
+    "كود qr في جيبه",
+    "qrcode"
+  ],
+  [
     "انشاء كود QR",
     "qrcode"
   ],
@@ -172,6 +176,8 @@ const positiveCases = [
 const negativeCases = [
   "What is QR code?",
   "ما هو رمز QR؟",
+  "اشرح كود QR في جيبه",
+  "تعريف كود QR في جيبه",
   "كيف أنشئ QR code؟",
   "What is a business plan?",
   "How do I make an invoice?",

@@ -524,3 +524,12 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - The QR/CV and other tool-routing fix is already present on this branch in `src/App.tsx` and `src/components/DZChatBox.tsx`: tool intents are intercepted before the LLM, and the card button opens `/tools?tool=<id>`. The exact Arabic QR/CV prompts are already covered in `tests/tool-redirect-intents.test.js`; no duplicate routing patch was made.
 - Cloudflare REST read access did not validate: the connected API-key integration returned HTTP 400 with `Invalid format for Authorization header`. No Cloudflare resources were changed. The branch is the effective production source; after this source commit, check its GitHub Actions/Cloudflare result and verify the exact SHA from both live version endpoints before reporting deployment.
 - Verification status at handoff: run `npm run test:version-check-state`, `npm run test:tool-redirect-intents`, `npm run build`, inspect the exact commit's Actions run, then perform browser click-through for the tool card if available. Do not claim a live deployment or browser click-through until observed.
+
+
+## Follow-up 2026-10-11 — CI failure and narrow compile fix
+
+- Commit 39d0a7d5d8e2fbe9ddffdfe624d71e3c5e266924 was pushed to devin/1774405518-init-dz-gpt after the user approved updating the production branch.
+- The version-state logic was checked against 12 cases. GitHub Actions then failed at tsc -b with TS7016 because TypeScript could not find a declaration for src/lib/version-check-state.js. The deploy step was skipped; live /api/version and /version.json both still report 140879efa9f9f01927c3a5724cf5c28ab528fe7d.
+- Narrow fix: add src/lib/version-check-state.d.ts with the four helper signatures, then rerun CI and verify the live SHA before reporting production success.
+- Tool routing already exists: src/App.tsx intercepts DZ Agent tool intents before the LLM; src/lib/tool-redirect-intents.js maps QR, CV, and other tools to /tools?tool=<id>, and tests/tool-redirect-intents.test.js covers Arabic and English inputs. Avoid duplicate routing changes; still verify the card click-through when a browser is available.
+- Cloudflare REST returned HTTP 400, Invalid format for Authorization header, for the connected API-key integration. No Cloudflare resources were changed; the key must be updated in Replit, never pasted into chat.

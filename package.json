@@ -13,7 +13,8 @@
     "test:image-search": "node tests/image-search.test.js",
     "test:radio-filters": "node tests/radio-filters.test.js",
     "test:tool-redirect-intents": "node tests/tool-redirect-intents.test.js",
-    "test:build-info": "node tests/generate-build-info.test.js"
+    "test:build-info": "node tests/generate-build-info.test.js",
+    "test:version-check-state": "node tests/version-check-state.test.js"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",

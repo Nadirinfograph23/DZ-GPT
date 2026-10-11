@@ -513,3 +513,14 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 2. If the original path was /dz-agent and either exact prompt still reaches the LLM, capture that URL and exact prompt/response; the repo helper already runs before stream and normal LLM requests in that component.
 3. On the next normal deployment, confirm the repaired static-version workflow check passes in addition to the Worker version check.
 4. Do not alter Cloudflare control-plane settings; no Cloudflare configuration was changed during this fix.
+
+
+## 2026-10-11 — Version notification race and stale-client detection
+
+- Baseline branch HEAD before this change: `62314811777ce122c63e774338f8e8fd1c105e49`. `startVersionChecker()` starts an async fetch before assigning `_pollTimer`; using `_pollTimer === null` to detect the first response therefore skipped first-visit initialization when the network replied later. The banner also auto-reloaded the page after 15 seconds.
+- The build already generates a full commit SHA in `data/build-info.json`; the server version endpoints expose `commit`. The client bundle now embeds the generated SHA and compares it with the server SHA, so a missing localStorage marker cannot silently hide an older loaded bundle.
+- Change: use explicit first-successful-check state and a single-flight guard; remove the automatic reload/countdown but retain manual update and dismissal; remember dismissal by a server-version fingerprint; only show Service Worker lifecycle prompts after verifying the server version.
+- Added `src/lib/version-check-state.js` and `tests/version-check-state.test.js`; added the focused `npm run test:version-check-state` script. JSON metadata imports are enabled for the frontend TypeScript build.
+- The QR/CV and other tool-routing fix is already present on this branch in `src/App.tsx` and `src/components/DZChatBox.tsx`: tool intents are intercepted before the LLM, and the card button opens `/tools?tool=<id>`. The exact Arabic QR/CV prompts are already covered in `tests/tool-redirect-intents.test.js`; no duplicate routing patch was made.
+- Cloudflare REST read access did not validate: the connected API-key integration returned HTTP 400 with `Invalid format for Authorization header`. No Cloudflare resources were changed. The branch is the effective production source; after this source commit, check its GitHub Actions/Cloudflare result and verify the exact SHA from both live version endpoints before reporting deployment.
+- Verification status at handoff: run `npm run test:version-check-state`, `npm run test:tool-redirect-intents`, `npm run build`, inspect the exact commit's Actions run, then perform browser click-through for the tool card if available. Do not claim a live deployment or browser click-through until observed.

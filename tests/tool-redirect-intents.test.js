@@ -145,7 +145,28 @@ const positiveCases = [
   [
     "faire un code QR pour mon site",
     "qrcode"
-  ]
+  ],
+  ["Créez un CV professionnel pour moi", "cv"],
+  ["Je voudrais créer mon CV", "cv"],
+  ["Crée une facture pour mon magasin", "invoice"],
+  ["Cherche un emploi à Alger", "jobs"],
+  ["Ouvre l'outil de santé", "health"],
+  ["Planifie un projet pour mon café", "planner"],
+  ["Calcule ma pension de retraite", "pension"],
+  ["Génère un code QR pour mon site", "qrcode"],
+  ["Convertis ce fichier PDF en Word", "convert"],
+  ["Partage ce fichier PDF", "fileupload"],
+  ["Créer une carte de visite", "bizcard"],
+  ["Fais une capture d'écran de mon site", "screenshot"],
+  ["Ouvre le lecteur OCR", "ocr"],
+  ["Créer une feuille de calcul pour mon budget", "excel"],
+  ["Analyse mes données CSV", "dataanalysis"],
+  ["Lire ce texte à voix haute", "tts"],
+  ["Cherche les vols Air Algérie pour Paris", "flights"],
+  ["ديرلي سيرة ذاتية", "cv"],
+  ["نحب ندير QR لرقم هاتفي", "qrcode"],
+  ["صايبلي فاتورة للمحل", "invoice"],
+  ["وجدلي خطة مشروع للمقهى", "planner"],
 ]
 
 const negativeCases = [
@@ -167,7 +188,11 @@ const negativeCases = [
   "what tools are available for invoices?",
   "ارسم بطاقة عمل للمحل",
   "ما هي أداة رفع الملفات؟",
-  "how do I use the tax calculator?"
+  "how do I use the tax calculator?",
+  "Qu'est-ce qu'un CV ?",
+  "Comment créer un QR code ?",
+  "Je veux des renseignements sur les impôts",
+  "Comment convertir un PDF ?"
 ]
 
 for (const [text, expectedId] of positiveCases) {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { getToolRedirectIntent } from '../src/lib/tool-redirect-intents.js'
+import { readFileSync } from 'node:fs'
+import { getToolRedirectIntent, TOOL_REDIRECT_TOOL_IDS } from '../src/lib/tool-redirect-intents.js'
 
 const positiveCases = [
   [
@@ -177,6 +178,67 @@ const positiveCases = [
   ["وجدلي خطة مشروع للمقهى", "planner"],
 ]
 
+// Every live tools-page entry has a representative request in Arabic,
+// French, English, and Algerian Darija / Franco-Darija.
+const multilingualCases = [
+  ['image', ['افتح أداة الصور الذكية', 'Ouvre l’outil d’images IA', 'open the AI image tool', 'nheb l’outil d’images IA']],
+  ['cv', ['أنشئ لي سيرة ذاتية احترافية', 'Crée mon CV professionnel', 'Create a professional resume', 'كيفاش ندير CV؟']],
+  ['planner', ['أنشئ خطة مشروع لمتجري', 'Planifie un projet pour mon café', 'Create a project plan', 'wajedli khouta projet']],
+  ['docs', ['اكتب عقد عمل', 'Rédige un contrat de travail', 'Draft a business contract', 'sawbli 3aqd 5edma']],
+  ['jobs', ['ابحث عن وظيفة في الجزائر', 'Cherche un emploi à Alger', 'Find a job in Algiers', 'nheb nkhdem, cherche job']],
+  ['health', ['ابحث عن طبيب أسنان في عنابة', 'Cherche un médecin à Annaba', 'Find a doctor in Annaba', 'nheb médecin f Annaba']],
+  ['ocr', ['استخرج النص من الصورة باستعمال OCR', 'Extraire le texte de cette image avec OCR', 'Extract text from this photo using OCR', 'nheb extract text avec OCR']],
+  ['bizplan', ['أنشئ خطة عمل لمقهى', 'Crée un business plan pour un café', 'Create a business plan for a café', 'sawbli business plan ta3 café']],
+  ['invoice', ['أنشئ لي فاتورة', 'Crée une facture pour mon magasin', 'Create an invoice for my shop', 'nheb ndir facture l magasin']],
+  ['tax', ['احسب ضريبة الدخل على راتبي', 'Calcule mes impôts sur le revenu', 'Calculate my income tax', '7seb impots ta3 salaire']],
+  ['zakat', ['احسب زكاة مالي', 'Calcule ma zakat', 'Calculate my zakat', '7seb zakat ta3i']],
+  ['hashtag', ['أنشئ هاشتاغات لمطعمي', 'Génère des hashtags pour mon restaurant', 'Generate hashtags for my cafe', 'sawb hashtags ta3 café']],
+  ['excel', ['أنشئ جدول Excel للمصاريف', 'Crée un tableau Excel pour mes dépenses', 'Create an Excel spreadsheet for expenses', 'nheb ndir tableau Excel']],
+  ['pension', ['احسب معاش التقاعد', 'Calcule ma pension de retraite', 'Calculate my pension', '7seb retraite ta3i']],
+  ['qrcode', ['أنشئ رمز QR لرابط موقعي', 'Génère un code QR pour mon site', 'Generate a QR code for my website', 'nheb ndir QR l site ta3i']],
+  ['bizcard', ['صمم بطاقة عمل للمحل', 'Crée une carte de visite', 'Design a business card', 'sawb carte visite ta3 magasin']],
+  ['dataanalysis', ['حلل ملف CSV', 'Analyse mes données CSV', 'Analyze my CSV data', 'nheb n-analyse data CSV']],
+  ['tts', ['حوّل النص إلى صوت', 'Convertis ce texte en parole', 'Convert this text to speech', 'nheb converti texte l audio']],
+  ['screenshot', ['التقط لقطة شاشة لموقعي', 'Fais une capture d’écran de mon site', 'Take a screenshot of my website', 'dir capture d’écran ta3 site']],
+  ['fileupload', ['ارفع وشارك ملف PDF', 'Partage ce fichier PDF', 'Upload and share my PDF file', 'nheb upload file PDF']],
+  ['convert', ['حوّل هذا الملف إلى PDF', 'Convertis ce fichier Word en PDF', 'Convert this DOCX file to PDF', 'nheb convert file PDF']],
+  ['flights', ['ابحث عن رحلات من الجزائر إلى باريس', 'Cherche des vols d’Alger à Paris', 'Find flights from Algiers to Paris', 'nheb n-searchi vols l Paris']],
+]
+
+const toolsPage = readFileSync(new URL('../src/pages/DZTools.tsx', import.meta.url), 'utf8')
+const pageIdsMatch = toolsPage.match(/const VALID_TOOL_IDS: ToolId\[\] = \[([^\]]+)\]/)
+assert.ok(pageIdsMatch, 'Expected the tools page to expose its deep-link allowlist')
+const pageToolIds = [...pageIdsMatch[1].matchAll(/'([^']+)'/g)].map(match => match[1])
+assert.deepEqual([...TOOL_REDIRECT_TOOL_IDS].sort(), [...pageToolIds].sort(), 'Intent registry must cover exactly the deep-linkable tools')
+assert.equal(TOOL_REDIRECT_TOOL_IDS.length, 22, 'Expected all 22 tools currently rendered on the tools page')
+
+const languageExpectations = [
+  { prefix: 'افتح', message: 'يمكنك استخدام' },
+  { prefix: 'Ouvrir', message: 'Vous pouvez utiliser' },
+  { prefix: 'Open', message: 'You can use' },
+  { prefix: 'حلّ', message: 'تقدر تستعمل' },
+]
+let multilingualCount = 0
+for (const [expectedId, requests] of multilingualCases) {
+  assert.equal(requests.length, 4, `Expected four language samples for ${expectedId}`)
+  requests.forEach((text, index) => {
+    const result = getToolRedirectIntent(text)
+    assert.equal(result?.id, expectedId, `Expected ${expectedId} for: ${text}`)
+    assert.equal(result?.toolUrl, `/tools?tool=${expectedId}`, `Unexpected destination for: ${text}`)
+    assert.ok(result?.buttonLabel, `Missing localized button label for: ${text}`)
+    assert.ok(result?.message, `Missing localized response for: ${text}`)
+    if (expectedId === 'qrcode' && (index === 0 || index === 3)) {
+      assert.equal(result.buttonLabel, 'فتح الأداة ←', 'Preserve the existing Arabic QR button label')
+      if (index === 0) assert.ok(result.message.includes('QR Code'), 'Preserve the existing Arabic QR response')
+      else assert.ok(result.message.startsWith(languageExpectations[index].message), `Wrong response language for: ${text}`)
+    } else {
+      assert.ok(result.buttonLabel.startsWith(languageExpectations[index].prefix), `Wrong button language for: ${text}`)
+      assert.ok(result.message.startsWith(languageExpectations[index].message), `Wrong response language for: ${text}`)
+    }
+    multilingualCount += 1
+  })
+}
+
 const negativeCases = [
   "What is QR code?",
   "ما هو رمز QR؟",
@@ -185,7 +247,6 @@ const negativeCases = [
   "تعريف كود QR في جيبه",
   "كيف أنشئ QR code؟",
   "What is a business plan?",
-  "How do I make an invoice?",
   "ما معنى الفاتورة؟",
   "Can you explain how taxes work?",
   "I want to know about CVs",
@@ -193,9 +254,6 @@ const negativeCases = [
   "Create an image of a CV page",
   "Create an image of a cat",
   "ما النص في هذه الصورة؟",
-  "extract text from this photo using OCR",
-  "open the image generator tool",
-  "create a QR code image for my business",
   "what tools are available for invoices?",
   "ارسم بطاقة عمل للمحل",
   "ما هي أداة رفع الملفات؟",
@@ -203,7 +261,8 @@ const negativeCases = [
   "Qu'est-ce qu'un CV ?",
   "Comment créer un QR code ?",
   "Je veux des renseignements sur les impôts",
-  "Comment convertir un PDF ?"
+  "How do I use the tax calculator?",
+  "what tools are available?"
 ]
 
 for (const [text, expectedId] of positiveCases) {
@@ -219,5 +278,10 @@ for (const text of negativeCases) {
 assert.equal(getToolRedirectIntent('create a CV for me', { hasImageAttachment: true }), null)
 assert.equal(getToolRedirectIntent('open the Visual AI image tool')?.toolUrl, '/tools?tool=image')
 assert.deepEqual(getToolRedirectIntent('أنشئ QR code لرابط موقعي')?.quickSuggestions, ['اعمل QR لرابط موقعي', 'QR لرقم هاتفي', 'QR لواتساب'])
+assert.equal(getToolRedirectIntent('كيفاش ندير CV؟')?.toolUrl, '/tools?tool=cv')
+assert.equal(getToolRedirectIntent('How do I make an invoice?')?.toolUrl, '/tools?tool=invoice')
+assert.equal(getToolRedirectIntent('extract text from this photo using OCR')?.toolUrl, '/tools?tool=ocr')
+assert.equal(getToolRedirectIntent('open the image generator tool')?.toolUrl, '/tools?tool=image')
+assert.equal(getToolRedirectIntent('Comment convertir un PDF ?')?.toolUrl, '/tools?tool=convert')
 
-console.log(`Tool redirect intent tests passed (${positiveCases.length} positive, ${negativeCases.length} negative, plus image and QR safeguards).`)
+console.log(`Tool redirect intent tests passed (${positiveCases.length} legacy positives, ${multilingualCount} multilingual routes across ${TOOL_REDIRECT_TOOL_IDS.length} tools, ${negativeCases.length} negative, plus safeguards).`)

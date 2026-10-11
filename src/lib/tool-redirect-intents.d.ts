@@ -5,6 +5,7 @@ export interface ToolRedirectIntent {
   toolIcon: string
   toolDesc: string
   message: string
+  buttonLabel?: string
   quickSuggestions?: string[]
 }
 

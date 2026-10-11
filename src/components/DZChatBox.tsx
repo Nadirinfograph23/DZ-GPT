@@ -726,6 +726,7 @@ interface DZMessage {
     toolIcon: string
     toolDesc: string
     message: string
+    buttonLabel?: string
     smartMessage?: string
     id?: string
     stations?: Array<{ name: string; icon: string }>
@@ -7986,7 +7987,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
 
       // ── Tool Redirect — show navigation card when a dedicated tool exists ──
       if (data._toolRedirect && typeof data._toolRedirect === 'object') {
-        const tr = data._toolRedirect as { toolName: string; toolUrl: string; toolIcon: string; toolDesc: string; message: string; smartMessage?: string }
+        const tr = data._toolRedirect as { toolName: string; toolUrl: string; toolIcon: string; toolDesc: string; message: string; buttonLabel?: string; smartMessage?: string }
         addAssistantMessage({
           content: tr.smartMessage || tr.message,
           richType: 'tool-redirect',
@@ -9921,7 +9922,7 @@ ${rows}
                               className="dz-tool-redirect-card__btn"
                               onClick={(e) => { e.stopPropagation(); window.location.href = msg.toolRedirect!.toolUrl }}
                             >
-                              فتح الأداة ←
+                              {msg.toolRedirect.buttonLabel || 'فتح الأداة ←'}
                             </button>
                           </div>
                         )

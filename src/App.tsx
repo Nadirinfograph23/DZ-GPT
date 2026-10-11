@@ -1470,7 +1470,7 @@ function App() {
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          فتح الأداة ←
+                          {message.toolRedirect.buttonLabel || 'فتح الأداة ←'}
                         </a>
                       </div>
                     )}

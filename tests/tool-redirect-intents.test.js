@@ -178,6 +178,32 @@ const positiveCases = [
   ["وجدلي خطة مشروع للمقهى", "planner"],
 ]
 
+const requiredCvCases = [
+  ["أنشئ سيرة ذاتية", "افتح أداة إنشاء السيرة الذاتية", "يمكنك استخدام"],
+  ["أريد إنشاء سيرة ذاتية", "افتح أداة إنشاء السيرة الذاتية", "يمكنك استخدام"],
+  ["ساعدني في إنشاء CV", "افتح أداة إنشاء السيرة الذاتية", "يمكنك استخدام"],
+  ["أريد عمل سيرة ذاتية احترافية", "افتح أداة إنشاء السيرة الذاتية", "يمكنك استخدام"],
+  ["أنشئ لي سيرة ذاتية", "افتح أداة إنشاء السيرة الذاتية", "يمكنك استخدام"],
+  ["ديرلي CV", "حلّ أداة السيرة الذاتية", "تقدر تستعمل"],
+  ["حبيت ندير سيرة ذاتية", "حلّ أداة السيرة الذاتية", "تقدر تستعمل"],
+  ["عاونّي نصايب CV", "حلّ أداة السيرة الذاتية", "تقدر تستعمل"],
+  ["كيفاش ندير CV؟", "حلّ أداة السيرة الذاتية", "تقدر تستعمل"],
+  ["Crée-moi un CV", "Ouvrir l’outil de création de CV", "Vous pouvez utiliser"],
+  ["Je veux créer un CV", "Ouvrir l’outil de création de CV", "Vous pouvez utiliser"],
+  ["Créer un curriculum vitae", "Ouvrir l’outil de création de CV", "Vous pouvez utiliser"],
+  ["Create a CV", "Open CV creator", "You can use"],
+  ["Create a resume", "Open CV creator", "You can use"],
+  ["Help me create my résumé", "Open CV creator", "You can use"],
+]
+
+for (const [text, buttonLabel, messagePrefix] of requiredCvCases) {
+  const result = getToolRedirectIntent(text)
+  assert.equal(result?.id, "cv", `Expected CV routing for: ${text}`)
+  assert.equal(result?.toolUrl, "/tools?tool=cv", `Unexpected CV destination for: ${text}`)
+  assert.equal(result?.buttonLabel, buttonLabel, `Wrong localized CV button for: ${text}`)
+  assert.ok(result?.message.startsWith(messagePrefix), `Wrong localized CV response for: ${text}`)
+}
+
 // Every live tools-page entry has a representative request in Arabic,
 // French, English, and Algerian Darija / Franco-Darija.
 const multilingualCases = [
@@ -259,6 +285,8 @@ const negativeCases = [
   "ما هي أداة رفع الملفات؟",
   "how do I use the tax calculator?",
   "Qu'est-ce qu'un CV ?",
+  "ما هي السيرة الذاتية؟",
+  "كيف أكتب سيرة ذاتية ناجحة؟",
   "Comment créer un QR code ?",
   "Je veux des renseignements sur les impôts",
   "How do I use the tax calculator?",

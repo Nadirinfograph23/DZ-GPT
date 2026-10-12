@@ -45,7 +45,7 @@ const TOOL_LABELS = {
 }
 
 const DARIJA_RE = /(?:كيفاش|واش|نحب|بغيت|حاب|ندير|ديرلي|صايب|وجدلي|تاع|على الخدمة|\b(?:nheb|bghit|hab|ndir|dir|dirli|sawb(?:li)?|wajedli|7seb|7eseb|ta3i?)\b)/i
-const FRENCH_RE = /\b(?:je|j['’]ai|vous|mon|ma|mes|le|la|les|un|une|des|avec|pour|crée|créer|génère|générer|cherche|chercher|calcule|calculer|ouvre|ouvrir|outil|facture|emploi|données|vols|cv|résumé|extraire|extrait|rédige|rédiger|planifie|faire|fais|convertir|convertis|partage|partager|fichier|devis)\b/i
+const FRENCH_RE = /\b(?:je|j['’]ai|vous|mon|ma|mes|le|la|les|un|une|des|avec|pour|crée|créer|génère|générer|cherche|chercher|calcule|calculer|ouvre|ouvrir|outil|facture|emploi|données|vols|extraire|extrait|rédige|rédiger|planifie|faire|fais|convertir|convertis|partage|partager|fichier|devis)\b/i
 
 function detectLanguage(text) {
   if (DARIJA_RE.test(text)) return 'dz'
@@ -60,7 +60,7 @@ function isToolAction(actionList, text) {
 
 const TOOL_SPECS = [
   { id: 'image', toolName: 'Visual AI — صور', toolIcon: '🖼️', toolDesc: 'بحث عن صور • بحث عكسي • تحليل AI • OCR من الصور', target: /(?:\b(?:visual\s+ai|images?\s+tool|picture\s+tool|photo\s+tool|image\s+generator|image\s+search|photo\s+editor|outil\s+(?:d['’]images?|photo)|recherche\s+d['’]images|générateur\s+d['’]images)\b|أداة\s*(?:الصور|الذكاء\s+البصري)|الذكاء\s+البصري|استوديو\s+الصور)/i, actions: ['open', 'search', 'analyze', 'edit', 'want'] },
-  { id: 'cv', toolName: 'مولّد السيرة الذاتية', toolIcon: '📄', toolDesc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ', target: /(?:\bcv\b|\bresume\b|\brésumé\b|\bcurriculum\s+vitae\b|السيرة\s+الذاتية|سيرة\s+ذاتية|سي\s*في)/i, actions: ['create', 'want', 'open'] },
+  { id: 'cv', toolName: 'مولّد السيرة الذاتية', toolIcon: '📄', toolDesc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ', target: /(?:\bcv\b|\bresume\b|\brésumé(?=$|[^\p{L}\p{N}_])|\bcurriculum\s+vitae\b|السيرة\s+الذاتية|سيرة\s+ذاتية|سي\s*في)/iu, actions: ['create', 'want', 'open'] },
   { id: 'planner', toolName: 'مخطط المشاريع', toolIcon: '📋', toolDesc: 'حوّل فكرتك إلى خطة عمل تفصيلية مع مهام وجدول زمني', target: /(?:project\s+(?:plan|planner)|project\s+planning|plan\s+(?:a\s+)?project|plan\s+(?:de|du)\s+projet|planification\s+(?:d['’]un?\s+)?projet|planifi(?:er|e|ez)\s+(?:un\s+)?projet|خطة\s+(?:مشروع|المشروع)|مخطط\s*(?:المشروع|المشاريع)|\bkhouta\s+projet\b)/i, actions: ['create', 'want', 'plan'] },
   { id: 'docs', toolName: 'وثائق تجارية', toolIcon: '📑', toolDesc: 'عقود عمل • مراسلات • عروض أسعار • محاضر اجتماعات', target: /(?:\b(?:contract|contrat|quotation|quote|devis|business\s+document|business\s+letter|3aqd)\b|عقد(?:\s+(?:عمل|تجاري|إيجار))?|عرض\s+سعر|مراسلة\s+تجارية|وثائق?\s+تجارية)/i, actions: ['create', 'want'] },
   { id: 'jobs', toolName: 'بحث وظيفي', toolIcon: '💼', toolDesc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم', target: /(?:\b(?:jobs?|employment|job\s+search|work\s+opportunities|emplois?|offre\s+d['’]emploi|recherche\s+d['’]emploi|postes?|work|job|khedma|5edma)\b|وظيف(?:ة|ات)|بحث\s+عن\s+عمل|خدمة|عمل)/i, actions: ['search', 'want', 'open'] },

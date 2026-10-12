@@ -1,3 +1,21 @@
+## 2026-10-12 — CV routing and production follow-up (current session)
+
+- Repository/branch: Nadirinfograph23/DZ-GPT / devin/1774405518-init-dz-gpt. Source HEAD inspected: 88952ffd7473d93eab59e890453b25358240def5 (fix: correct English CV routing and language detection). No application-source edit was needed in this session; the CV fix and all-tools routing were already present on the branch.
+- Routing chain verified in source: src/App.tsx calls getToolRedirectIntent for DZ Agent before any LLM request; src/lib/tool-redirect-intents.js returns localized tool text and /tools?tool=<catalog-id>; the chat renderer displays the redirect button; src/pages/DZTools.tsx resolves the allowlisted ID. The catalog and regression suite cover all 22 existing tools.
+- Root cause: the historical Arabic report cannot be tied to a specific old source revision—the Arabic failure did not reproduce on the deployed baseline, and the failing historical source is unavailable. The verified current follow-up did fix two reproducible English CV edge cases: the French-language detector treated bare “CV” as a French cue (wrong button/response language), and JavaScript \b did not delimit the accented final é in “résumé” (missed intent). The patch uses a Unicode-aware end boundary and removes CV/resume terms as standalone French cues. Arabic CV routing is covered and intercepts before the LLM; Arabic information/guidance negatives remain unredirected.
+- Regression tests: checked out exact source HEAD 88952ffd7473d93eab59e890453b25358240def5 from the required branch and ran npm run test:tool-redirect-intents successfully: 59 legacy positives, 88 multilingual routes across 22 tools, 25 negatives, and QR/image safeguards. The task’s 15 CV prompts and CV information/guidance negatives are in the test file. This is a real Node test run, not a session harness.
+- QR/CV browser evidence: prior project notes record real Chromium CV and QR redirect-card/click-through checks on the deployed baseline ed431630b1d1f31f3e51e97509653d1d1dedfe30; QR and Arabic/Darija/French CV flows passed there. The current session did not have browser interaction available, so the final SHA 88952ffd’s interactive submission/card click-through is not newly verified. Latest deep-link HTTP checks do not substitute for a click-through.
+- Release: GitHub Actions run 38224487236 for exact app SHA 88952ffd7473d93eab59e890453b25358240def5 completed successfully. Install, Cloudflare compatibility patches, app assets build, Worker deploy, production /api/version and /version.json checks, and production smoke test all passed. Release path remains .github/workflows/deploy-cloudflare-worker.yml → Wrangler → Cloudflare Worker dzagent. Open release PR #53 is already updated to source HEAD 88952ffd; no duplicate PR created.
+- Live check on 2026-10-12 ~08:57 UTC: /api/version and /version.json both returned HTTP 200 and exact app SHA 88952ffd7473d93eab59e890453b25358240def5, branch devin/1774405518-init-dz-gpt, runtime cloudflare-workers; /dz-agent, /tools?tool=cv, and /tools?tool=qrcode returned HTTP 200. This proves the production app and direct tool URLs are deployed, not an interactive browser click-through.
+- Local build limitation: npm ci was attempted from the exact branch checkout and failed with HTTP 403 because Replit’s package firewall blocked proxy-addr@2.0.7 due to a Critical CVE. The shell uses Node v24.13.0 while package.json requires Node 20.x. Therefore no local build is claimed; the exact-SHA GitHub Actions build/deployment passed. Do not bypass the package policy or change dependencies merely to force a local build.
+- No app code, Cloudflare settings, DNS, Worker config, cache, or secrets were changed during this session. This note is a documentation-only checkpoint and should use a [skip ci] commit to avoid an unnecessary deployment.
+
+### Remaining UI verification
+
+When a real browser session is available, submit representative Arabic/Darija, French, and English CV requests plus a QR request on /dz-agent, confirm each localized redirect card, click it, and verify the correct tool is selected. Capture the exact prompt/response/URL if any case fails. Do not report current-SHA browser click-through as verified until observed.
+
+---
+
 # DZ Agent — ChatGPT Continuation Notes
 
 ## Tool-routing continuation — 2026-10-12 (read first)

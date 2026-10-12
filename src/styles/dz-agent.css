@@ -14958,3 +14958,45 @@
     --cs-bg: #121212 !important;
   }
 }
+
+
+/* Mobile tool redirect card layout: keep Arabic copy readable. */
+@media (max-width: 520px) {
+  .dz-tool-redirect-card {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 12px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 12px;
+  }
+
+  .dz-tool-redirect-card__icon {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: center;
+  }
+
+  .dz-tool-redirect-card__body {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    min-width: 0;
+    direction: rtl;
+    text-align: right;
+    line-height: 1.6;
+  }
+
+  .dz-tool-redirect-card__btn {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
+  }
+}

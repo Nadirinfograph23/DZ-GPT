@@ -1,3 +1,18 @@
+## 2026-10-12 — Mobile Arabic tool-redirect card fix (latest)
+
+- Repository/branch: `Nadirinfograph23/DZ-GPT`, `devin/1774405518-init-dz-gpt`. Application fix commit: `32018c2ae82117a7dcc8c490793e0f66c86b85bb` (`fix: keep Arabic tool cards readable on mobile`). The route classifier and tool destination were unchanged.
+- Cause from the current source: the shared `.dz-tool-redirect-card` used a horizontal flex row with non-shrinking icon/button and no mobile layout. At narrow chat widths, that left the Arabic tool name/description too little room, making the response/card appear as a vertical column.
+- Fix: at viewport widths up to 520px, render the card as a two-column grid for icon + text and put the full-width, wrapping action button on its own row. Applies to the shared tool card; desktop layout and `/tools?tool=<id>` navigation are unchanged.
+- GitHub Actions run [38245079652](https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/38245079652) succeeded for exact SHA `32018c2ae82117a7dcc8c490793e0f66c86b85bb`: dependency install, compatibility patches, application asset build, Worker deploy, production dynamic/static version checks, and YouTube smoke test all passed.
+- Production verification: `/api/version` and `/version.json` both returned HTTP 200 and exact SHA `32018c2ae82117a7dcc8c490793e0f66c86b85bb`; `/dz-agent` returned HTTP 200. The served DZ Agent stylesheet `/assets/dz-agent-kxLuHJGq.css` returned HTTP 200 and contains the emitted `max-width:520px` grid and full-row button rules. This verifies the deployed asset, not visual appearance in a real browser.
+- A real mobile browser submission/card click-through was not available in this session. No Cloudflare control-plane, DNS, Worker settings, cache, or secrets were changed.
+
+### Ordered continuation
+1. On a real phone or browser viewport <=520px, submit `أنشئ سيرة ذاتية`; verify the assistant sentence and CV name/description read normally, and the button spans a separate full-width row.
+2. Tap the button and verify `/tools?tool=cv` opens with the CV tool selected; confirm the normal desktop card layout remains intact.
+3. If any text still stacks vertically, record the viewport width, screenshot, and resulting URL before changing the card CSS.
+
+---
 ## 2026-10-12 — CV routing and production follow-up (current session)
 
 - Repository/branch: Nadirinfograph23/DZ-GPT / devin/1774405518-init-dz-gpt. Source HEAD inspected: 88952ffd7473d93eab59e890453b25358240def5 (fix: correct English CV routing and language detection). No application-source edit was needed in this session; the CV fix and all-tools routing were already present on the branch.

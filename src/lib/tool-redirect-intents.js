@@ -17,7 +17,10 @@ const WANT_INFO_RE = /(?:\b(?:i\s+want|i\s+need|je\s+veux|je\s+voudrais|je\s+sou
 const QR_CREATE_RE = /(?:\b(?:create|generate|make|build|design|créer|crée|créez|creer|cree|générer|génère|générez|generer|genere|faire|fais|faites)\b|أنشئ|انشئ|إنشاء|انشاء|إنشأ|انشأ|اعمل|أعمل|عمل|اصنع|صنع|ولّد|ولد|توليد|دير|ندير|صمّم|صمم)/i
 const PLAN_ACTION_RE = /(?:\b(?:plan|organize|planifier|planifie|planifiez|organiser|organise|organisez)\b|خطط|خطّط|نظم|نظّم)/i
 const READ_ALOUD_RE = /(?:\b(?:read\s+(?:this\s+)?aloud|speak|voice|lire\s+(?:(?:ce\s+)?texte\s+)?(?:à|a)\s+voix\s+haute|lisez\s+(?:à|a)\s+voix\s+haute|lecture\s+(?:à|a)\s+voix\s+haute)\b|اقرأ|اقرا|انطق|حوّل\s+النص\s+إلى\s+صوت)/i
-const ACTIONS = { create: CREATE_OR_DESIGN_RE, want: WANT_RE, open: OPEN_TOOL_RE, calculate: CALCULATE_RE, search: SEARCH_RE, analyze: ANALYZE_RE, convert: CONVERT_RE, uploadShare: UPLOAD_SHARE_RE, capture: CAPTURE_RE, extract: EXTRACT_RE, edit: EDIT_RE, qr: QR_CREATE_RE, plan: PLAN_ACTION_RE, readAloud: READ_ALOUD_RE }
+const FLIGHT_SCHEDULE_RE = /(?:\b(?:flight\s+(?:times?|schedules?|timetables?)|flights?\s+(?:times?|schedules?|timetables?)|departure\s+times?|arrival\s+times?|schedules?|timetables?|horaire|horaires)\b|(?:موعد|مواعيد|جدول|توقيت|أوقات|اوقات)\s+(?:ال)?(?:رحلات|رحلة|طيران)|وقتاش\s+(?:(?:كاين|تكون)\s+)?(?:ال)?(?:رحلات|رحلة|طيران))/iu
+const FLIGHT_SCHEDULE_EXPLANATION_RE = /^\s*(?:اشرح|شرح|عرّف|عرف|تعريف|ما\s+معنى|ماذا\s+يعني|explain\b|define\b|what\s+does\b|qu['’]?est-ce\b|comment\s+(?:fonctionne|marche)\b)/i
+
+const ACTIONS = { create: CREATE_OR_DESIGN_RE, want: WANT_RE, open: OPEN_TOOL_RE, calculate: CALCULATE_RE, search: SEARCH_RE, analyze: ANALYZE_RE, convert: CONVERT_RE, uploadShare: UPLOAD_SHARE_RE, capture: CAPTURE_RE, extract: EXTRACT_RE, edit: EDIT_RE, qr: QR_CREATE_RE, plan: PLAN_ACTION_RE, readAloud: READ_ALOUD_RE, flightSchedule: FLIGHT_SCHEDULE_RE }
 
 const TOOL_LABELS = {
   image:       { ar: 'أداة الصور الذكية', dz: 'أداة الصور', fr: 'l’outil d’images IA', en: 'AI image tool' },
@@ -44,8 +47,8 @@ const TOOL_LABELS = {
   flights:     { ar: 'أداة البحث عن الرحلات', dz: 'أداة البحث على الرحلات', fr: 'l’outil de recherche de vols', en: 'flight search tool' },
 }
 
-const DARIJA_RE = /(?:كيفاش|واش|نحب|بغيت|حاب|ندير|ديرلي|صايب|وجدلي|تاع|على الخدمة|\b(?:nheb|bghit|hab|ndir|dir|dirli|sawb(?:li)?|wajedli|7seb|7eseb|ta3i?)\b)/i
-const FRENCH_RE = /\b(?:je|j['’]ai|vous|mon|ma|mes|le|la|les|un|une|des|avec|pour|crée|créer|génère|générer|cherche|chercher|calcule|calculer|ouvre|ouvrir|outil|facture|emploi|données|vols|extraire|extrait|rédige|rédiger|planifie|faire|fais|convertir|convertis|partage|partager|fichier|devis)\b/i
+const DARIJA_RE = /(?:كيفاش|واش|وقتاش|نحب|بغيت|حاب|ندير|ديرلي|صايب|وجدلي|تاع|على الخدمة|\b(?:nheb|bghit|hab|ndir|dir|dirli|sawb(?:li)?|wajedli|7seb|7eseb|ta3i?)\b)/i
+const FRENCH_RE = /\b(?:je|j['’]ai|vous|mon|ma|mes|le|la|les|un|une|des|avec|pour|crée|créer|génère|générer|cherche|chercher|calcule|calculer|ouvre|ouvrir|outil|facture|emploi|données|vols|horaire|horaires|extraire|extrait|rédige|rédiger|planifie|faire|fais|convertir|convertis|partage|partager|fichier|devis)\b/i
 
 function detectLanguage(text) {
   if (DARIJA_RE.test(text)) return 'dz'
@@ -80,14 +83,21 @@ const TOOL_SPECS = [
   { id: 'screenshot', toolName: 'تصوير المواقع', toolIcon: '📸', toolDesc: 'التقط صورة كاملة لأي موقع — تنزيل PNG أو PDF — Desktop / Mobile', target: /(?:\b(?:website\s+)?screenshots?\b|\bweb\s+capture\b|\bcapture\s+d['’]écran\b|\bcapture\s+(?:de\s+)?site\s+(?:web|internet)\b|لقطة\s+شاشة|تصوير\s+(?:المواقع|موقع)|أداة\s+تصوير\s+المواقع)/i, actions: ['capture', 'open'] },
   { id: 'fileupload', toolName: 'رفع ومشاركة الملفات', toolIcon: '☁️', toolDesc: 'ارفع أي ملف (صورة · فيديو · PDF · ملف) واحصل على رابط مشاركة آمن — GoFile.io', target: /(?:\b(?:upload|share)\b.{0,40}\b(?:files?|pdf|document)\b|\bfile\s+sharing\b|\b(?:t[eé]l[eé]verser|partage|partager|partagez|envoyer)\b.{0,40}\b(?:fichier|document|pdf)\b|رفع\s+ملف|مشاركة\s+الملفات|شارك\s+ملف|رفع\s+الملفات|مشاركة\s+ملف)/i, actions: ['uploadShare', 'open'] },
   { id: 'convert', toolName: 'محوِّل الصيغ', toolIcon: '🔄', toolDesc: 'حوِّل فيديو · صوت · صور بين جميع الصيغ — مباشرة في المتصفح بـ FFmpeg.wasm', target: /(?:\b(?:file\s+format|format\s+converter|convert\s+(?:a\s+)?file|convert\s+video|convert\s+audio)\b|\b(?:convert|convertir|converti|convertis|convertissez|transformer|transforme|transformez)\b.{0,40}\b(?:file|document|docx|doc|pdf|xlsx|csv|mp4|mp3|wav|avi|mkv|fichier|format|vid[eé]o|audio)\b|تحويل\s+الصيغ|محول\s+الصيغ|صيغة\s+الملف|(?:حوّل|حول|تحويل).{0,30}(?:ملف|pdf|word|docx|mp3|mp4|صيغة))/i, actions: ['convert', 'open', 'want'] },
-  { id: 'flights', toolName: 'رحلات الخطوط الجزائرية', toolIcon: '✈️', toolDesc: 'ابحث عن رحلات Air Algérie الداخلية والدولية بالمواعيد وأيام التشغيل', target: /(?:\b(?:flights?|air\s+algerie|air\s+algérie|vols?|billets?\s+d['’]avion)\b|رحلات?|طيران)/i, actions: ['search', 'want', 'open'] },
+  { id: 'flights', toolName: 'رحلات الخطوط الجزائرية', toolIcon: '✈️', toolDesc: 'ابحث عن رحلات Air Algérie الداخلية والدولية بالمواعيد وأيام التشغيل', target: /(?:\b(?:flights?|air\s+algerie|air\s+algérie|vols?|billets?\s+d['’]avion)\b|رحلات?|طيران)/i, actions: ['search', 'want', 'open', 'flightSchedule'] },
 ]
 
 export const TOOL_REDIRECT_TOOL_IDS = Object.freeze(TOOL_SPECS.map(spec => spec.id))
 
 export function getToolRedirectIntent(text, options = {}) {
   const value = typeof text === 'string' ? text.trim() : ''
-  if (!value || options.hasImageAttachment || WANT_INFO_RE.test(value) || FACT_QUESTION_RE.test(value)) return null
+  if (!value || options.hasImageAttachment) return null
+
+  const flights = TOOL_SPECS.find(spec => spec.id === 'flights')
+  if (flights && flights.target.test(value) && FLIGHT_SCHEDULE_RE.test(value)) {
+    if (FLIGHT_SCHEDULE_EXPLANATION_RE.test(value)) return null
+    return toRedirect(flights, detectLanguage(value))
+  }
+  if (WANT_INFO_RE.test(value) || FACT_QUESTION_RE.test(value)) return null
 
   const qr = TOOL_SPECS.find(spec => spec.id === 'qrcode')
   const qrRequested = qr && (qr.actions.some(action => ACTIONS[action].test(value)) && qr.target.test(value) || qr.implicit.test(value))

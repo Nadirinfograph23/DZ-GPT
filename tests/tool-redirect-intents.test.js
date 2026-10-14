@@ -205,6 +205,24 @@ for (const [text, buttonLabel, messagePrefix] of requiredCvCases) {
   assert.ok(result?.message.startsWith(messagePrefix), `Wrong localized CV response for: ${text}`)
 }
 
+
+const requiredFlightScheduleCases = [
+  ["مواعيد رحلات الخطوط الجوية الجزائرية", "افتح أداة البحث عن الرحلات", "يمكنك استخدام"],
+  ["ما هي مواعيد رحلات الخطوط الجوية الجزائرية؟", "افتح أداة البحث عن الرحلات", "يمكنك استخدام"],
+  ["وقتاش كاين رحلات الخطوط الجوية الجزائرية؟", "حلّ أداة البحث على الرحلات", "تقدر تستعمل"],
+  ["Horaires des vols Air Algérie", "Ouvrir l’outil de recherche de vols", "Vous pouvez utiliser"],
+  ["Air Algérie flight schedule", "Open flight search tool", "You can use"],
+]
+for (const [text, buttonLabel, messagePrefix] of requiredFlightScheduleCases) {
+  const result = getToolRedirectIntent(text)
+  assert.equal(result?.id, "flights")
+  assert.equal(result?.toolUrl, "/tools?tool=flights")
+  assert.equal(result?.buttonLabel, buttonLabel)
+  assert.ok(result?.message.startsWith(messagePrefix))
+}
+for (const text of ["اشرح جدول رحلات الخطوط الجوية الجزائرية", "ما معنى جدول رحلات الخطوط الجوية الجزائرية؟", "Explain the Air Algérie flight schedule", "What is Air Algérie?"]) {
+  assert.equal(getToolRedirectIntent(text), null)
+}
 // Every live tools-page entry has a representative request in Arabic,
 // French, English, and Algerian Darija / Franco-Darija.
 const multilingualCases = [

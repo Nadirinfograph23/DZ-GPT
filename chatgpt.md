@@ -1,3 +1,20 @@
+## 2026-10-14 — Flight schedule tool routing (latest)
+
+- Repository/branch: `Nadirinfograph23/DZ-GPT`, `devin/1774405518-init-dz-gpt`. Application commit: `a7427557a68caeff79e42dc7a3c99bc56c3ebfd2` (`fix: route flight schedule requests to tools`). Regression cases were added in preceding test commit `5708cacba4da9f0239f4d565416415f7d444e445` (`[skip ci]`).
+- Gap: the flights tool already existed in the shared registry for all 22 tools, but bare timetable requests such as `مواعيد رحلات الخطوط الجوية الجزائرية` lacked an explicit search verb and fell through to the assistant.
+- Change: recognize timetable/schedule/time phrases for Arabic, Algerian Darija, French, and English, then reuse the existing localized redirect card and `/tools?tool=flights` destination. Direct schedule questions such as `ما هي مواعيد رحلات الخطوط الجوية الجزائرية؟` also route; definition/explanation prompts remain with the assistant. No tool catalog item or destination was added.
+- Regression verification: the complete `tests/tool-redirect-intents.test.js` source was executed in the JS sandbox with an `assert` shim against the candidate source and real tools-page allowlist: 59 legacy positives, 88 multilingual routes across 22 tools, 25 negatives, existing safeguards, plus 5 schedule-positive and 4 schedule-negative cases passed. The shell did not provide a `node` executable, so this was not an `npm run test:tool-redirect-intents` run.
+- Release: GitHub Actions run [38639948123](https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/38639948123) succeeded for exact app SHA `a7427557a68caeff79e42dc7a3c99bc56c3ebfd2`: install, compatibility patches, app asset build, Worker deployment, both version checks, and production smoke test passed. Existing open PR [#53](https://github.com/Nadirinfograph23/DZ-GPT/pull/53) now includes this source SHA; no duplicate PR was opened.
+- Production: `/api/version` and `/version.json` returned HTTP 200 and exact app SHA `a7427557a68caeff79e42dc7a3c99bc56c3ebfd2`; runtime `cloudflare-workers`. `/dz-agent` and `/tools?tool=flights` returned HTTP 200. Served DZ Agent bundle `/assets/dz-agent-nH0KS120.js` returned 200 and contains `flightSchedule`, `وقتاش`, and `مواعيد`. These checks verify the deployed bundle and deep link, not a real browser click-through.
+- No Cloudflare control plane, DNS, Worker settings, secrets, or cache were changed.
+
+### Ordered continuation
+1. In a real browser/phone, submit `مواعيد رحلات الخطوط الجوية الجزائرية`, `وقتاش كاين رحلات الخطوط الجوية الجزائرية؟`, `Horaires des vols Air Algérie`, and `Air Algérie flight schedule`; verify each localized card and CTA.
+2. Click each CTA and verify `/tools?tool=flights` opens with the flights tool selected; confirm explanation prompts still stay with the assistant.
+3. If another tool-page capability has a missing natural-language request form, add its phrase to the same registry and regression suite, update PR #53, then wait for the release checks before verifying production.
+
+---
+
 ## 2026-10-12 — Mobile Arabic tool-redirect card fix (latest)
 
 - Repository/branch: `Nadirinfograph23/DZ-GPT`, `devin/1774405518-init-dz-gpt`. Application fix commit: `32018c2ae82117a7dcc8c490793e0f66c86b85bb` (`fix: keep Arabic tool cards readable on mobile`). The route classifier and tool destination were unchanged.

@@ -223,6 +223,27 @@ for (const [text, buttonLabel, messagePrefix] of requiredFlightScheduleCases) {
 for (const text of ["اشرح جدول رحلات الخطوط الجوية الجزائرية", "ما معنى جدول رحلات الخطوط الجوية الجزائرية؟", "Explain the Air Algérie flight schedule", "What is Air Algérie?"]) {
   assert.equal(getToolRedirectIntent(text), null)
 }
+
+// Natural noun-phrase requests should route to each matching catalog tool.
+const implicitArabicCases = [["image","بحث عن صور كلاب"],["cv","سيرة ذاتية احترافية"],["planner","خطة مشروع لمقهى"],["docs","عقد عمل"],["jobs","وظائف في الجزائر"],["health","طبيب أسنان في عنابة"],["ocr","استخراج النص من صورة"],["bizplan","خطة عمل لمقهى"],["invoice","فاتورة للمحل"],["tax","ضريبة الدخل على راتبي"],["zakat","زكاة مالي"],["hashtag","هاشتاغات لمطعمي"],["excel","جدول Excel للمصاريف"],["pension","معاش التقاعد"],["qrcode","QR لرقم هاتفي"],["bizcard","بطاقة عمل للمحل"],["dataanalysis","تحليل ملف CSV"],["tts","قراءة النص بصوت"],["screenshot","لقطة شاشة لموقعي"],["fileupload","مشاركة ملف PDF"],["convert","تحويل الملف إلى PDF"],["flights","مواعيد رحلات الخطوط الجوية الجزائرية"]]
+for (const [expectedId, text] of implicitArabicCases) {
+  const result = getToolRedirectIntent(text)
+  assert.equal(result?.id, expectedId, `Wrong implicit route for ${text}`)
+  assert.equal(result?.toolUrl, `/tools?tool=${expectedId}`)
+}
+const implicitLocalizedCases = [["image","Recherche d’images de chiens","Ouvrir"],["cv","CV professionnel","Ouvrir"],["planner","Plan de projet pour mon café","Ouvrir"],["docs","Contrat de travail","Ouvrir"],["jobs","Offre d’emploi à Alger","Ouvrir"],["health","Médecin dentiste à Annaba","Ouvrir"],["bizplan","Business plan pour un café","Ouvrir"],["invoice","Facture pour mon magasin","Ouvrir"],["tax","Impôts sur mon salaire","Ouvrir"],["zakat","Zakat de mon épargne","Ouvrir"],["hashtag","Hashtags pour mon restaurant","Ouvrir"],["excel","Tableau Excel pour mes dépenses","Ouvrir"],["pension","Retraite","Ouvrir"],["bizcard","Carte de visite pour mon magasin","Ouvrir"],["tts","Lecture à voix haute","Ouvrir"],["screenshot","Capture d’écran de mon site","Ouvrir"],["image","image search for dogs","Open"],["cv","professional resume","Open"],["planner","project plan for my cafe","Open"],["docs","employment contract","Open"],["jobs","jobs in Algeria","Open"],["health","dentist in Annaba","Open"],["bizplan","business plan for a cafe","Open"],["invoice","invoice for my shop","Open"],["tax","income tax on my salary","Open"],["zakat","zakat on savings","Open"],["hashtag","hashtags for my restaurant","Open"],["excel","spreadsheet for expenses","Open"],["pension","retirement pension","Open"],["bizcard","business card for my store","Open"],["tts","text to speech","Open"],["screenshot","screenshot of my website","Open"]]
+for (const [expectedId, text, buttonPrefix] of implicitLocalizedCases) {
+  const result = getToolRedirectIntent(text)
+  assert.equal(result?.id, expectedId, `Wrong localized implicit route for ${text}`)
+  assert.ok(result?.buttonLabel.startsWith(buttonPrefix), `Wrong language for ${text}`)
+}
+const implicitDarijaCases = [["image","قلبلي على صور كلاب"],["planner","خطة مشروع تاع قهوة"],["jobs","نحب خدمة في الجزائر"],["invoice","نحب فاتورة للمحل"],["screenshot","ديرلي لقطة شاشة لموقعي"]]
+for (const [expectedId, text] of implicitDarijaCases) {
+  const result = getToolRedirectIntent(text)
+  assert.equal(result?.id, expectedId, `Wrong Darija route for ${text}`)
+  assert.ok(result?.buttonLabel.startsWith("حلّ"), `Wrong Darija button for ${text}`)
+}
+for (const text of ["What is a CV?","ما هي السيرة الذاتية؟","What is a project plan?","كيف أستخدم حاسبة الضرائب؟","Comment fonctionne l’outil de facture ?","What tools are available for invoices?","ما معنى عقد العمل؟"]) assert.equal(getToolRedirectIntent(text), null, `Information question should not redirect: ${text}`)
 // Every live tools-page entry has a representative request in Arabic,
 // French, English, and Algerian Darija / Franco-Darija.
 const multilingualCases = [
@@ -331,4 +352,4 @@ assert.equal(getToolRedirectIntent('extract text from this photo using OCR')?.to
 assert.equal(getToolRedirectIntent('open the image generator tool')?.toolUrl, '/tools?tool=image')
 assert.equal(getToolRedirectIntent('Comment convertir un PDF ?')?.toolUrl, '/tools?tool=convert')
 
-console.log(`Tool redirect intent tests passed (${positiveCases.length} legacy positives, ${multilingualCount} multilingual routes across ${TOOL_REDIRECT_TOOL_IDS.length} tools, ${negativeCases.length} negative, plus safeguards).`)
+console.log(`Tool redirect intent tests passed (${positiveCases.length} legacy positives, ${multilingualCount} multilingual routes across ${TOOL_REDIRECT_TOOL_IDS.length} tools, ${negativeCases.length} negative, ${implicitArabicCases.length} Arabic natural, ${implicitLocalizedCases.length} French/English natural, ${implicitDarijaCases.length} Darija, plus safeguards).`)

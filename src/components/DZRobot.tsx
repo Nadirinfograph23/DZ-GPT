@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import '../styles/dz-robot.css'
 
 interface HolidayInfo {
@@ -313,33 +314,7 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
         onMouseEnter={() => { if (!isAngry && !isExploding) { setShowMsg(true); setIsHappy(true) } }}
         onMouseLeave={() => { if (!isDragging && !isAngry) setIsHappy(false) }}
       >
-        {showMsg && !isExploding && (
-          <div
-            className={[
-              'dzr-bubble',
-              isAngry   ? 'dzr-bubble--angry'   : '',
-              isHoliday ? 'dzr-bubble--holiday' : '',
-              showBubbleBelow ? 'dzr-bubble--below' : '',
-            ].filter(Boolean).join(' ')}
-            dir="rtl"
-            style={{
-              left: bubbleCenterX,
-              right: 'auto',
-              top: showBubbleBelow ? pos.y + widgetHeight + 8 : 'auto',
-              bottom: showBubbleBelow ? 'auto' : window.innerHeight - pos.y + 8,
-              transform: 'translateX(-50%)',
-              '--bubble-tail-x': `${bubbleTailX}px`,
-            } as React.CSSProperties}
-          >
-            <span className="dzr-message">{currentMsg}</span>
-            <button
-              className="dzr-bubble-close"
-              onMouseDown={e => e.stopPropagation()}
-              onTouchStart={e => e.stopPropagation()}
-              onClick={e => { e.stopPropagation(); setShowMsg(false) }}
-            >×</button>
-          </div>
-        )}
+
 
         <svg
           className={[
@@ -433,6 +408,35 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
           ×
         </button>
       </div>
+
+      {showMsg && !isExploding && createPortal(
+          <div
+            className={[
+              'dzr-bubble',
+              isAngry   ? 'dzr-bubble--angry'   : '',
+              isHoliday ? 'dzr-bubble--holiday' : '',
+              showBubbleBelow ? 'dzr-bubble--below' : '',
+            ].filter(Boolean).join(' ')}
+            dir="rtl"
+            style={{
+              left: bubbleCenterX,
+              right: 'auto',
+              top: showBubbleBelow ? pos.y + widgetHeight + 8 : 'auto',
+              bottom: showBubbleBelow ? 'auto' : window.innerHeight - pos.y + 8,
+              transform: 'translateX(-50%)',
+              '--bubble-tail-x': `${bubbleTailX}px`,
+            } as React.CSSProperties}
+          >
+            <span className="dzr-message">{currentMsg}</span>
+            <button
+              className="dzr-bubble-close"
+              onMouseDown={e => e.stopPropagation()}
+              onTouchStart={e => e.stopPropagation()}
+              onClick={e => { e.stopPropagation(); setShowMsg(false) }}
+            >×</button>
+          </div>,
+        document.body,
+      )}
     </>
   )
 }

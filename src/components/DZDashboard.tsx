@@ -59,20 +59,42 @@ function parseRssItems(xml: string, sourceName: string): NewsItem[] {
   return items
 }
 
-const ALGERIA_NEWS_FEEDS = [
-  // ── Algerian-specific news (highest priority) ──────────────────────────
-  { name: '🇩🇿 أحداث نت', url: 'https://news.google.com/rss/search?q=%D8%A3%D8%AD%D8%AF%D8%A7%D8%AB+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: '🇩🇿 جزاير توداي', url: 'https://news.google.com/rss/search?q=%D8%AC%D8%B2%D8%A7%D8%A6%D9%8A%D8%B1+%D8%AA%D9%88%D8%AF%D8%A7%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: '🇩🇿 النهار', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D9%86%D9%87%D8%A7%D8%B1+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: '🇩🇿 الشروق', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B4%D8%B1%D9%88%D9%82+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  // ── General Algeria news ──────────────────────────────────────────────
-  { name: '🇩🇿 أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: '🇩🇿 وطن أخبار', url: 'https://news.google.com/rss/search?q=%D9%88%D8%B7%D9%86+%D8%A2%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  // ── International Arabic news (secondary) ──────────────────────────────
-  { name: 'عربية: سكاي', url: 'https://news.google.com/rss/search?q=%D8%B3%D9%83%D8%A7%D9%8A+%D9%86%D9%8A%D8%B8%D8%A7%D9%84&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'عربية: العربية', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9+%D9%86%D9%8A%D9%88%D8%B2&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'عربية: الجزيرة', url: 'https://news.google.com/rss/search?q+%D8%A7%D9%84%D8%AC%D8%B2%D9%8A%D8%B1%D8%A9+%D9%86%D9%8A%D9%88%D8%B2&hl=ar&gl=DZ&ceid=DZ:ar' },
-]
+type WorkerDashboardNewsItem = {
+  title?: string
+  link?: string
+  url?: string
+  description?: string
+  snippet?: string
+  pubDate?: string
+  date?: string
+  source?: string
+  feedName?: string
+}
+
+async function fetchWorkerNews(category: string, force = false) {
+  const params = new URLSearchParams({ category, limit: '20' })
+  if (force) params.set('bypassCache', '1')
+  const response = await fetch('/api/dz-agent/news?' + params.toString(), {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(12000),
+  })
+  if (!response.ok) throw new Error('News endpoint returned ' + response.status)
+  const payload = await response.json() as { items?: WorkerDashboardNewsItem[] }
+  return (Array.isArray(payload.items) ? payload.items : []).flatMap(item => {
+    const title = String(item.title || '').trim()
+    const link = String(item.link || item.url || '').trim()
+    if (!title || !link) return []
+    const source = String(item.source || item.feedName || 'مصدر إخباري')
+    return [{
+      title,
+      link,
+      description: String(item.description || item.snippet || ''),
+      pubDate: String(item.pubDate || item.date || ''),
+      source,
+      feedName: String(item.feedName || source),
+    }]
+  })
+}
 
 const TECH_NEWS_FEEDS = [
   // ── Arabic tech news (priority) ───────────────────────────────────────
@@ -83,12 +105,6 @@ const TECH_NEWS_FEEDS = [
   // ── General tech news in Arabic ───────────────────────────────────────
   { name: '🖥️ ذكاء اصطناعي', url: 'https://news.google.com/rss/search?q=%D8%B0%D9%83%D8%A7%D8%A1+%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A+OR+%D9%86%D9%85%D8%B7%D8%A7%D8%AC+OR+%D8%A7%D9%84%D8%B9%D9%84%D9%85&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: '🖥️ تقنية عربية', url: 'https://news.google.com/rss/search?q=%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1+%D8%AA%D9%82%D9%86%D9%8A%D8%A9+%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
-]
-
-const SPORTS_NEWS_FEEDS = [
-  { name: '🏆 رياضة', url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: '⚽ الدوري', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AF%D9%88%D8%B1%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%84%D9%85%D8%AD%D8%AA%D8%B1%D9%81&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: '⚽ عربي', url: 'https://news.google.com/rss/search?q=%D9%83%D8%B1%D8%A9+%D8%A7%D9%84%D9%82%D8%AF%D9%85+%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A+%D8%A7%D9%84%D9%85%D8%AD%D8%AA%D8%B1%D9%81&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 
 async function fetchRssFeed(feed: { name: string; url: string }): Promise<NewsItem[]> {
@@ -821,8 +837,8 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
       // Fetch news, sports, tech, and LFP data directly from free RSS APIs
       // This bypasses the broken Express/Worker bridge for dashboard data
       const [newsItems, sportsItems, techItems, leagueData] = await Promise.allSettled([
-        fetchAllRss(ALGERIA_NEWS_FEEDS),
-        fetchAllRss(SPORTS_NEWS_FEEDS),
+        fetchWorkerNews('algeria', !!opts.force),
+        fetchWorkerNews('sports', !!opts.force),
         fetchAllRss(TECH_NEWS_FEEDS),
         fetchLfpFree(),
       ])

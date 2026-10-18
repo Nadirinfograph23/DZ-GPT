@@ -6,6 +6,7 @@ type NewsCardItem = {
   date?: string | null
   source?: string
   snippet?: string
+  category?: string
 }
 
 function formatNewsDate(value?: string | null) {
@@ -26,6 +27,14 @@ export default function NewsResultsCard({ items }: { items: NewsCardItem[] }) {
   })
   if (!visibleItems.length) return null
 
+  const categoryLabels: Record<string, string> = {
+    algeria: 'عناوين الأخبار الجزائرية',
+    sports: 'عناوين الأخبار الرياضية',
+    international: 'عناوين الأخبار الدولية',
+    economy: 'عناوين الأخبار الاقتصادية',
+  }
+  const categoryLabel = categoryLabels[visibleItems[0].category || 'algeria'] || categoryLabels.algeria
+
   const panelStyle: CSSProperties = {
     marginTop: 12,
     padding: 12,
@@ -41,9 +50,9 @@ export default function NewsResultsCard({ items }: { items: NewsCardItem[] }) {
   }
 
   return (
-    <section style={panelStyle} dir="rtl" aria-label="أحدث الأخبار الجزائرية">
+    <section style={panelStyle} dir="rtl" aria-label={categoryLabel}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <strong style={{ fontSize: 14 }}>📰 عناوين الأخبار الجزائرية</strong>
+        <strong style={{ fontSize: 14 }}>📰 {categoryLabel}</strong>
         <span style={{ fontSize: 11, opacity: 0.7 }}>{visibleItems.length} عناوين</span>
       </div>
       <div style={gridStyle}>

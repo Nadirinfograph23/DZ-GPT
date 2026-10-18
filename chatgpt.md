@@ -1,3 +1,19 @@
+## 2026-10-18 — Draggable robot head and compact message bubble
+
+- Repository/target branch: `Nadirinfograph23/DZ-GPT` / `devin/1774405518-init-dz-gpt`. Work on this branch as requested; keep the existing PR #60 context in view and do not create a duplicate PR.
+- Baseline branch HEAD before this change: `878f4e50d1f21e4ccac1a9d49dbd8c48918a5779`. The existing PR #60 commit `c47b96e43f227eb20ea2b823219c2fe4300ce83e` only shrinks the full-body floating robot. Its Cloudflare bot comment and both public version endpoints show that feature branch is currently serving production; that is not evidence that this requested head-only design is live.
+- Requested implementation: replace the floating robot torso/arms with a compact animated head (antenna, side pods, eyes, and mouth); keep drag, hide/restore, holiday colors and celebration; keep the movable head inside viewport bounds; clamp the Arabic RTL message bubble horizontally and show no more than two text lines.
+- Build-security remediation: `package-lock.json` updates Express's transitive `proxy-addr` from 2.0.7 to 2.0.8; Express requires `~2.0.7`, so 2.0.8 satisfies the declared range. GHSA-jqcg-44mw-7w3h / CVE-2026-90711 affects versions below 2.0.8. Do not bypass the package firewall.
+- The Cloudflare REST integration currently returns 9109 Invalid access token (API-key credential); direct account-level access is not verified. The public endpoints and GitHub Actions can be used for read-only deployment verification and the normal release path. Do not claim Cloudflare account access until the user updates the existing Replit connection.
+- Verification is pending the GitHub Actions run for the exact application commit and live `/api/version` plus `/version.json` checks. No visual browser check has been performed.
+
+### Ordered continuation
+1. Confirm the target branch accepted this commit and inspect the exact SHA's GitHub Actions run; require install, build, Cloudflare deploy, production version checks and smoke tests to pass.
+2. Verify both public version endpoints report the exact source SHA and `devin/1774405518-init-dz-gpt`; check `/` returns HTTP 200.
+3. On a real desktop and a phone-width browser, visually confirm a head-only robot, functional drag/hide/restore, and all normal/angry/holiday messages fit within one or two horizontal lines. Record any visual mismatch before changing CSS.
+4. After exact-SHA verification, update this handoff with run link and deployment result. Treat open draft PR #60 as superseded only after confirming the target branch contains the requested fix.
+
+---
 ## 2026-10-14 — Flight schedule tool routing (latest)
 
 - Repository/branch: `Nadirinfograph23/DZ-GPT`, `devin/1774405518-init-dz-gpt`. Application commit: `a7427557a68caeff79e42dc7a3c99bc56c3ebfd2` (`fix: route flight schedule requests to tools`). Regression cases were added in preceding test commit `5708cacba4da9f0239f4d565416415f7d444e445` (`[skip ci]`).

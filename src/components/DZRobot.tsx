@@ -85,7 +85,13 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
   // Initial position
   useEffect(() => {
     const setInitialPos = () => {
-      setPos({ x: window.innerWidth - 110, y: window.innerHeight - 210 })
+      const compactRobot = window.innerWidth <= 480
+      const robotWidth = compactRobot ? 48 : 56
+      const robotHeight = compactRobot ? 44 : 50
+      setPos({
+        x: Math.max(8, window.innerWidth - robotWidth - 16),
+        y: Math.max(8, window.innerHeight - robotHeight - 15 - 20),
+      })
     }
     setInitialPos()
     window.addEventListener('resize', setInitialPos)
@@ -163,8 +169,9 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
     lastPos.current = { x: clientX, y: clientY, t: now }
     const nx = clientX - dragOffset.current.x
     const ny = clientY - dragOffset.current.y
-    const maxX = window.innerWidth - 90
-    const maxY = window.innerHeight - 130
+    const bounds = robotRef.current?.getBoundingClientRect()
+    const maxX = window.innerWidth - (bounds?.width ?? 56) - 8
+    const maxY = window.innerHeight - (bounds?.height ?? 70) - 8
     setPos({
       x: Math.max(0, Math.min(nx, maxX)),
       y: Math.max(0, Math.min(ny, maxY)),
@@ -215,8 +222,19 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
   if (pos.x === -1) return null
 
   const messages = isAngry ? MESSAGES_ANGRY : MESSAGES_NORMAL
-  const centerX = pos.x + 40
-  const centerY = pos.y + 50
+  const compactRobot = window.innerWidth <= 480
+  const robotWidth = compactRobot ? 48 : 56
+  const robotHeight = compactRobot ? 44 : 50
+  const svgRect = robotRef.current?.querySelector<SVGSVGElement>('.dzr-svg')?.getBoundingClientRect()
+  const centerX = pos.x + (svgRect?.width ?? robotWidth) / 2
+  const centerY = pos.y + (svgRect?.height ?? robotHeight) / 2
+  const bubbleMaxWidth = Math.min(260, Math.max(120, window.innerWidth - 20))
+  const bubbleCenterX = Math.max(
+    bubbleMaxWidth / 2 + 10,
+    Math.min(pos.x + robotWidth / 2, window.innerWidth - bubbleMaxWidth / 2 - 10),
+  )
+  const bubbleTailX = Math.max(12, Math.min(bubbleMaxWidth - 12, pos.x + robotWidth / 2 - bubbleCenterX + bubbleMaxWidth / 2))
+  const showBubbleBelow = pos.y < 80
 
   // Holiday color scheme
   const isHoliday = isHolidayCelebrating
@@ -271,7 +289,11 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
           isHoliday    ? 'dzr-root--holiday'    : '',
         ].filter(Boolean).join(' ')}
         style={{ left: pos.x, top: pos.y }}
-        onMouseDown={e => { e.preventDefault(); startDrag(e.clientX, e.clientY) }}
+        onMouseDown={e => {
+          if ((e.target as HTMLElement).closest('button')) return
+          e.preventDefault()
+          startDrag(e.clientX, e.clientY)
+        }}
         onTouchStart={e => { if (e.touches[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY) }}
         onMouseEnter={() => { if (!isAngry && !isExploding) { setShowMsg(true); setIsHappy(true) } }}
         onMouseLeave={() => { if (!isDragging && !isAngry) setIsHappy(false) }}
@@ -282,12 +304,23 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
               'dzr-bubble',
               isAngry   ? 'dzr-bubble--angry'   : '',
               isHoliday ? 'dzr-bubble--holiday' : '',
+              showBubbleBelow ? 'dzr-bubble--below' : '',
             ].filter(Boolean).join(' ')}
             dir="rtl"
+            style={{
+              left: bubbleCenterX,
+              right: 'auto',
+              top: showBubbleBelow ? pos.y + robotHeight + 8 : 'auto',
+              bottom: showBubbleBelow ? 'auto' : window.innerHeight - pos.y + 8,
+              transform: 'translateX(-50%)',
+              '--bubble-tail-x': `${bubbleTailX}px`,
+            } as React.CSSProperties}
           >
-            <span>{currentMsg}</span>
+            <span className="dzr-message">{currentMsg}</span>
             <button
               className="dzr-bubble-close"
+              onMouseDown={e => e.stopPropagation()}
+              onTouchStart={e => e.stopPropagation()}
               onClick={e => { e.stopPropagation(); setShowMsg(false) }}
             >×</button>
           </div>
@@ -300,7 +333,7 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
             isAngry    ? 'dzr-svg--angry' : '',
             isHoliday  ? 'dzr-svg--holiday' : '',
           ].filter(Boolean).join(' ')}
-          viewBox="0 0 80 100"
+          viewBox="0 0 80 70"
           xmlns="http://www.w3.org/2000/svg"
         >
           <defs>
@@ -318,8 +351,8 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
             </filter>
           </defs>
 
-          <line x1="40" y1="6" x2="40" y2="18" stroke="url(#rg1)" strokeWidth="2" strokeLinecap="round" />
-          <circle cx="40" cy="4" r="4" fill="url(#rg1)" filter="url(#rglow)" className="dzr-antenna-ball" />
+          <line x1="40" y1="8" x2="40" y2="16" stroke="url(#rg1)" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="40" cy="6" r="4" fill="url(#rg1)" filter="url(#rglow)" className="dzr-antenna-ball" />
 
           {/* Holiday hat */}
           {isHoliday && (
@@ -330,7 +363,7 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
             </>
           )}
 
-          <rect x="14" y="18" width="52" height="40" rx="12" fill="url(#rg2)" stroke="url(#rg1)" strokeWidth="1.5" />
+          <rect x="10" y="16" width="60" height="46" rx="18" fill="url(#rg2)" stroke="url(#rg1)" strokeWidth="1.5" />
 
           <circle cx="28" cy="35" r="8" fill={isAngry ? '#2a0000' : isHoliday ? '#1a0800' : '#0d1f0d'} stroke="url(#rg1)" strokeWidth="1.5" />
           <circle cx="52" cy="35" r="8" fill={isAngry ? '#2a0000' : isHoliday ? '#1a0800' : '#0d1f0d'} stroke="url(#rg1)" strokeWidth="1.5" />
@@ -364,22 +397,10 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
             <path d="M28 52 Q40 56 52 52" stroke="url(#rg1)" strokeWidth="2" strokeLinecap="round" fill="none" />
           )}
 
-          <rect x="16" y="60" width="48" height="30" rx="8" fill="url(#rg2)" stroke="url(#rg1)" strokeWidth="1.5" />
-          <rect x="26" y="66" width="28" height="5" rx="2.5" fill="url(#rg1)" opacity="0.6" />
-          <rect x="29" y="75" width="22" height="4" rx="2" fill="url(#rg1)" opacity="0.4" />
+          {/* Compact side pods keep the design readable as a floating head */}
+          <rect x="4" y="31" width="8" height="16" rx="4" fill="url(#rg2)" stroke="url(#rg1)" strokeWidth="1.2" />
+          <rect x="68" y="31" width="8" height="16" rx="4" fill="url(#rg2)" stroke="url(#rg1)" strokeWidth="1.2" />
 
-          {/* Holiday badge on body */}
-          {isHoliday && (
-            <text x="40" y="82" textAnchor="middle" fontSize="8" fill="#FFD700">🎊</text>
-          )}
-
-          <rect x="6"  y="62" width="10" height="20" rx="5" fill="url(#rg2)" stroke="url(#rg1)" strokeWidth="1.2"
-            className={isDragging ? 'dzr-arm-r' : isAngry ? 'dzr-arm-angry-r' : ''} />
-          <rect x="64" y="62" width="10" height="20" rx="5" fill="url(#rg2)" stroke="url(#rg1)" strokeWidth="1.2"
-            className={isDragging ? 'dzr-arm-l' : isAngry ? 'dzr-arm-angry-l' : ''} />
-
-          <circle cx="21" cy="62" r="3" fill="url(#rg1)" opacity="0.5" filter="url(#rglow)" className="dzr-chest-led" />
-          <circle cx="59" cy="62" r="3" fill="url(#rg1)" opacity="0.5" filter="url(#rglow)" className="dzr-chest-led" />
         </svg>
 
         <div className={`dzr-label${isAngry ? ' dzr-label--angry' : ''}${isHoliday ? ' dzr-label--holiday' : ''}`}>
@@ -388,6 +409,8 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
 
         <button
           className="dzr-hide-btn"
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
           onClick={handleHide}
           title="إخفاء الروبوت"
           aria-label="إخفاء الروبوت"

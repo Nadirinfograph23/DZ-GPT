@@ -7,7 +7,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   animation: dzr-float 3s ease-in-out infinite;
   isolation: isolate;
 }
@@ -107,7 +107,7 @@
 
 @keyframes dzr-float {
   0%, 100% { transform: translateY(0px); }
-  50%       { transform: translateY(-8px); }
+  50%       { transform: translateY(-5px); }
 }
 
 @keyframes dzr-wobble {
@@ -120,14 +120,14 @@
 }
 
 .dzr-svg {
-  width: 72px;
-  height: 90px;
+  width: 56px;
+  height: 50px;
   transition: transform 0.2s ease, filter 0.3s ease;
   filter: drop-shadow(0 4px 12px rgba(200,255,0,0.2));
 }
 
 .dzr-svg--held {
-  transform: scale(1.08) rotate(-3deg);
+  transform: scale(1.06) rotate(-3deg);
   filter: drop-shadow(0 8px 20px rgba(200,255,0,0.5));
 }
 
@@ -202,15 +202,15 @@
 
 .dzr-hide-btn {
   position: absolute;
-  top: -6px;
-  left: -6px;
-  width: 18px;
-  height: 18px;
+  top: -4px;
+  left: -4px;
+  width: 16px;
+  height: 16px;
   background: rgba(15,15,20,0.9);
   border: 1px solid rgba(255,255,255,0.2);
   border-radius: 50%;
   color: #94a3b8;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1;
   display: flex;
   align-items: center;
@@ -232,10 +232,10 @@
 }
 
 .dzr-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   color: #c8ff00;
-  letter-spacing: 1px;
+  letter-spacing: 0.8px;
   text-shadow: 0 0 8px rgba(200,255,0,0.6);
   font-family: 'Segoe UI', sans-serif;
   transition: color 0.3s, text-shadow 0.3s;
@@ -247,26 +247,44 @@
 }
 
 .dzr-bubble {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 50%;
-  transform: translateX(50%);
-  background: rgba(10, 20, 10, 0.95);
-  border: 1px solid rgba(200,255,0,0.35);
-  border-radius: 14px;
-  padding: 9px 12px 9px 30px;
-  white-space: nowrap;
+  position: fixed;
+  z-index: 2147483647;
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  transform: translateX(-50%);
+  width: min(260px, calc(100vw - 20px));
+  min-width: min(180px, calc(100vw - 20px));
+  max-width: min(260px, calc(100vw - 20px));
+  box-sizing: border-box;
+  padding: 8px 30px 8px 12px;
+  white-space: normal;
+  overflow-wrap: break-word;
   font-size: 12px;
+  line-height: 1.4;
   font-weight: 600;
   color: #d4f5a0;
   font-family: 'Segoe UI', 'Tajawal', sans-serif;
+  background: rgba(10, 20, 10, 0.95);
+  border: 1px solid rgba(200,255,0,0.35);
+  border-radius: 14px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.6), 0 0 0 1px rgba(200,255,0,0.1);
   animation: dzr-bubble-in 0.3s ease-out;
   pointer-events: auto;
-  max-width: 180px;
   text-align: center;
   direction: rtl;
   transition: border-color 0.3s, background 0.3s, color 0.3s;
+}
+
+.dzr-message {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  max-height: 2.8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dzr-bubble--angry {
@@ -280,16 +298,23 @@
   content: '';
   position: absolute;
   bottom: -7px;
-  left: 50%;
+  left: var(--bubble-tail-x, 50%);
   transform: translateX(-50%);
   border: 7px solid transparent;
   border-top-color: rgba(200,255,0,0.35);
   border-bottom: none;
 }
 
+.dzr-bubble--below::after {
+  top: -7px;
+  bottom: auto;
+  border-top: none;
+  border-bottom: 7px solid rgba(200,255,0,0.35);
+}
+
 @keyframes dzr-bubble-in {
-  from { opacity: 0; transform: translateX(50%) translateY(6px) scale(0.92); }
-  to   { opacity: 1; transform: translateX(50%) translateY(0) scale(1); }
+  from { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.92); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
 }
 
 .dzr-bubble-close {
@@ -309,7 +334,7 @@
 .dzr-bubble-close:hover { color: #ff6b6b; }
 
 @media (max-width: 480px) {
-  .dzr-svg { width: 60px; height: 75px; }
-  .dzr-label { font-size: 9px; }
-  .dzr-bubble { font-size: 11px; max-width: 150px; }
+  .dzr-svg { width: 48px; height: 44px; }
+  .dzr-label { font-size: 8px; }
+  .dzr-bubble { font-size: 11px; min-width: min(160px, calc(100vw - 20px)); max-width: min(260px, calc(100vw - 20px)); padding: 7px 28px 7px 10px; }
 }

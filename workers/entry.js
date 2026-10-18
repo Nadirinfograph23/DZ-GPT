@@ -12,6 +12,7 @@
 
 import { Readable } from 'node:stream'
 import { lookupStaticFact } from '../lib/static-facts.js'
+import { buildNewsChatResponse, fetchFirstValidNewsBatch, isAlgerianNewsQuery } from '../lib/news-response.js'
 import workerBuildInfoText from '../data/build-info.json'
 
 // Use the CI-generated metadata inside the Worker so reusable static /version.json cache
@@ -36,7 +37,6 @@ const WORKER_NEWS_FEEDS = [
   { name: 'البلاد', url: 'https://www.elbilad.net/feed' },
 ]
 
-const WORKER_NEWS_QUERY_RE = /(?:أخبار|خبر|عاجل|اليوم|الآن|آخر|news|breaking|actualité|derni[eè]res)/i
 
 // Currency intent must be handled before the broad news intent (which also matches 'اليوم').
 const WORKER_CURRENCY_QUERY_RE = /(?:سعر\s*(?:الصرف|الدولار|اليورو|العملة)|أسعار\s*الصرف|صرف\s*(?:اليوم|الدولار|اليورو)|دولار|يورو|عملة|currency|exchange\s*rate|exchange)/i
@@ -457,26 +457,25 @@ async function fetchChatDirect(request, env = {}) {
         console.warn('[Worker:Chat] Currency fetch failed:', e?.message || e)
       }
     }
-    // News intent
-    if (/أخبار|خبر|مستجدات|عاجل|اليوم.*الجزائر|الجزائر.*اليوم|news/i.test(lower)) {
+    // Algerian news and newspaper-headline intent must run before DZ Maps.
+    if (isAlgerianNewsQuery(lastUser)) {
+      let newsItems = []
       try {
         const newsResult = await fetchNewsDirect(new Request('https://dzagent.app/api/dz-agent/news'))
         const newsData = await newsResult.json()
-        if (newsData.items?.length) {
-          const items = newsData.items.slice(0, 10).map(item => `- [${item.title}](${item.link}) — *${item.source}*`).join('\n')
-          const content = `## 📰 آخر الأخبار الجزائرية\n\n${items}\n\n> ℹ️ المصدر: RSS مباشر`
-          return new Response(JSON.stringify({ content, model: 'news-api' }), {
-            headers: {
-        'content-type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      }
-          })
-        }
+        newsItems = Array.isArray(newsData.items) ? newsData.items : []
       } catch (e) {
-        console.warn('[Worker:Chat] News fetch failed:', e.message)
+        console.warn('[Worker:Chat] News fetch failed:', e?.message || e)
       }
+      const response = buildNewsChatResponse(newsItems, lastUser)
+      return new Response(JSON.stringify(response), {
+        headers: {
+          'content-type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        }
+      })
     }
 
     // ── Restored DZ Maps / OpenStreetMap place search ─────────────────────
@@ -864,21 +863,28 @@ async function fetchNewsDirect(request) {
   }
 
   try {
-    const settled = await Promise.allSettled(
-      WORKER_NEWS_FEEDS_STANDALONE.map(async (feed) => {
-        const response = await fetch(feed.url, {
-          headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*', 'User-Agent': 'DZ-Agent-Worker/1.0' },
-          signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 8000); return ctrl.signal })()
-        })
-        if (!response.ok) return []
-        const xml = await response.text()
-        return parseWorkerRss(xml, feed.name)
-      }),
+    const fetchedItems = await fetchFirstValidNewsBatch(
+      WORKER_NEWS_FEEDS_STANDALONE,
+      async (feed) => {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 8000)
+        try {
+          const response = await fetch(feed.url, {
+            headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*', 'User-Agent': 'DZ-Agent-Worker/1.0' },
+            signal: controller.signal,
+          })
+          if (!response.ok) return []
+          const xml = await response.text()
+          return parseWorkerRss(xml, feed.name)
+        } finally {
+          clearTimeout(timeout)
+        }
+      },
+      { graceMs: 300 },
     )
 
     const seen = new Set()
-    const items = settled
-      .flatMap(result => result.status === 'fulfilled' ? result.value : [])
+    const items = fetchedItems
       .filter(item => {
         const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
         if (!key || seen.has(key)) return false
@@ -893,8 +899,10 @@ async function fetchNewsDirect(request) {
       .slice(0, 20)
 
     const data = { items, generatedAt: new Date().toISOString() }
-    WORKER_NEWS_CACHE.data = data
-    WORKER_NEWS_CACHE.ts = now
+    if (items.length) {
+      WORKER_NEWS_CACHE.data = data
+      WORKER_NEWS_CACHE.ts = now
+    }
     return new Response(JSON.stringify(data), {
       headers: {
         'content-type': 'application/json',

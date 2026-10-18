@@ -642,3 +642,20 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Live verification after deploy (~2026-10-11 08:31 UTC): `/api/version` and `/version.json` both returned HTTP 200 and exact commit `3e8ad383a6ba6841c5363d5d0cdcb0d018d6dda4`; `/tools?tool=qrcode` and `/tools?tool=cv` returned HTTP 200.
 - No Cloudflare control-plane, DNS, Worker settings, secrets, or unrelated source were changed. Real-browser submission of `كود qr في جيبه` and card click-through remains unverified; verify the card appears and opens QR Code selected.
 - Next action: in a real browser at `/dz-agent`, submit `كود qr في جيبه`, click the tool card, and confirm the QR generator opens selected. If it still answers with a definition, capture the exact response and browser console/network error.
+
+
+## 2026-10-18 — إصلاح توجيه وبطاقات أخبار DZ Agent
+
+- قاعدة العمل: الفرع المطلوب `devin/1774405518-init-dz-gpt`؛ HEAD الذي بُنيت عليه هذه المعالجة `878f4e50d1f21e4ccac1a9d49dbd8c48918a5779`.
+- إعادة الإنتاج الحية: `أبرز عناوين الصحف الجزائرية` أعاد بطاقة خريطة للجزائر؛ إضافة `اليوم` أعادت قائمة Markdown بلا `newsItems`، لذلك لم تظهر بطاقة نتائج الأخبار.
+- فحص السابق: PR #15 مُدمج في `main` وكان إصلاحه في المسار القديم؛ PR #16 الخاص بعناوين الصحف أُغلق دون دمج. كود Worker على الفرع المطلوب ما زال يُظهر العطلين.
+- التغيير المقترح على فرع منفصل: توجيه عبارات عناوين الصحف قبل خرائط الأماكن؛ إرجاع `newsItems` منظمة مع بطاقات متجاوبة وروابط آمنة؛ إطلاق موجزات RSS بالتوازي واعتماد أول نتائج صالحة مع مهلة تجميع قصيرة، وعدم تخزين الاستجابة الفارغة.
+- الاختبارات: `tests/news-response.test.js` نجح تشغيله مباشرةً في بيئة Node المضمنة. أمر `node` غير متاح في shell الخاص بالجلسة، لذا لم يُشغّل build كامل.
+- لا نشر أو تعديل إنتاجي هنا: الدفع إلى الفرع المستهدف يشغّل Cloudflare deployment؛ التغييرات تُراجع عبر draft PR أولًا.
+- Cloudflare API integration متصل لكنه يرفض التحقق من API token (401/403)، لذلك لا يوجد وصول حساب/zone مؤكد؛ تحديث المفتاح يتم في اتصال Replit الحالي، لا في المحادثة.
+
+### ترتيب الاستمرار
+1. فتح draft PR إلى `devin/1774405518-init-dz-gpt` وتسجيل رقمه بعد الإنشاء.
+2. انتظار مراجعة المستخدم قبل دمجه؛ الدمج يشغّل workflow النشر تلقائيًا.
+3. بعد الدمج، التحقق من `/api/version` وتجربة العبارتين أعلاه على DZ Agent الحي.
+4. إعادة اختبار Cloudflare بعد تحديث API credential في Replit.

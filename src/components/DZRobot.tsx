@@ -163,8 +163,9 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
     lastPos.current = { x: clientX, y: clientY, t: now }
     const nx = clientX - dragOffset.current.x
     const ny = clientY - dragOffset.current.y
-    const maxX = window.innerWidth - 90
-    const maxY = window.innerHeight - 130
+    const bounds = robotRef.current?.getBoundingClientRect()
+    const maxX = window.innerWidth - (bounds?.width ?? 56) - 8
+    const maxY = window.innerHeight - (bounds?.height ?? 84) - 8
     setPos({
       x: Math.max(0, Math.min(nx, maxX)),
       y: Math.max(0, Math.min(ny, maxY)),
@@ -215,8 +216,10 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
   if (pos.x === -1) return null
 
   const messages = isAngry ? MESSAGES_ANGRY : MESSAGES_NORMAL
-  const centerX = pos.x + 40
-  const centerY = pos.y + 50
+  const compactRobot = window.innerWidth <= 480
+  const svgRect = robotRef.current?.querySelector<SVGSVGElement>('.dzr-svg')?.getBoundingClientRect()
+  const centerX = pos.x + (svgRect?.width ?? (compactRobot ? 48 : 56)) / 2
+  const centerY = pos.y + (svgRect?.height ?? (compactRobot ? 60 : 70)) / 2
 
   // Holiday color scheme
   const isHoliday = isHolidayCelebrating

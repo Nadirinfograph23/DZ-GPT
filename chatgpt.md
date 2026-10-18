@@ -1,3 +1,18 @@
+## 2026-10-18 — Same-size centered DZ robot head
+
+- Repository/target branch: `Nadirinfograph23/DZ-GPT` / `devin/1774405518-init-dz-gpt`. The branch already contained the head-only robot from `e0c2d72976e0ed0b221750a97c9576b6e297aa70`; this follow-up restores the previous visual footprint and centers it.
+- Change: preserve the antenna/face/side-pod head, drag bounds, hide/restore, holiday animation and responsive two-line Arabic message bubble; restore SVG dimensions to 72×90 desktop and 60×75 mobile; center the widget on initial load; keep a dragged widget within the viewport after resizing; keep the bubble immediately above the robot, horizontally clamped, and move it below only near the top edge.
+- Commit and release: this source-and-handoff change is being pushed directly to the requested branch with the user's approval. Pushes to this branch trigger .github/workflows/deploy-cloudflare-worker.yml, which builds, deploys the dzagent Worker, verifies /api/version and /version.json, and runs the production smoke test. Exact-SHA run and live verification remain pending until observed; do not claim visual browser verification without a real browser check.
+- Cloudflare REST connector returned HTTP 403 / 9109 (Invalid access token; API-key credential). No direct Cloudflare control-plane, DNS, Worker, cache, or secret changes are authorized or needed; update the Cloudflare key in the existing Replit connection before any account-level operation.
+- Existing draft PR #60 is an earlier compact-size proposal. Do not create a duplicate PR; verify the requested target-branch commit and treat PR #60 as superseded only after confirming its latest status.
+
+### Ordered continuation
+1. Confirm the target branch points to this commit and inspect the exact-SHA GitHub Actions run; require install, build, Worker deploy, both version checks, and production smoke test to pass.
+2. Confirm https://dzagent.app/api/version and https://dzagent.app/version.json report the exact app SHA and target branch; confirm / returns HTTP 200.
+3. On desktop and phone-width browsers, verify the head's original footprint, initial page center, drag and hide/restore, the bubble directly above and horizontally within the viewport, and top-edge placement below the head. Record any visual mismatch before changing CSS.
+4. After checks, append the exact run URL, deployed SHA, and observed results here; distinguish production endpoint evidence from visual/browser evidence. Keep DNS, Worker configuration, and secrets unchanged.
+
+---
 ## 2026-10-18 — Draggable robot head and compact message bubble
 
 - Repository/target branch: `Nadirinfograph23/DZ-GPT` / `devin/1774405518-init-dz-gpt`. Work on this branch as requested; keep the existing PR #60 context in view and do not create a duplicate PR.

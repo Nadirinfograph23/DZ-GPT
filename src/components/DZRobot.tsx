@@ -78,19 +78,32 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
   const robotRef = useRef<HTMLDivElement>(null)
   const dragOffset = useRef({ x: 0, y: 0 })
   const dragging = useRef(false)
+  const hasUserDragged = useRef(false)
   const lastPos = useRef({ x: 0, y: 0, t: 0 })
   const velocity = useRef({ vx: 0, vy: 0 })
   const angryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Initial position
+  // Initial position — center the robot on first load and keep it in view on resize
   useEffect(() => {
     const setInitialPos = () => {
       const compactRobot = window.innerWidth <= 480
-      const robotWidth = compactRobot ? 48 : 56
-      const robotHeight = compactRobot ? 44 : 50
-      setPos({
-        x: Math.max(8, window.innerWidth - robotWidth - 16),
-        y: Math.max(8, window.innerHeight - robotHeight - 15 - 20),
+      const robotWidth = compactRobot ? 60 : 72
+      const robotHeight = compactRobot ? 75 : 90
+      const widgetHeight = robotHeight + (compactRobot ? 15 : 16)
+      setPos(current => {
+        const bounds = robotRef.current?.getBoundingClientRect()
+        const width = bounds?.width ?? robotWidth
+        const height = bounds?.height ?? widgetHeight
+        if (current.x < 0 || current.y < 0 || !hasUserDragged.current) {
+          return {
+            x: Math.max(8, (window.innerWidth - width) / 2),
+            y: Math.max(8, (window.innerHeight - height) / 2),
+          }
+        }
+        return {
+          x: Math.max(8, Math.min(current.x, window.innerWidth - width - 8)),
+          y: Math.max(8, Math.min(current.y, window.innerHeight - height - 8)),
+        }
       })
     }
     setInitialPos()
@@ -158,6 +171,7 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
 
   const moveDrag = useCallback((clientX: number, clientY: number) => {
     if (!dragging.current) return
+    hasUserDragged.current = true
     const now = Date.now()
     const dt = now - lastPos.current.t
     if (dt > 0) {
@@ -170,8 +184,8 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
     const nx = clientX - dragOffset.current.x
     const ny = clientY - dragOffset.current.y
     const bounds = robotRef.current?.getBoundingClientRect()
-    const maxX = window.innerWidth - (bounds?.width ?? 56) - 8
-    const maxY = window.innerHeight - (bounds?.height ?? 70) - 8
+    const maxX = window.innerWidth - (bounds?.width ?? 72) - 8
+    const maxY = window.innerHeight - (bounds?.height ?? 106) - 8
     setPos({
       x: Math.max(0, Math.min(nx, maxX)),
       y: Math.max(0, Math.min(ny, maxY)),
@@ -223,8 +237,8 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
 
   const messages = isAngry ? MESSAGES_ANGRY : MESSAGES_NORMAL
   const compactRobot = window.innerWidth <= 480
-  const robotWidth = compactRobot ? 48 : 56
-  const robotHeight = compactRobot ? 44 : 50
+  const robotWidth = compactRobot ? 60 : 72
+  const robotHeight = compactRobot ? 75 : 90
   const svgRect = robotRef.current?.querySelector<SVGSVGElement>('.dzr-svg')?.getBoundingClientRect()
   const centerX = pos.x + (svgRect?.width ?? robotWidth) / 2
   const centerY = pos.y + (svgRect?.height ?? robotHeight) / 2
@@ -234,6 +248,7 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
     Math.min(pos.x + robotWidth / 2, window.innerWidth - bubbleMaxWidth / 2 - 10),
   )
   const bubbleTailX = Math.max(12, Math.min(bubbleMaxWidth - 12, pos.x + robotWidth / 2 - bubbleCenterX + bubbleMaxWidth / 2))
+  const widgetHeight = robotHeight + (compactRobot ? 15 : 16)
   const showBubbleBelow = pos.y < 80
 
   // Holiday color scheme
@@ -310,7 +325,7 @@ export default function DZRobot({ holiday, onHide }: DZRobotProps) {
             style={{
               left: bubbleCenterX,
               right: 'auto',
-              top: showBubbleBelow ? pos.y + robotHeight + 8 : 'auto',
+              top: showBubbleBelow ? pos.y + widgetHeight + 8 : 'auto',
               bottom: showBubbleBelow ? 'auto' : window.innerHeight - pos.y + 8,
               transform: 'translateX(-50%)',
               '--bubble-tail-x': `${bubbleTailX}px`,

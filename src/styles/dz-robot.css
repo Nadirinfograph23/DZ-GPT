@@ -7,7 +7,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   animation: dzr-float 3s ease-in-out infinite;
   isolation: isolate;
 }
@@ -120,8 +120,8 @@
 }
 
 .dzr-svg {
-  width: 56px;
-  height: 50px;
+  width: 72px;
+  height: 90px;
   transition: transform 0.2s ease, filter 0.3s ease;
   filter: drop-shadow(0 4px 12px rgba(200,255,0,0.2));
 }
@@ -232,7 +232,7 @@
 }
 
 .dzr-label {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   color: #c8ff00;
   letter-spacing: 0.8px;
@@ -334,7 +334,7 @@
 .dzr-bubble-close:hover { color: #ff6b6b; }
 
 @media (max-width: 480px) {
-  .dzr-svg { width: 48px; height: 44px; }
-  .dzr-label { font-size: 8px; }
+  .dzr-svg { width: 60px; height: 75px; }
+  .dzr-label { font-size: 9px; }
   .dzr-bubble { font-size: 11px; min-width: min(160px, calc(100vw - 20px)); max-width: min(260px, calc(100vw - 20px)); padding: 7px 28px 7px 10px; }
 }

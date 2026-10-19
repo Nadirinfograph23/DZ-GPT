@@ -14,6 +14,7 @@
     "test:radio-filters": "node tests/radio-filters.test.js",
     "test:tool-redirect-intents": "node tests/tool-redirect-intents.test.js",
     "test:build-info": "node tests/generate-build-info.test.js",
+    "test:news-response": "node tests/news-response.test.js",
     "test:version-check-state": "node tests/version-check-state.test.js"
   },
   "dependencies": {

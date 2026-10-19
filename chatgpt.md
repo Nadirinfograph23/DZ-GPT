@@ -674,3 +674,36 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Live verification after deploy (~2026-10-11 08:31 UTC): `/api/version` and `/version.json` both returned HTTP 200 and exact commit `3e8ad383a6ba6841c5363d5d0cdcb0d018d6dda4`; `/tools?tool=qrcode` and `/tools?tool=cv` returned HTTP 200.
 - No Cloudflare control-plane, DNS, Worker settings, secrets, or unrelated source were changed. Real-browser submission of `كود qr في جيبه` and card click-through remains unverified; verify the card appears and opens QR Code selected.
 - Next action: in a real browser at `/dz-agent`, submit `كود qr في جيبه`, click the tool card, and confirm the QR generator opens selected. If it still answers with a definition, capture the exact response and browser console/network error.
+
+
+## 2026-10-18 — إصلاح توجيه وبطاقات أخبار DZ Agent
+
+- قاعدة العمل: الفرع المطلوب `devin/1774405518-init-dz-gpt`؛ HEAD الذي بُنيت عليه هذه المعالجة `878f4e50d1f21e4ccac1a9d49dbd8c48918a5779`.
+- إعادة الإنتاج الحية: `أبرز عناوين الصحف الجزائرية` أعاد بطاقة خريطة للجزائر؛ إضافة `اليوم` أعادت قائمة Markdown بلا `newsItems`، لذلك لم تظهر بطاقة نتائج الأخبار.
+- فحص السابق: PR #15 مُدمج في `main` وكان إصلاحه في المسار القديم؛ PR #16 الخاص بعناوين الصحف أُغلق دون دمج. كود Worker على الفرع المطلوب ما زال يُظهر العطلين.
+- التغيير المقترح على فرع منفصل: توجيه عبارات عناوين الصحف قبل خرائط الأماكن؛ إرجاع `newsItems` منظمة مع بطاقات متجاوبة وروابط آمنة؛ إطلاق موجزات RSS بالتوازي واعتماد أول نتائج صالحة مع مهلة تجميع قصيرة، وعدم تخزين الاستجابة الفارغة.
+- الاختبارات: `tests/news-response.test.js` نجح تشغيله مباشرةً في بيئة Node المضمنة. أمر `node` غير متاح في shell الخاص بالجلسة، لذا لم يُشغّل build كامل.
+- لا نشر أو تعديل إنتاجي هنا: الدفع إلى الفرع المستهدف يشغّل Cloudflare deployment؛ التغييرات تُراجع عبر draft PR أولًا.
+- Cloudflare API integration متصل لكنه يرفض التحقق من API token (401/403)، لذلك لا يوجد وصول حساب/zone مؤكد؛ تحديث المفتاح يتم في اتصال Replit الحالي، لا في المحادثة.
+
+### ترتيب الاستمرار
+1. فتح draft PR إلى `devin/1774405518-init-dz-gpt` وتسجيل رقمه بعد الإنشاء.
+2. انتظار مراجعة المستخدم قبل دمجه؛ الدمج يشغّل workflow النشر تلقائيًا.
+3. بعد الدمج، التحقق من `/api/version` وتجربة العبارتين أعلاه على DZ Agent الحي.
+4. إعادة اختبار Cloudflare بعد تحديث API credential في Replit.
+
+
+## 2026-10-18 — استكمال تصنيف الأخبار والصفحات وبطاقة لوحة التحكم
+
+- موافقة المستخدم: توسيع PR #59 الحالي على فرعه fix/dz-agent-algerian-news، مع السماح بمسار النشر التلقائي الذي قد يحدّث production. لا تُرفع التغييرات على فرع الأساس مباشرةً.
+- استُبدلت معالجة الأخبار العامة بموجزات مجانية مصنّفة يعاد استخدامها من lib/news.js: أخبار الجزائر (APS، إذاعة الجزائر، الشروق، النهار، الخبر، TSA، البلاد وGoogle News)، الرياضة (APS Sport، الهداف، BBC Sport، ESPN، CAF وسبورت 360)، الدولية (BBC عربي، France 24، العربية، سكاي نيوز عربية وBBC World)، والاقتصاد (Google News ومصادر جزائرية).
+- resolveNewsIntent يوجّه الرياضة/الدولي/الاقتصاد قبل مسار الإجابة العامة، ويحفظ تصنيف الطلب الأصلي عند «عرض المزيد». صفحة الأخبار تتقدم بمقدار 10 نتائج لكل متابعة؛ cache يحتفظ بقائمة التصنيف الكاملة خمس دقائق، والـrefresh اليدوي يتجاوزها. لا تُخزّن الاستجابة الفارغة.
+- لوحة DZ Dashboard أصبحت تقرأ الجزائر والرياضة من /api/dz-agent/news الخادمي بدلاً من وسطاء CORS في المتصفح؛ مصادر RSS التقنية تظل كما هي. بطاقة الأخبار تعرض عنواناً مطابقاً للتصنيف.
+- tests/news-response.test.js يختبر تصنيف الطلبات، متابعة الصفحة، اختلاف نتائج الصفحة، اختيار مصادر الرياضة والدولي، وعقد البطاقة. التحقق المضمن في الجلسة نجح؛ انتظار تشغيل GitHub Actions للبناء والاختبار والنشر، ثم التحقق من إصدار الإنتاج وتجربة الأخبار الحية.
+- اتصال Cloudflare المباشر ما زال يرفض API token (401/403)؛ لا تعديل DNS أو إعدادات Cloudflare يدوياً. حدّث مفتاح الاتصال وصلاحياته داخل اتصال Replit الحالي إذا احتجنا إلى فحص لوحة Cloudflare.
+
+### ترتيب الاستمرار بعد الـcommit
+1. فحص GitHub Actions للـcommit الجديد وقراءة نتيجة الاختبار والبناء وsmoke test.
+2. إذا اكتمل النشر، طلب /api/version والتحقق من تطابق SHA، ثم تجربة أخبار الجزائر، أخبار رياضية، أخبار دولية، ثم عرض المزيد والتأكد من أن الصفحة الثانية مختلفة.
+3. تأكيد أن /api/dz-agent/news?category=algeria و?category=sports يعيدان عناصر حقيقية، ثم تأكيد ظهور بطاقة لوحة التحكم وإعادة المحاولة.
+4. حدّث بيانات Cloudflare API في اتصال Replit للتحقق من zone/deployment؛ لا تُدخلها في الدردشة.

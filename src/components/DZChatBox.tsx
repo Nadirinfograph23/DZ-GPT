@@ -23,6 +23,7 @@ import remarkGfm from 'remark-gfm'
 import WC2026MatchCard from './WC2026MatchCard'
 import { DZMDTable } from './tables/DZSmartTable'
 import DZDashboard from './DZDashboard'
+import NewsResultsCard from './NewsResultsCard'
 import DoctorResultsPanel, { type DoctorResult, type DirLink } from './DoctorResultsPanel'
 import DoctorSelectionPanel, { type DoctorSelectionData } from './DoctorSelectionPanel'
 import { DeveloperCard } from './DeveloperCard'
@@ -8951,6 +8952,7 @@ ${rows}
                           }}
                         >{stripSourceFooters(msg.content)}</ReactMarkdown>
                       )}
+                      {msg.newsItems?.length ? <NewsResultsCard items={msg.newsItems} /> : null}
                       {msg.richType === 'text' && msg.executionCode && (
                         <CodeExecutionPreview code={msg.executionCode} lang={msg.executionLang || 'python'} />
                       )}

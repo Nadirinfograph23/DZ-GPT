@@ -12,6 +12,7 @@
 
 import { Readable } from 'node:stream'
 import { lookupStaticFact } from '../lib/static-facts.js'
+import { buildNewsChatResponse, fetchFirstValidNewsBatch, getNewsFeeds, normalizeNewsCategory, paginateNewsItems, resolveNewsIntent } from '../lib/news-response.js'
 import workerBuildInfoText from '../data/build-info.json'
 
 // Use the CI-generated metadata inside the Worker so reusable static /version.json cache
@@ -21,22 +22,6 @@ const WORKER_BUILD_INFO = (() => {
 })()
 
 let expressApp = null
-
-// Cloudflare Workers can cold-start before the Express news preloader has
-// populated its in-memory cache. Keep a small, keyless RSS fallback here so a
-// valid live-news request never degrades to "news unavailable" just because the
-// Node compatibility bridge is still warming up.
-const WORKER_NEWS_FEEDS = [
-  {
-    name: 'Google أخبار الجزائر',
-    url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',
-  },
-  { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
-  { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
-  { name: 'البلاد', url: 'https://www.elbilad.net/feed' },
-]
-
-const WORKER_NEWS_QUERY_RE = /(?:أخبار|خبر|عاجل|اليوم|الآن|آخر|news|breaking|actualité|derni[eè]res)/i
 
 // Currency intent must be handled before the broad news intent (which also matches 'اليوم').
 const WORKER_CURRENCY_QUERY_RE = /(?:سعر\s*(?:الصرف|الدولار|اليورو|العملة)|أسعار\s*الصرف|صرف\s*(?:اليوم|الدولار|اليورو)|دولار|يورو|عملة|currency|exchange\s*rate|exchange)/i
@@ -141,7 +126,7 @@ function parseWorkerRss(xml, source) {
   const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
   let match
 
-  while ((match = itemRegex.exec(xml)) !== null && items.length < 10) {
+  while ((match = itemRegex.exec(xml)) !== null && items.length < 25) {
     const block = match[1]
     const get = (tag) => {
       const found = block.match(new RegExp(
@@ -457,27 +442,9 @@ async function fetchChatDirect(request, env = {}) {
         console.warn('[Worker:Chat] Currency fetch failed:', e?.message || e)
       }
     }
-    // News intent
-    if (/أخبار|خبر|مستجدات|عاجل|اليوم.*الجزائر|الجزائر.*اليوم|news/i.test(lower)) {
-      try {
-        const newsResult = await fetchNewsDirect(new Request('https://dzagent.app/api/dz-agent/news'))
-        const newsData = await newsResult.json()
-        if (newsData.items?.length) {
-          const items = newsData.items.slice(0, 10).map(item => `- [${item.title}](${item.link}) — *${item.source}*`).join('\n')
-          const content = `## 📰 آخر الأخبار الجزائرية\n\n${items}\n\n> ℹ️ المصدر: RSS مباشر`
-          return new Response(JSON.stringify({ content, model: 'news-api' }), {
-            headers: {
-        'content-type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      }
-          })
-        }
-      } catch (e) {
-        console.warn('[Worker:Chat] News fetch failed:', e.message)
-      }
-    }
+    // Route every live-news intent, including sports, international, and follow-up pages, before the general AI/maps path.
+    const newsIntent = resolveNewsIntent(messages)
+    if (newsIntent) return await fetchNewsChatResponse(newsIntent)
 
     // ── Restored DZ Maps / OpenStreetMap place search ─────────────────────
     // Preserve the original POI flow (e.g. "مسجد في عنابة") before AI so
@@ -834,89 +801,114 @@ async function fetchChatDirect(request, env = {}) {
 
 
 // ===== NEWS DIRECT (Worker-native, no server.js) =====
-const WORKER_NEWS_CACHE = { data: null, ts: 0 }
-const WORKER_NEWS_TTL = 15 * 60 * 1000
-
-const WORKER_NEWS_FEEDS_STANDALONE = [
-  { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
-  { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
-  { name: 'البلاد', url: 'https://www.elbilad.net/feed' },
-]
+const WORKER_NEWS_CACHE = new Map()
+const WORKER_NEWS_TTL = 5 * 60 * 1000
 
 async function fetchNewsDirect(request) {
   const requestUrl = new URL(request.url)
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      }
-    })
+  const corsHeaders = {
+    'content-type': 'application/json',
+    'cache-control': 'no-store',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
   }
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders })
+
+  const category = normalizeNewsCategory(requestUrl.searchParams.get('category'))
+  const page = Math.max(0, Math.floor(Number(requestUrl.searchParams.get('page')) || 0))
+  const limit = Math.min(25, Math.max(1, Math.floor(Number(requestUrl.searchParams.get('limit')) || 10)))
+  const bypassCache = requestUrl.searchParams.get('bypassCache') === '1'
   const now = Date.now()
-  if (WORKER_NEWS_CACHE.data && WORKER_NEWS_CACHE.ts > now - WORKER_NEWS_TTL) {
-    return new Response(JSON.stringify(WORKER_NEWS_CACHE.data), {
-      headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
-    })
+  const previous = WORKER_NEWS_CACHE.get(category)
+  let cacheEntry = !bypassCache && previous && previous.expiresAt > now ? previous : null
+
+  if (!cacheEntry) {
+    try {
+      const fetchedItems = await fetchFirstValidNewsBatch(
+        getNewsFeeds(category),
+        async (feed) => {
+          const controller = new AbortController()
+          const timeout = setTimeout(() => controller.abort(), 7000)
+          try {
+            const response = await fetch(feed.url, {
+              headers: { Accept: 'application/rss+xml,application/xml,text/xml,*/*', 'User-Agent': 'DZ-Agent-Worker/2.0' },
+              signal: controller.signal,
+            })
+            if (!response.ok) return []
+            return parseWorkerRss(await response.text(), feed.name).map(item => ({ ...item, category }))
+          } finally {
+            clearTimeout(timeout)
+          }
+        },
+        { graceMs: 900 },
+      )
+      const seen = new Set()
+      const items = fetchedItems
+        .filter(item => {
+          const key = String(item.title || '').toLowerCase().replace(/\s+/g, ' ').trim()
+          if (!key || seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        .sort((a, b) => (Date.parse(b.pubDate || '') || 0) - (Date.parse(a.pubDate || '') || 0))
+        .slice(0, 120)
+      if (items.length) {
+        cacheEntry = { items, generatedAt: new Date().toISOString(), expiresAt: now + WORKER_NEWS_TTL }
+        WORKER_NEWS_CACHE.set(category, cacheEntry)
+      } else if (previous) {
+        cacheEntry = previous
+      }
+    } catch (error) {
+      console.warn('[Worker:News] Source batch failed:', error?.message || error)
+      if (previous) cacheEntry = previous
+    }
   }
 
+  const sourceItems = cacheEntry?.items || []
+  const result = paginateNewsItems(sourceItems, page, limit)
+  return new Response(JSON.stringify({
+    ...result,
+    category,
+    generatedAt: cacheEntry?.generatedAt || new Date().toISOString(),
+    sources: [...new Set(sourceItems.map(item => item.source).filter(Boolean))],
+  }), { headers: corsHeaders })
+}
+
+async function fetchNewsChatResponse(intent) {
+  const url = new URL('https://dzagent.app/api/dz-agent/news')
+  url.searchParams.set('category', intent.category)
+  url.searchParams.set('page', String(intent.page))
+  url.searchParams.set('limit', '10')
   try {
-    const settled = await Promise.allSettled(
-      WORKER_NEWS_FEEDS_STANDALONE.map(async (feed) => {
-        const response = await fetch(feed.url, {
-          headers: { 'Accept': 'application/rss+xml,application/xml,text/xml,*/*', 'User-Agent': 'DZ-Agent-Worker/1.0' },
-          signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 8000); return ctrl.signal })()
-        })
-        if (!response.ok) return []
-        const xml = await response.text()
-        return parseWorkerRss(xml, feed.name)
-      }),
-    )
-
-    const seen = new Set()
-    const items = settled
-      .flatMap(result => result.status === 'fulfilled' ? result.value : [])
-      .filter(item => {
-        const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
-        if (!key || seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
-      .sort((a, b) => {
-        const aTime = Date.parse(a.pubDate || '') || 0
-        const bTime = Date.parse(b.pubDate || '') || 0
-        return bTime - aTime
-      })
-      .slice(0, 20)
-
-    const data = { items, generatedAt: new Date().toISOString() }
-    WORKER_NEWS_CACHE.data = data
-    WORKER_NEWS_CACHE.ts = now
-    return new Response(JSON.stringify(data), {
-      headers: {
-        'content-type': 'application/json',
-        'cache-control': 'no-store',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      }
+    const response = await fetchNewsDirect(new Request(url))
+    const data = await response.json()
+    const result = buildNewsChatResponse(data.items, intent.query, {
+      category: intent.category,
+      page: intent.page,
+      hasMoreNews: data.hasMore,
     })
-  } catch (err) {
-    console.error('[Worker:News] Failed:', err.message)
-    return new Response(JSON.stringify({ items: [], error: 'تعذّر جلب الأخبار', generatedAt: new Date().toISOString() }), {
+    return new Response(JSON.stringify(result), {
       headers: {
         'content-type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
-      }
+      },
+    })
+  } catch (error) {
+    console.warn('[Worker:Chat] News fetch failed:', error?.message || error)
+    const result = buildNewsChatResponse([], intent.query, { category: intent.category, page: intent.page })
+    return new Response(JSON.stringify(result), {
+      headers: {
+        'content-type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
     })
   }
 }
-
 
 // ===== NATIONAL TEAM NEWS DIRECT (Worker-native, no server.js) =====
 const WORKER_NT_NEWS_CACHE = { items: [], ts: 0 }
@@ -1238,81 +1230,13 @@ async function fetchPrayerDirect(request) {
 async function fetchWorkerNewsFallback(request) {
   let payload
   try {
-    payload = await request.json()
+    payload = await request.clone().json()
   } catch {
     return null
   }
-
   const messages = Array.isArray(payload?.messages) ? payload.messages : []
-  const lastUserMessage = [...messages]
-    .reverse()
-    .find(message => message?.role === 'user' && typeof message.content === 'string')
-    ?.content
-    ?.trim() || ''
-
-  const isAlgeriaNewsQuery = /الجزائر|الجزاير|algeria|alg[eé]rie/i.test(lastUserMessage)
-  if (!isAlgeriaNewsQuery || !WORKER_NEWS_QUERY_RE.test(lastUserMessage)) return null
-
-  const settled = await Promise.allSettled(
-    WORKER_NEWS_FEEDS.map(async (feed) => {
-      const response = await fetch(feed.url, {
-        headers: {
-          Accept: 'application/rss+xml,application/xml,text/xml,*/*',
-          'User-Agent': 'DZ-Agent-Worker/1.0 (+https://dzagent.app)',
-        },
-        signal: (() => { const ctrl = new AbortController(); const tid = setTimeout(() => ctrl.abort(), 6500); return ctrl.signal })(),
-      })
-      if (!response.ok) return []
-      return parseWorkerRss(await response.text(), feed.name)
-    }),
-  )
-
-  const seen = new Set()
-  const items = settled
-    .flatMap(result => result.status === 'fulfilled' ? result.value : [])
-    .filter(item => {
-      const key = item.title.toLowerCase().replace(/\s+/g, ' ').trim()
-      if (!key || seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-    .sort((a, b) => {
-      const aTime = Date.parse(a.pubDate || '') || 0
-      const bTime = Date.parse(b.pubDate || '') || 0
-      return bTime - aTime
-    })
-    .slice(0, 20)
-
-  if (!items.length) return null
-
-  const date = new Date().toLocaleDateString('ar-DZ', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-  const content = [
-    `## 📰 آخر أخبار الجزائر — ${date}`,
-    '',
-    ...items.map(item => {
-      const link = item.link ? ` [عرض الخبر](${item.link})` : ''
-      return `- **${item.title}** — *${item.source}*${link}`
-    }),
-    '',
-    '---',
-    '> ℹ️ تم جلب العناوين مباشرة من RSS عبر Cloudflare Worker.',
-  ].join('\n')
-
-  return new Response(JSON.stringify({
-    content,
-    status: 'rss_worker_direct',
-  }), {
-    status: 200,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-    },
-  })
+  const intent = resolveNewsIntent(messages)
+  return intent ? fetchNewsChatResponse(intent) : null
 }
 
 /**

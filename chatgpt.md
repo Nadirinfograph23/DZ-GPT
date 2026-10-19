@@ -1,3 +1,21 @@
+## 2026-10-19 — Algerian radio stations prioritized (PR #61)
+
+- Repository/target branch: `Nadirinfograph23/DZ-GPT` / `devin/1774405518-init-dz-gpt`. Work is on PR #61's source branch `feat/dz-radio-international-stations`; do not push directly to the target branch or merge without explicit approval because pushes to the target branch trigger production Cloudflare Worker deployment.
+- Code commit: `ead4d1847bc74bd76589b0ebc1f97824eef4a4a1` (`fix: prioritize Algerian radio stations`). The user's request: when DZ Radio opens, list Algerian stations first, followed by all other stations, while retaining the existing category filters.
+- Implementation: `filterRadioStations` applies the existing country/category predicates unchanged, then stable-partitions Algerian stations before all others. Original order within both groups is retained; a country-specific filter still returns its matching stations in their existing order. `RADIO_CATEGORY_FILTERS` and country/category definitions were not changed.
+- Files changed: `src/lib/radio-filters.js` and `tests/radio-filters.test.js`; this handoff note is in `chatgpt.md`.
+- Verification: the exact radio filter test body was executed in the JS sandbox against the candidate source; all 19 assertions passed, including default ordering, Algeria-only order, country filters, music category with an Algerian station, country flags, and unchanged filter counts. The actual `npm run test:radio-filters` and full build have not yet run in the project environment; do not claim CI/build success until checked.
+- PR #61 remains the existing review target; no duplicate PR was opened. No production deployment or direct Cloudflare setting change was made. Cloudflare API read access still returns 403/code 9109 (invalid API-key credential); update the key in the existing Replit Cloudflare connection before account-level operations, never in chat.
+
+### Ordered continuation
+1. Confirm PR #61 now contains code commit `ead4d1847bc74bd76589b0ebc1f97824eef4a4a1`; inspect the diff and confirm only Algerian-first list ordering, its regression fixture/assertions, and this handoff note changed.
+2. Run `npm run test:radio-filters` and the project's normal build/PR checks; record exact results here.
+3. In the PR preview, confirm the default all-country view begins with Algerian stations and then other stations, while country filters, category labels/counts, and within-group order stay intact.
+4. Keep PR #61 open until review is complete. Merge only after explicit approval; merging to `devin/1774405518-init-dz-gpt` triggers the production deploy workflow.
+5. After an approved merge, verify the exact deployed SHA and production version endpoints; do not use the failed Cloudflare API-key connection as evidence of account access.
+
+---
+
 ## 2026-10-19 — Curated international radio stations (PR #61)
 
 - Repository/target branch: `Nadirinfograph23/DZ-GPT` / `devin/1774405518-init-dz-gpt`. Work is isolated on `feat/dz-radio-international-stations`; do not merge or push directly to the target branch without explicit approval because the deployment workflow deploys to production on pushes to that branch or `main`.

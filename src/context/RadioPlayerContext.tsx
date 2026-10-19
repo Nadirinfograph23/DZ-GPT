@@ -15,6 +15,7 @@ export interface RadioStation {
   codec: string
   bitrate: number
   category?: 'algeria' | 'arabic' | 'international'
+  featured?: boolean
 }
 
 interface RadioPlayerCtx {
@@ -61,8 +62,8 @@ const RADIO_STREAM_PROXY_KEYS: Record<string, string> = {
 
 const RADIO_STREAM_PROXY_ROUTE_KEYS = new Set<string>(["adrar","aindefla","aintemouchent","alger","alger_chaines","annaba","bahdja","batna","bechar","bejaia","biskra","blida","bordjbouarreridj","bouira","boumerdes","chaine1","chaine2","chaine3","chlef","constantine","coran","culture","djelfa","elbayadh","eloued","eltarf","ghardaia","guelma","illizi","internationale","jijel","jil","jilfm","khenchela","laghouat","mascara","medea","mila","mostaganem","msila","naama","oran","ouargla","oumelbouaghi","rai","relizane","saida","setif","sidibelabbes","skikda","soukahras","tamanrasset","tebessa","tiaret","tindouf","tipaza","tissemsilt","tiziouzou","tlemcen"])
 
-function mk(id: string, name: string, url: string, tags: string, country: string, lang: string, bitrate: number, cat: RadioStation['category']): RadioStation {
-  return { stationuuid: id, name, url, url_resolved: url, favicon: '', tags, country, language: lang, votes: 0, codec: 'MP3', bitrate, category: cat }
+function mk(id: string, name: string, url: string, tags: string, country: string, lang: string, bitrate: number, cat: RadioStation['category'], countrycode?: string, featured = false): RadioStation {
+  return { stationuuid: id, name, url, url_resolved: url, favicon: '', tags, country, countrycode, language: lang, votes: 0, codec: 'MP3', bitrate, category: cat, featured }
 }
 
 function radioStationNameKey(name: string): string {
@@ -160,7 +161,8 @@ function normalizeRadioStations(data: RadioStation[]): RadioStation[] {
 
 function mergeRadioStations(preferred: RadioStation[], fallback: RadioStation[]): RadioStation[] {
   const seen = new Set<string>()
-  return [...preferred, ...fallback].filter(station => {
+  const featuredFallback = fallback.filter(station => station.featured)
+  return [...featuredFallback, ...preferred, ...fallback].filter(station => {
     const key = radioStationNameKey(station.name) + '|' + radioStationCountryKey(station)
     if (!radioStationNameKey(station.name) || seen.has(key)) return false
     seen.add(key)
@@ -229,18 +231,35 @@ const BUILTIN_STATIONS: RadioStation[] = [
   mk('dz-tindouf',    'Radio Tindouf',           'https://radiotindouf.ice.infomaniak.ch/tindouf.mp3',           'tindouf,sahara',            'Algeria', 'arabic',           128, 'algeria'),
   mk('dz-illizi',     'Radio Illizi',            'https://radioillizi.ice.infomaniak.ch/illizi.mp3',             'illizi,south',              'Algeria', 'arabic',           128, 'algeria'),
 
+  // ═══ دولية — محطات مميّزة مرتبة حسب البلد واللغة ═══════════════════
+  mk('fr-inter',       'France Inter',          'https://icecast.radiofrance.fr/franceinter-midfi.mp3',             'news,talk,culture,french,public radio', 'France', 'french', 128, 'international', 'FR', true),
+  mk('fr-info',        'France Info',           'https://icecast.radiofrance.fr/franceinfo-midfi.mp3',              'news,french,public radio', 'France', 'french', 128, 'international', 'FR', true),
+  mk('fr-europe1',     'Europe 1',              'https://stream.europe1.fr/europe1.aac',                            'news,talk,french', 'France', 'french', 128, 'international', 'FR', true),
+  mk('fr-rmc',         'RMC France',            'https://audio.bfmtv.com/rmcradio_128.mp3',                         'news,sports,talk,french', 'France', 'french', 128, 'international', 'FR', true),
+  mk('fr-culture',     'France Culture',        'https://icecast.radiofrance.fr/franceculture-hifi.aac',            'culture,talk,french,public radio', 'France', 'french', 192, 'international', 'FR', true),
+  mk('fr-rfi-monde',   'RFI Monde',             'http://live02.rfi.fr/rfimonde-64.mp3',                             'news,french,international', 'France', 'french', 64, 'international', 'FR', true),
+
+  mk('uk-bbc-world',   'BBC World Service',     'https://stream.live.vc.bbcmedia.co.uk/bbc_world_service',          'news,talk,english,international', 'United Kingdom', 'english', 56, 'international', 'GB', true),
+  mk('uk-classicfm',   'Classic FM UK',         'https://media-ssl.musicradio.com/ClassicFM',                       'classical,music,english,uk', 'United Kingdom', 'english', 128, 'international', 'GB', true),
+  mk('uk-lbc',         'LBC UK',                'https://media-ice.musicradio.com/LBCUK',                            'news,talk,english,uk', 'United Kingdom', 'english', 48, 'international', 'GB', true),
+
+  mk('us-npr',         'NPR News',              'https://npr-ice.streamguys1.com/live.mp3',                         'news,talk,english,american', 'United States', 'english', 128, 'international', 'US', true),
+  mk('us-cnn',         'CNN Radio',             'https://tunein.cdnstream1.com/2868_96.mp3',                        'news,english,american', 'United States', 'english', 96, 'international', 'US', true),
+  mk('us-kexp',        'KEXP 90.3',             'https://kexp-mp3-128.streamguys1.com/kexp128.mp3',                'music,rock,indie,english,american', 'United States', 'english', 128, 'international', 'US', true),
+  mk('us-paradise',    'Radio Paradise',        'http://stream-uk1.radioparadise.com/aac-320',                      'music,rock,pop,english,american', 'United States', 'english', 320, 'international', 'US', true),
+
+  mk('eg-nogoum',     'Nogoum FM',             'https://stream-159.zeno.fm/qb1zvsykm98uv',                         'music,pop,arabic,egypt', 'Egypt', 'arabic', 128, 'arabic', 'EG', true),
+  mk('eg-9090',       'Radio 9090 Egypt',      'https://9090streaming.mobtada.com/9090FMEGYPT',                    'news,talk,music,arabic,egypt', 'Egypt', 'arabic', 64, 'arabic', 'EG', true),
+  mk('eg-quran',      'Cairo Quran Radio',     'https://stream.radiojar.com/8s5u5tpdtwzuv',                       'quran,religious,islamic,egypt', 'Egypt', 'arabic', 128, 'arabic', 'EG', true),
+
   // ═══ عربية — إذاعات عربية دولية ══════════════════════════════════
-  mk('ar-bbc',        'BBC Arabic Radio',        'https://stream.live.vc.bbcmedia.co.uk/bbc_arabic_radio',       'news,arabic,bbc',           'United Kingdom', 'arabic',    96,  'arabic'),
-  mk('ar-mcd',        'Monte Carlo Doualiya',    'https://stream.rfi.fr/rfi-arabe-128',                          'news,arabic,international', 'France',         'arabic',    128, 'arabic'),
-  mk('ar-rfi',        'RFI Arabe',               'https://stream.rfi.fr/rfi-arabe-56',                           'news,arabic,france',        'France',         'arabic',    56,  'arabic'),
+  mk('ar-bbc',        'BBC Arabic Radio',        'https://stream.live.vc.bbcmedia.co.uk/bbc_arabic_radio',       'news,arabic,bbc',           'United Kingdom', 'arabic',    96,  'arabic', 'GB'),
+  mk('ar-mcd',        'Monte Carlo Doualiya',    'https://montecarlodoualiya128k.ice.infomaniak.ch/mc-doualiya.mp3','news,arabic,international','France',         'arabic',    128, 'arabic', 'FR'),
   mk('ar-maher',      'إذاعة ماهر المعيقلي',    'https://backup.qurango.net/radio/maher',                       'quran,maher,islamic',       'Saudi Arabia',   'arabic',    128, 'arabic'),
   mk('ar-qurango',    'قرآنجو — تلاوات',         'https://qurango.net/radio/salma',                              'quran,recitation,islamic',  'International',  'arabic',    128, 'arabic'),
-  mk('ar-classicfm',  'Classic FM UK',           'https://media-ssl.musicradio.com/ClassicFM',                   'classical,music,uk',        'United Kingdom', 'english',   128, 'arabic'),
-  mk('ar-srf2',       'SRF 2 Classical',         'https://stream.srg-ssr.ch/m/drs2/mp3_128',                     'classical,music,switzerland','Switzerland',   'german',    128, 'international'),
 
   // ═══ دولية ════════════════════════════════════════════════════════
-  mk('int-classicfm', 'Classic FM UK',           'https://media-ssl.musicradio.com/ClassicFM',                   'classical,music,uk',        'United Kingdom', 'english',   128, 'international'),
-  mk('int-srf2',      'SRF 2 Classical',         'https://stream.srg-ssr.ch/m/drs2/mp3_128',                     'classical,swiss',           'Switzerland',    'german',    128, 'international'),
+  mk('int-srf2',      'SRF 2 Classical',         'https://stream.srg-ssr.ch/m/drs2/mp3_128',                     'classical,swiss',           'Switzerland',    'german',    128, 'international', 'CH'),
 ]
 
 function loadPersisted(): RadioStation | null {
@@ -253,7 +272,7 @@ function loadPersisted(): RadioStation | null {
 
 export function RadioPlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const [stations, setStations] = useState<RadioStation[]>(BUILTIN_STATIONS)
+  const [stations, setStations] = useState<RadioStation[]>(() => mergeRadioStations([], BUILTIN_STATIONS))
   const [apiStations, setApiStations] = useState<RadioStation[]>([])
   const [loadingStations, setLoadingStations] = useState(true)
   const [currentStation, setCurrentStation] = useState<RadioStation | null>(loadPersisted)

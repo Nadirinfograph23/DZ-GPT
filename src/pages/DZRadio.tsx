@@ -5,12 +5,16 @@ import {
   Loader2, Search, RefreshCw, Wifi, WifiOff, X, Globe
 } from 'lucide-react'
 import { useRadioPlayer, RadioStation } from '../context/RadioPlayerContext'
-import { RADIO_CATEGORY_FILTERS, filterRadioStations, matchesRadioCategory, type RadioCategoryFilter, type RadioCountryFilter } from '../lib/radio-filters.js'
+import { RADIO_CATEGORY_FILTERS, RADIO_COUNTRY_FILTERS, filterRadioStations, getRadioCountryFlag, isAlgerianRadioStation, matchesRadioCategory, type RadioCategoryFilter, type RadioCountryFilter } from '../lib/radio-filters.js'
 import '../styles/dz-radio.css'
 
 type Tab = 'browse' | 'search'
 
 function getStationEmoji(station: RadioStation): string {
+  if (!isAlgerianRadioStation(station)) {
+    const flag = getRadioCountryFlag(station)
+    if (flag) return flag
+  }
   const n = station.name.toLowerCase()
   const t = (station.tags || '').toLowerCase()
   if (n.includes('quran') || n.includes('قرآن') || t.includes('quran') || t.includes('islamic')) return '🕌'
@@ -137,7 +141,6 @@ export default function DZRadio() {
     setTab('browse')
   }
 
-  const algeriaStations = filterRadioStations(stations, { country: 'algeria' })
   const scopedStations = filterRadioStations(stations, { country: countryFilter })
   const sourceStations = tab === 'search' ? searchResults : stations
   const displayStations = filterRadioStations(sourceStations, { country: countryFilter, category: categoryFilter })
@@ -147,12 +150,15 @@ export default function DZRadio() {
   const selectedCategoryLabel = categoryFilter === 'all'
     ? ''
     : ' · ' + (RADIO_CATEGORY_FILTERS.find(category => category.id === categoryFilter)?.label || '')
+  const selectedCountry = RADIO_COUNTRY_FILTERS.find(country => country.id === countryFilter)
 
   const tabLabel = (tab === 'search'
     ? '🔍 ' + displayStations.length + ' نتيجة للبحث عن "' + searchQuery + '"'
     : countryFilter === 'algeria'
       ? '🇩🇿 ' + displayStations.length + ' إذاعة جزائرية'
-      : '🌐 ' + displayStations.length + ' إذاعة متاحة') + selectedCategoryLabel
+      : countryFilter === 'all'
+        ? '🌐 ' + displayStations.length + ' إذاعة متاحة'
+        : (selectedCountry?.flag || '🌍') + ' ' + displayStations.length + ' إذاعة من ' + (selectedCountry?.label || '')) + selectedCategoryLabel
 
   return (
     <div className="dzr-page">
@@ -206,15 +212,21 @@ export default function DZRadio() {
                 <Globe size={12} /> الكل
                 <span className="dzr-tab-count">{stations.length}</span>
               </button>
-              <button
-                type="button"
-                className={'dzr-tab ' + (countryFilter === 'algeria' ? 'dzr-tab--active' : '')}
-                aria-pressed={countryFilter === 'algeria'}
-                onClick={() => { handleClearSearch(); setCountryFilter('algeria'); setCategoryFilter('all') }}
-              >
-                🇩🇿 الجزائر
-                <span className="dzr-tab-count">{algeriaStations.length}</span>
-              </button>
+              {RADIO_COUNTRY_FILTERS.map(country => {
+                const count = filterRadioStations(stations, { country: country.id }).length
+                return (
+                  <button
+                    key={country.id}
+                    type="button"
+                    className={'dzr-tab ' + (countryFilter === country.id ? 'dzr-tab--active' : '')}
+                    aria-pressed={countryFilter === country.id}
+                    onClick={() => { handleClearSearch(); setCountryFilter(country.id); setCategoryFilter('all') }}
+                  >
+                    {country.flag} {country.label}
+                    <span className="dzr-tab-count">{count}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
           <div className="dzr-filter-row">

@@ -1,3 +1,13 @@
+## 2026-10-19 — Curated international radio stations (PR #61)
+
+- Repository/target branch: `Nadirinfograph23/DZ-GPT` / `devin/1774405518-init-dz-gpt`. Work is isolated on `feat/dz-radio-international-stations`; do not merge or push directly to the target branch without explicit approval because the deployment workflow deploys to production on pushes to that branch or `main`.
+- Change commit: `a4d76027b167bfb457be7c68df3cce7691f9e299`. PR: https://github.com/Nadirinfograph23/DZ-GPT/pull/61. The PR adds country filters and flags and orders 16 featured international stations: France (France Inter, France Info, Europe 1, RMC, France Culture, RFI Monde), UK (BBC World Service, Classic FM, LBC), US (NPR News, CNN Radio, KEXP, Radio Paradise), Egypt (Nogoum FM, Radio 9090, Cairo Quran). It replaces the dead RFI Arabic URL with RFI Monde, repairs Monte Carlo Doualiya, and leaves the healthy Algerian proxy catalog intact.
+- Verification performed: the radio filter harness passed 19 assertions; all 16 candidate international streams returned audio/mpeg (HTTP 200/206) at check time; all 59 Algerian proxy route keys returned audio on first pass or retry. The live Radio Browser feed had 250 stations overall and 80 for Algeria, all with `lastcheckok=1` at check time. A full npm build was not run in this environment.
+- Cloudflare access remains blocked: the existing Replit Cloudflare API-key connection returned 403 / code 9109 (Invalid access token), and the token-verification endpoint returned 401. No Cloudflare account, DNS, Worker, cache, or secret settings were changed. Update the API key/permissions in the existing Replit Cloudflare connection; never paste credentials into chat.
+- Ordered continuation: (1) run `npm run test:radio-filters` and the full project build in the project environment; (2) inspect PR #61 checks and review the diff; (3) merge only after explicit approval, because merging into the target branch triggers production deployment; (4) after merge, verify the exact GitHub Actions deployment SHA and production endpoints; (5) reconnect Cloudflare with a valid API key if direct account-level administration is still needed. Keep existing PR #53 unchanged.
+
+---
+
 ## 2026-10-18 — Same-size centered DZ robot head
 
 - Repository/target branch: `Nadirinfograph23/DZ-GPT` / `devin/1774405518-init-dz-gpt`. The branch already contained the head-only robot from `e0c2d72976e0ed0b221750a97c9576b6e297aa70`; this follow-up restores the previous visual footprint and centers it.

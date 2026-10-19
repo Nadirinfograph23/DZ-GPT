@@ -60,5 +60,9 @@ export function matchesRadioCategory(station, category = 'all') {
 }
 
 export function filterRadioStations(stations, { country = 'all', category = 'all' } = {}) {
-  return stations.filter(station => matchesRadioCountry(station, country) && matchesRadioCategory(station, category))
+  const filtered = stations.filter(station => matchesRadioCountry(station, country) && matchesRadioCategory(station, category))
+  return [
+    ...filtered.filter(isAlgerianRadioStation),
+    ...filtered.filter(station => !isAlgerianRadioStation(station)),
+  ]
 }

@@ -9,15 +9,16 @@ const stations = [
   { stationuuid: 'uk-news', name: 'BBC World Service', country: 'The United Kingdom Of Great Britain And Northern Ireland', countrycode: 'GB', category: 'international', tags: 'news,talk,english', language: 'English' },
   { stationuuid: 'us-music', name: 'KEXP 90.3', country: 'United States', countrycode: 'US', category: 'international', tags: 'music,rock,indie', language: 'English' },
   { stationuuid: 'eg-quran', name: 'Cairo Quran Radio', country: 'Egypt', countrycode: 'EG', category: 'arabic', tags: 'quran,religious', language: 'Arabic' },
+  { stationuuid: 'dz-music', name: 'Radio Algerie Music', country: 'Algeria', countrycode: 'DZ', category: 'algeria', tags: 'music,rai', language: 'Arabic' },
 ]
 
-assert.deepEqual(filterRadioStations(stations).map(station => station.stationuuid), ['dz-quran', 'dz-news', 'fr-music', 'dz-culture', 'uk-news', 'us-music', 'eg-quran'])
-assert.deepEqual(filterRadioStations(stations, { country: 'algeria' }).map(station => station.stationuuid), ['dz-quran', 'dz-news', 'dz-culture'])
+assert.deepEqual(filterRadioStations(stations).map(station => station.stationuuid), ['dz-quran', 'dz-news', 'dz-culture', 'dz-music', 'fr-music', 'uk-news', 'us-music', 'eg-quran'])
+assert.deepEqual(filterRadioStations(stations, { country: 'algeria' }).map(station => station.stationuuid), ['dz-quran', 'dz-news', 'dz-culture', 'dz-music'])
 assert.deepEqual(filterRadioStations(stations, { country: 'france' }).map(station => station.stationuuid), ['fr-music'])
 assert.deepEqual(filterRadioStations(stations, { country: 'uk' }).map(station => station.stationuuid), ['uk-news'])
 assert.deepEqual(filterRadioStations(stations, { country: 'us' }).map(station => station.stationuuid), ['us-music'])
 assert.deepEqual(filterRadioStations(stations, { country: 'egypt' }).map(station => station.stationuuid), ['eg-quran'])
-assert.deepEqual(filterRadioStations(stations, { category: 'music' }).map(station => station.stationuuid), ['fr-music', 'us-music'])
+assert.deepEqual(filterRadioStations(stations, { category: 'music' }).map(station => station.stationuuid), ['dz-music', 'fr-music', 'us-music'])
 assert.deepEqual(filterRadioStations(stations, { country: 'egypt', category: 'religious' }).map(station => station.stationuuid), ['eg-quran'])
 assert.equal(isAlgerianRadioStation({ country: 'Algéria' }), true)
 assert.equal(matchesRadioCategory(stations[0], 'religious'), true)

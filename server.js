@@ -36062,40 +36062,49 @@ const IMG_AR_EN_MAP = [
 ]
 
 async function translateImgPrompt(rawPrompt) {
-  const cacheKey = rawPrompt.slice(0, 120)
+  const normalizedPrompt = rawPrompt.trim()
+  const cacheKey = crypto.createHash('sha256').update(normalizedPrompt).digest('hex')
   if (IMG_TRANSLATE_CACHE.has(cacheKey)) return IMG_TRANSLATE_CACHE.get(cacheKey)
-  const hasArabic = /[\u0600-\u06FF]/.test(rawPrompt)
-  if (!hasArabic) return rawPrompt
 
-  // Step 1: apply static dictionary
-  let translated = rawPrompt
-  for (const [ar, en] of IMG_AR_EN_MAP) {
-    translated = translated.split(ar).join(en)
+  const hasArabic = /[\u0600-\u06FF]/.test(normalizedPrompt)
+  const hasFrench = /[àâçéèêëîïôùûüÀÂÇÉÈÊËÎÏÔÙÛÜ]/.test(normalizedPrompt)
+    || /\b(le|la|les|un|une|des|du|de|dans|sur|avec|pour|est|sont)\b/i.test(normalizedPrompt)
+  if (!hasArabic && !hasFrench) return normalizedPrompt
+
+  // Apply the Arabic phrase map first, then translate anything still outside English.
+  let translated = normalizedPrompt
+  if (hasArabic) {
+    for (const [ar, en] of IMG_AR_EN_MAP) {
+      translated = translated.split(ar).join(en)
+    }
   }
 
-  // Step 2: if Arabic chars still present, ask Groq for a quick translation
-  if (/[\u0600-\u06FF]/.test(translated)) {
+  if (/[\u0600-\u06FF]/.test(translated) || hasFrench) {
     try {
       const { content } = await callGroqWithFallback({
         model: 'llama-3.1-8b-instant',
         messages: [
-          { role: 'system', content: 'Translate this Arabic/French image description to a concise English image-generation prompt. Keep all visual details. Output ONLY the English prompt, no explanation. IMPORTANT: جميلة means "beautiful" (adjective), NOT the archaeological site Djemila. واقعي/واقعية = photorealistic. أسود/سوداء = black. أبيض/بيضاء = white.' },
-          { role: 'user', content: rawPrompt },
+          { role: 'system', content: 'Translate this Arabic/French image description to a concise English image-generation prompt. Preserve the exact subject, actions, location, colors, and composition. Do not invent or replace objects. Output ONLY the English prompt, no explanation. IMPORTANT: جميلة means beautiful (adjective), NOT the archaeological site Djemila. واقعي/واقعية = photorealistic. أسود/سوداء = black. أبيض/بيضاء = white.' },
+          { role: 'user', content: normalizedPrompt },
         ],
         max_tokens: 150,
         temperature: 0.2,
       })
-      if (content && !/[\u0600-\u06FF]/.test(content) && content.length < 400) {
+      if (content && !/[\u0600-\u06FF]/.test(content) && content.trim().length < 400) {
         translated = content.trim()
       }
     } catch (_) {}
   }
 
-  // Step 3: append quality suffix
   if (!/4k|high quality|detailed/i.test(translated)) {
     translated = translated.trim() + ', high quality, detailed, sharp focus'
   }
 
+  // Hash the full prompt to avoid prefix collisions and bound cache memory.
+  if (IMG_TRANSLATE_CACHE.size >= 300) {
+    const firstKey = IMG_TRANSLATE_CACHE.keys().next().value
+    if (firstKey) IMG_TRANSLATE_CACHE.delete(firstKey)
+  }
   IMG_TRANSLATE_CACHE.set(cacheKey, translated)
   return translated
 }
@@ -36151,7 +36160,7 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
   try {
     const polModel = (reqModel && ['flux','turbo','flux-realism','flux-anime','flux-3d','flux-cablyai'].includes(reqModel)) ? reqModel : 'flux-realism'
     const polUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(englishPrompt)}`
-      + `?model=${polModel}&width=${Math.min(w,1024)}&height=${Math.min(h,1024)}&seed=${seed}&nologo=true&enhance=true&safe=false`
+      + `?model=${polModel}&width=${Math.min(w,1024)}&height=${Math.min(h,1024)}&seed=${seed}&nologo=true&enhance=false&safe=false`
     const polRes = await fetch(polUrl, {
       headers: { 'Referer': 'https://dz-gpt.vercel.app', 'User-Agent': 'DZ-GPT/2.0' },
       signal: AbortSignal.timeout(40000),

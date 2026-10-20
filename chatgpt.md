@@ -1,3 +1,16 @@
+## 2026-10-20 — User decision: keep image generation free
+
+- The user declined Flaq's billable GPT Image 2 API and chose to keep the existing free image models. Do not add Flaq/OpenAI paid routes, request a paid-provider key, or incur third-party image costs without a new explicit approval.
+- The requested MiniGPT/HeyDream endpoint scraping is not implemented: the pages do not publish integration endpoints. Do not reverse-engineer their private routes or bypass browser verification/quota controls.
+- No image-generation source code was changed; existing models and routing remain as they were. Cloudflare MCP read access was verified separately; no Cloudflare writes were made.
+
+### Ordered continuation
+1. Preserve current free models.
+2. Add any future provider only through a published API that permits application integration, respecting its rate/quota limits and making any billing clear to the user.
+3. If a supported provider is added, test both DZ Agent and DZ Media for a completed task and non-empty image result, then run the image tests/build and verify the exact deployment SHA.
+
+---
+
 ## 2026-10-20 — GPT Image 2 official API option found
 
 - User's requested UX: make MiniGPT and HeyDream first-priority image routes in both DZ Agent and DZ Media, verify a successful generated image, then automatically fall back to existing providers when quota/exhaustion or generation failure occurs. Preserve the current models.

@@ -817,3 +817,18 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 3. Keep PR #62 in draft until build and visual checks pass; record exact outcomes here.
 4. Obtain explicit production approval before merging to devin/1774405518-init-dz-gpt. After an approved merge, confirm the deployment workflow succeeds and both /api/version and /version.json report the exact deployed SHA.
 5. For separate Cloudflare account-level checks, update the existing API key first and request only permissions needed for the specific operation; do not claim full access unless the relevant checks succeed.
+
+
+## 2026-10-20 — User clarification and final validation: iOS homepage header
+
+- The user clarified the target is the fixed homepage navbar in DZHome: DZ AGENT logo, Algeria flag badge, and DZ CHAT action. Kept the already-approved iOS glass treatment on the global announcement and the PWA prompt; added a rounded, beveled dark-glass/iOS finish to the navbar, coordinated the DZ CHAT action, added safe-area spacing, and moved the hero content below the fixed bar. Existing text, icon shapes, routes, and click handlers were preserved.
+- Homepage header CSS commit: 416628b9ba5a2f866327c63bed624e4928806788 on review branch ui/dz-home-amoled; base remains devin/1774405518-init-dz-gpt. Existing CSS commits remain fd2f2d685c031fc38bf678715ae5db211417817e (global announcement) and 6f290eef4a9aae081e0abd60583b14d2e94edefd (PWA prompt).
+- Verification: npm run build passed on exact code SHA 416628b9ba5a2f866327c63bed624e4928806788: 8 image-prompt tests, image-loading tests, release-announcement tests, build-metadata tests, tsc -b, and Vite production build. The local runtime was Node 24.13.0 / npm 11.6.2; the project declares Node 20.x, so npm emitted an engine warning during dependency installation. Real-browser visual QA remains pending.
+- Cloudflare MCP read-only checks succeeded: one account, one active zone dzagent.app, and Worker dzagent present. This verifies read access only; no write permissions were tested and no Cloudflare resources were changed. The separate REST API-key connection still returns invalid-token 403 / code 9109.
+- No production deployment was triggered. The deploy workflow runs on pushes to devin/1774405518-init-dz-gpt and main; the review branch ui/dz-home-amoled is outside those triggers. The PR remains draft and requires explicit production approval before merge.
+
+### Ordered continuation
+1. In a real browser on phone and desktop, inspect / with the global announcement, fixed navbar, and PWA prompt visible; confirm safe-area spacing, no overlap, and working dismiss/install/chat controls.
+2. Keep PR #62 in draft until that visual check is complete; record its outcome here.
+3. Obtain explicit production approval before merging PR #62 to devin/1774405518-init-dz-gpt. After an approved merge, confirm the deployment workflow succeeds and /api/version plus /version.json report the deployed SHA.
+4. For any Cloudflare write, identify the exact resource and change first and obtain approval; current verification was read-only.

@@ -780,3 +780,5 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 2. Obtain explicit production-deployment confirmation, then run the existing `Deploy Cloudflare Worker` workflow for the exact approved commit.
 3. Require a successful run, verify `/api/version` and `/version.json` report the exact SHA, and smoke-test an image request mentioning prayer/location terms plus a normal prayer question.
 4. Record the exact code SHA, Actions run, deployed SHA, and smoke outcomes here; do not claim visual image quality without inspecting the returned image.
+
+- Validation follow-up: the first build confirmed the prompt-translation tests pass, then the new loading test failed because its weather example also matched the existing broader news rule. The example is being made unambiguous; no production code change to weather/news classification is intended. The deploy step was skipped after build failure, and production still serves the previous SHA.

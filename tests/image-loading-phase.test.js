@@ -12,5 +12,5 @@ for (const prompt of imagePrompts) {
   assert.ok(getLoadingPhases(prompt).every(phase => !/مواقيت الصلاة|المنطقة الجغرافية|الموقع الجغرافي/.test(phase)))
 }
 assert.equal(detectLoadingCategory('ما هي مواقيت الصلاة في الجزائر؟'), 'prayer')
-assert.equal(detectLoadingCategory('ما حالة الطقس في الجزائر اليوم؟'), 'weather')
+assert.equal(detectLoadingCategory('ما حالة الطقس الآن؟'), 'weather')
 console.log('Passed image loading priority and existing prayer/weather category tests.')

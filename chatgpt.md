@@ -1,3 +1,19 @@
+## 2026-10-20 — GPT Image 2 no-login site-provider request (review only)
+
+- Target: `Nadirinfograph23/DZ-GPT`, branch `devin/1774405518-init-dz-gpt`; branch HEAD at review: `86a4baaa4400739a9b548337aedf9acea6d0257e`.
+- Reviewed the requested MiniGPT and HeyDream GPT Image 2 pages. Their public page content describes free, no-registration browser generation, but did not expose a documented public integration API; the fetched pages also returned Cloudflare browser-verification content. This does not establish that their terms forbid automation, but it is not a supported API contract. Do not automate those browser flows or bypass their verification.
+- Existing image routing is already present: the shared DZ Agent provider registry has automatic fallback providers, and DZ Media has separate provider/model selection. Preserve the existing models and route behavior. Do not extend integrations based on undocumented endpoints.
+- OpenAI documents GPT Image 2 at `v1/images/generations`; its model page says the Free tier is not supported. Do not silently replace the requested no-login flow with a paid/credentialed provider. If approved, keep the API key server-side in the project secret store and never commit it.
+- Cloudflare read checks in this session returned HTTP 403 / code 9109 (Invalid access token) for both account and zone listing. No Cloudflare settings, DNS, Worker, or secrets were changed. Update the existing Replit Cloudflare API credential/permissions before any account-level verification; do not paste keys into chat.
+
+### Ordered continuation
+1. Restore Cloudflare API access by updating the credential/permissions in the existing Replit connection, then verify the intended account and zone with read-only requests.
+2. Choose an authorized generation interface: the official OpenAI GPT Image 2 API (not available on its Free tier), or another provider with published API documentation and permission for application integration. Do not reverse-engineer or automate the two browser-only pages.
+3. After that choice, add a shared provider adapter to the existing DZ Agent and DZ Media flows, retaining all current model IDs and adding bounded timeouts, explicit rate handling, and fallback tests.
+4. Run the focused image tests and full build, inspect the exact commit's CI/deploy result, then verify both production version endpoints and one generated-image smoke test for each route. Record exact SHAs and outcomes here before claiming production success.
+
+---
+
 ## 2026-10-20 — General multilingual image-translation fallback (production verified)
 
 - Reproduced on production: a generic Arabic prompt outside the static phrase map returned HTTP 503 with code IMAGE_PROMPT_TRANSLATION_FAILED before an image provider was called. The earlier black-car/Algiers smoke prompt was covered by a static mapping and did not exercise general translation.

@@ -1,3 +1,17 @@
+## 2026-10-20 — Cloudflare MCP read verification and endpoint clarification
+
+- After the separate Cloudflare REST API-key route returned HTTP 403 / code 9109, Cloudflare MCP connected. Read-only checks succeeded: authenticated identity, one account, active unpaused zone `dzagent.app`, and Worker script `dzagent`. This confirms MCP read access only; it does not prove full/write permissions. The REST API-key failure is separate and remains unresolved. No DNS, Worker, deployment, or account settings were changed.
+- The user clarified that the requested MiniGPT/HeyDream integration should POST prompts to endpoints and retrieve generated images. Their public pages did not expose documented endpoints; do not reverse-engineer private APIs or bypass browser verification. Await official API documentation or authorization before adding a provider.
+- No application-code changes or image-provider tests/deployments were made. Preserve all current image models.
+
+### Ordered continuation
+1. Obtain a published API specification or explicit authorization for the exact image-generation endpoint and response format. Never request or store secrets in chat or Git.
+2. If no supported free endpoint is available, ask before substituting an official credentialed API; state its pricing/tier requirements first.
+3. Once approved, integrate through the existing DZ Agent and DZ Media paths, preserve current model IDs, add request/response tests and bounded retries, then run the focused tests, build, CI and exact-SHA production checks.
+4. Treat Cloudflare MCP read success as read-only verification; request explicit approval before any DNS, Worker, or production mutation.
+
+---
+
 ## 2026-10-20 — GPT Image 2 no-login site-provider request (review only)
 
 - Target: `Nadirinfograph23/DZ-GPT`, branch `devin/1774405518-init-dz-gpt`; branch HEAD at review: `86a4baaa4400739a9b548337aedf9acea6d0257e`.

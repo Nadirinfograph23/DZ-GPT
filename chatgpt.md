@@ -5,13 +5,14 @@
 - Restyle the global React QuickNav FAB in `src/styles/quick-nav.css` with a dark iOS glass surface, blue/cyan accent, raised bevel and shadow, safe-area spacing, open/hover/focus states, and reduced-motion support. Give the certificate page's standalone `.qnav-fab-cert` the matching treatment because that static page does not use the React QuickNav component.
 - Update only these three files: `public/dz-agent-certificate.html`, `src/styles/quick-nav.css`, and this handoff file. Keep the existing menu items, routes, handlers, and drawer behavior unchanged.
 - Cloudflare REST connector reads returned HTTP 403 / 9109 (Invalid access token); no direct Cloudflare control-plane settings were changed. The repository's production workflow builds, deploys the Worker, verifies `/api/version` and `/version.json`, and runs a production smoke test. A Cloudflare bot also reported a production deployment from a prior review-branch commit; treat GitHub Actions and Cloudflare Git integration as separate deployment paths.
-- Production verification is pending for this commit. Do not claim success until the exact Actions run has completed and the live version endpoints match the commit SHA.
+- Production verification completed on 2026-10-20 for source commit `bbd9836314eea8df70e8d6e35d8cbc194910569a`. GitHub Actions run [39451819904](https://github.com/Nadirinfograph23/DZ-GPT/actions/runs/39451819904) completed successfully; all job steps passed, including `npm run build`, Worker deployment, `/api/version`, `/version.json`, and the production smoke test.
+NaN
+- No real-browser click-through or visual QA was performed. Cloudflare API connector access remains invalid (`403` / `9109`); no direct Cloudflare control-plane settings were read or changed. The live release was verified through the repository workflow and production version endpoints.
 
 ### Ordered continuation
-1. Record the resulting source commit SHA and Actions run ID after the push.
-2. Confirm the release workflow build and deployment succeeded, then verify `https://dzagent.app/api/version` and `https://dzagent.app/version.json` both report that exact commit SHA.
-3. Check the production certificate page: click `الرئيسية` and confirm the URL remains on `dzagent.app/`; visually inspect the floating menu on desktop and phone-width viewports.
-4. Update this entry with the exact commit SHA, run ID, deployed SHA, and observed smoke-test results. If any check fails, record the failure and do not claim production success.
+1. If visual behavior needs further confirmation, open the production homepage and certificate page in a real browser at desktop and phone widths; verify the menu opens, closes, routes correctly, and the raised iOS treatment is visible.
+2. For future source changes, inspect the resulting GitHub Actions run and verify both production version endpoints against the exact source commit SHA before calling the change deployed.
+3. Cloudflare API credential remains invalid; update it in the existing Replit connection before any direct account, zone, or deployment-configuration inspection.
 
 ---
 

@@ -1,3 +1,10 @@
+## 2026-10-20 — Restore iOS theme and manual robot launcher
+
+- Root cause confirmed: production before the direct release served `ui/dz-home-amoled` (`7f63e04`). The released `devin/1774405518-init-dz-gpt` source was still at the older `8ac0d404` base and did not include the draft PR #62 visual changes, replacing the homepage, announcement and PWA styling.
+- Corrective patch restores the visual theme plus requested robot behavior from PR #62: `src/App.css`, `src/styles/dz-home.css`, `src/styles/site-announcement.css`, `src/styles/global-robot.css`, `src/pages/DZHome.tsx`, and `src/components/GlobalRobot.tsx`. The robot remains hidden by default on the homepage, with the bottom-left restore button opening it manually. Existing certificate and QuickNav fixes are preserved.
+- Deployment verification for this correction is pending: record the source SHA and Actions run, require successful build/deploy/smoke, then check production `/api/version` and `/version.json` both match the source SHA. Confirm the live homepage, announcement, PWA banner, robot restore button, and certificate link.
+- Cloudflare REST connector returned `403 / 9109 Invalid access token` for both account and zone reads even after the user reported updating credentials. Do not claim account/zone/Worker settings were inspected; verify again only after the connection credential is updated.
+
 ## 2026-10-20 — Direct production: certificate navigation and global QuickNav iOS finish
 
 - Target: `Nadirinfograph23/DZ-GPT`, branch `devin/1774405518-init-dz-gpt`. The user explicitly authorized direct production for this change.

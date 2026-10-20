@@ -1,3 +1,17 @@
+## 2026-10-20 — GPT Image 2 official API option found
+
+- User's requested UX: make MiniGPT and HeyDream first-priority image routes in both DZ Agent and DZ Media, verify a successful generated image, then automatically fall back to existing providers when quota/exhaustion or generation failure occurs. Preserve the current models.
+- The two no-login web pages still do not publish integration endpoints. Their pages link to a separate Flaq AI API. Flaq's public docs do document GPT Image 2: submit with `POST https://api.flaq.ai/api/v1/image/task` using `model_name: gpt-image-2`, then poll `GET /api/v1/image/{task_id}` until `task_status=succeed` and an image URL is present. Requests require a Bearer API key. The provider requires an account and charges per image; this is not the free no-login website service.
+- No Flaq key, account, provider billing consent, or integration authorization was supplied. Do not request secrets in chat or silently route prompts to this third party. No application code was changed.
+
+### Ordered continuation
+1. Ask whether the user accepts the separate, billable Flaq API (and that prompts/images will be processed by Flaq) as the first-priority GPT Image 2 provider; otherwise keep existing free providers and do not scrape MiniGPT/HeyDream.
+2. If approved, collect the API key through the project secrets flow, never chat or Git; implement the documented submit/poll endpoints in both existing image flows.
+3. Confirm generation only on terminal success plus a non-empty image URL; classify quota/auth/provider failures and fall back to current providers without removing models.
+4. Add request/poll/fallback tests, run the build and CI, then verify each app route with a controlled smoke test and exact production SHA.
+
+---
+
 ## 2026-10-20 — Cloudflare MCP read verification and endpoint clarification
 
 - After the separate Cloudflare REST API-key route returned HTTP 403 / code 9109, Cloudflare MCP connected. Read-only checks succeeded: authenticated identity, one account, active unpaused zone `dzagent.app`, and Worker script `dzagent`. This confirms MCP read access only; it does not prove full/write permissions. The REST API-key failure is separate and remains unresolved. No DNS, Worker, deployment, or account settings were changed.

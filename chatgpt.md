@@ -1,18 +1,17 @@
-## 2026-10-19 — Image prompt fidelity: live check and correction
+## 2026-10-20 — Image generation prompt fidelity (production verified)
 
 - Target: `Nadirinfograph23/DZ-GPT`, branch `devin/1774405518-init-dz-gpt`.
-- First fix commit `ffd4ac43ebff2aa0a8e75c1cf6c36fa055c80936` deployed successfully (Actions run `39337185102`); `/api/version` matched that exact SHA.
-- Live smoke test falsified the initial success assumption: DZ Agent returned a mixed English/Arabic `englishPrompt`; DZ Media returned the original Arabic unchanged. A successful build/version marker alone did not verify prompt translation or image relevance.
-- Follow-up in this commit: one shared image-prompt translator for `/api/tools/img-gen`, `/api/chatimg/generate`, and DZ Media providers; deterministic mapping for the reported black-car/Algiers example; Groq then MyMemory fallback; reject generation when an Arabic/French prompt remains untranslated; keep Pollinations `enhance=false`; full-prompt hashed cache keys.
-- Checks still required after this commit: wait for Actions; verify `/api/version` matches the new SHA; repeat the exact Arabic smoke test on Agent and Media; inspect the returned image visually. If translation fails, the API should now return an explicit error rather than generate from mixed text.
-- Cloudflare integration API remains `403` / code `9109` (invalid API token). No account settings were changed. Direct Cloudflare control-plane access remains blocked; deployment uses the existing GitHub Actions path.
+- Production routing: `workers/entry.js` sends non-native API requests through the Express bridge, which imports `server.js`; DZ Agent uses `POST /api/tools/img-gen`, while DZ Media default uses `POST /api/chatimg/generate`.
+- Verified issue and correction: the first deploy (`ffd4ac43ebff2aa0a8e75c1cf6c36fa055c80936`) still returned mixed/original Arabic. The follow-up centralizes translation for all image routes, adds an exact Arabic mapping for the reported black-car/Algiers prompt, falls back from Groq to MyMemory, rejects unresolved Arabic/French instead of generating from mixed text, disables Pollinations prompt rewriting, and hashes complete prompts for caches.
+- Deployment verified: GitHub Actions run `39384595011` succeeded for code commit `6ef95df7a1249ff9b13f8e9388c0466d0eac86fe`; production `/api/version` reported that exact SHA on `devin/1774405518-init-dz-gpt`.
+- Live tests: both endpoints returned `a black car driving through the streets of Algiers, Algeria, high quality, detailed, sharp focus`. DZ Agent completed via Stable Horde after two polls; DZ Media returned a Pollinations image URL that fetched as `image/jpeg` (HTTP 200). Both generated images were visually inspected: black cars on urban streets. The images do not independently prove the exact city, but the model received the Algiers location in its prompt.
+- The documentation-only update is committed with `[skip ci]`; production code remains at `6ef95df7a1249ff9b13f8e9388c0466d0eac86fe`.
+- Cloudflare integration read still returns `403` / code `9109` (invalid API token). No Cloudflare account settings were changed; the deployed release succeeded through the repository's GitHub Actions credentials. Direct account-level verification remains blocked until the Cloudflare token is updated in the existing Replit connection.
 
 ### Continuation (in order)
-1. Check the Actions run for this follow-up commit and inspect failed job logs if needed.
-2. Confirm production `/api/version` reports the new commit SHA.
-3. Test `سيارة سوداء تتجول في العاصمة الجزائرية` through DZ Agent and DZ Media; both should expose an English prompt containing black car and Algiers/Algeria.
-4. Inspect at least one generated image visually; URL success and prompt metadata do not prove pixel-level relevance.
-5. If the worker returns `IMAGE_PROMPT_TRANSLATION_FAILED`, check the configured AI/translation egress and refresh the Cloudflare API token in the existing Replit connection; never paste the token in chat.
+1. Update the Cloudflare API token in the existing Replit connection (do not paste it into chat), then verify account/Worker access directly.
+2. For future image-provider changes, test both DZ Agent and DZ Media with Arabic prompts; check the translated prompt and visually inspect at least one rendered result.
+3. If an image is still visually unrelated while its English prompt is correct, compare/change the selected provider and document the provider outcome here.
 ## 2026-10-18 — Same-size centered DZ robot head
 
 - Repository/target branch: `Nadirinfograph23/DZ-GPT` / `devin/1774405518-init-dz-gpt`. The branch already contained the head-only robot from `e0c2d72976e0ed0b221750a97c9576b6e297aa70`; this follow-up restores the previous visual footprint and centers it.

@@ -801,3 +801,19 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 3. Update this note with the exact test/browser outcomes and any final CSS commit; keep PR #62 in draft until those checks pass.
 4. Obtain explicit production approval before merging PR #62 or manually dispatching deployment. After approval, confirm a successful exact-SHA workflow run and verify `/api/version` plus `/version.json` report that SHA.
 5. For Cloudflare account-level verification, first update the existing Replit API credential, then make only the user-requested read/write operations; do not claim full access until the actual permission checks succeed.
+
+
+## 2026-10-20 — iOS glass fixed banner and PWA prompt (draft PR #62 follow-up)
+
+- Target: Nadirinfograph23/DZ-GPT, base devin/1774405518-init-dz-gpt; continue on the existing review branch ui/dz-home-amoled and draft PR #62 rather than opening a duplicate.
+- Restyled the fixed site announcement at the top as a raised, dark glass iOS-style banner: rounded/beveled edges, layered highlights and shadows, safe-area spacing, restrained green accent, blue action links, and reduced-motion handling. Restyled the PWA install prompt to match, with a dark glass surface, safe-area spacing, brighter copy, and iOS blue install/guide buttons.
+- Files: src/styles/site-announcement.css and src/App.css. CSS commits: fd2f2d685c031fc38bf678715ae5db211417817e (announcement) and 6f290eef4a9aae081e0abd60583b14d2e94edefd (PWA). This note is a separate documentation commit.
+- Verification so far: CSS braces and parentheses balance in both changed files. No full npm run build or real-browser visual QA has run in this GitHub-API-only session; verify both before merging. The deployment workflow only runs on pushes to devin/1774405518-init-dz-gpt and main, not the review branch; merging into the base or manually dispatching that workflow can deploy production. No deployment was triggered.
+- Cloudflare REST access returned HTTP 403 / error 9109 (Invalid access token); the connection credential is an API key, so account access and permissions remain unverified. No Cloudflare zones, DNS, Worker settings, secrets, or production resources were changed. Update the key in the existing Replit Cloudflare connection if Cloudflare work is needed; never paste it into chat or Git.
+
+### Ordered continuation
+1. Run npm run build for the current review-branch HEAD and inspect the GitHub checks; do not dispatch the production deployment workflow.
+2. In a real browser, review / on phone and desktop widths: confirm the fixed banner clears the safe area and page content, the PWA prompt and blue button match the theme, dismiss/install flows still work, and reduced-motion settings are respected.
+3. Keep PR #62 in draft until build and visual checks pass; record exact outcomes here.
+4. Obtain explicit production approval before merging to devin/1774405518-init-dz-gpt. After an approved merge, confirm the deployment workflow succeeds and both /api/version and /version.json report the exact deployed SHA.
+5. For separate Cloudflare account-level checks, update the existing API key first and request only permissions needed for the specific operation; do not claim full access unless the relevant checks succeed.

@@ -21,35 +21,67 @@
 .qnav-fab {
   position: fixed;
   top: 50%;
-  right: 16px;
+  right: calc(16px + env(safe-area-inset-right, 0px));
   transform: translateY(-50%);
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  border: 1px solid rgba(200, 255, 0, 0.18);
-  background: rgba(10, 10, 16, 0.92);
-  backdrop-filter: blur(12px);
-  color: rgba(200, 255, 0, 0.7);
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: linear-gradient(145deg, rgba(58, 61, 69, 0.97), rgba(27, 29, 35, 0.97) 52%, rgba(14, 16, 21, 0.98));
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  backdrop-filter: blur(22px) saturate(170%);
+  color: #64d2ff;
   cursor: pointer;
   display: grid;
   place-items: center;
   z-index: 9999;
-  transition: color 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+  isolation: isolate;
+  overflow: hidden;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              color 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
               border-color 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
               background 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
               box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.04);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.48),
+              0 3px 8px rgba(0, 0, 0, 0.28),
+              inset 0 1px 0 rgba(255, 255, 255, 0.28),
+              inset 0 -3px 6px rgba(0, 0, 0, 0.35),
+              0 0 0 1px rgba(10, 132, 255, 0.09);
+}
+.qnav-fab::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(155deg, rgba(255,255,255,0.2), rgba(255,255,255,0.045) 34%, transparent 62%, rgba(0,0,0,0.16));
+}
+.qnav-fab > * {
+  position: relative;
+  z-index: 1;
 }
 .qnav-fab:hover {
-  color: #c8ff00;
-  border-color: rgba(200, 255, 0, 0.4);
-  background: rgba(14, 14, 22, 0.98);
-  box-shadow: 0 6px 28px rgba(200, 255, 0, 0.15), 0 0 0 1px rgba(255,255,255,0.06);
+  transform: translateY(calc(-50% - 2px));
+  color: #ffffff;
+  border-color: rgba(100, 210, 255, 0.52);
+  background: linear-gradient(145deg, rgba(70, 75, 86, 0.99), rgba(24, 28, 36, 0.99));
+  box-shadow: 0 13px 30px rgba(0, 0, 0, 0.54),
+              0 4px 12px rgba(10, 132, 255, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.32),
+              inset 0 -3px 6px rgba(0, 0, 0, 0.34);
 }
 .qnav-fab--open {
-  color: #c8ff00;
-  border-color: rgba(200, 255, 0, 0.45);
+  color: #ffffff;
+  border-color: rgba(10, 132, 255, 0.62);
+  background: linear-gradient(145deg, rgba(31, 125, 220, 0.98), rgba(10, 84, 160, 0.98));
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.48),
+              0 0 20px rgba(10, 132, 255, 0.28),
+              inset 0 1px 0 rgba(255, 255, 255, 0.32),
+              inset 0 -3px 6px rgba(0, 0, 0, 0.28);
 }
+.qnav-fab:active { transform: translateY(-50%) scale(0.95); }
+.qnav-fab:focus-visible { outline: 2px solid #64d2ff; outline-offset: 3px; }
 
 /* ── Drawer ───────────────────────────────────── */
 .qnav-drawer {
@@ -250,7 +282,7 @@ body.dz-lightbox-active .qnav-backdrop {
 @media (max-width: 480px) {
   .qnav-fab {
     top: 50%;
-    right: 10px;
+    right: calc(10px + env(safe-area-inset-right, 0px));
     width: 44px;
     height: 44px;
     transform: translateY(-50%);
@@ -267,4 +299,8 @@ body.dz-lightbox-active .qnav-backdrop {
   .qnav-drawer--open {
     transform: translateY(-50%) translateX(0) scale(1);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qnav-fab { transition-duration: 0.01ms; }
 }

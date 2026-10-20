@@ -1,3 +1,20 @@
+## 2026-10-20 — Direct production: certificate navigation and global QuickNav iOS finish
+
+- Target: `Nadirinfograph23/DZ-GPT`, branch `devin/1774405518-init-dz-gpt`. The user explicitly authorized direct production for this change.
+- Fix the standalone certificate page's Home entry: replace the hard-coded `https://dz-gpt.vercel.app/` destination with same-origin `/`, so it returns to the current site instead of a different host. The same one-line correction was already present in open draft PR #62, but the release branch still had the old URL.
+- Restyle the global React QuickNav FAB in `src/styles/quick-nav.css` with a dark iOS glass surface, blue/cyan accent, raised bevel and shadow, safe-area spacing, open/hover/focus states, and reduced-motion support. Give the certificate page's standalone `.qnav-fab-cert` the matching treatment because that static page does not use the React QuickNav component.
+- Update only these three files: `public/dz-agent-certificate.html`, `src/styles/quick-nav.css`, and this handoff file. Keep the existing menu items, routes, handlers, and drawer behavior unchanged.
+- Cloudflare REST connector reads returned HTTP 403 / 9109 (Invalid access token); no direct Cloudflare control-plane settings were changed. The repository's production workflow builds, deploys the Worker, verifies `/api/version` and `/version.json`, and runs a production smoke test. A Cloudflare bot also reported a production deployment from a prior review-branch commit; treat GitHub Actions and Cloudflare Git integration as separate deployment paths.
+- Production verification is pending for this commit. Do not claim success until the exact Actions run has completed and the live version endpoints match the commit SHA.
+
+### Ordered continuation
+1. Record the resulting source commit SHA and Actions run ID after the push.
+2. Confirm the release workflow build and deployment succeeded, then verify `https://dzagent.app/api/version` and `https://dzagent.app/version.json` both report that exact commit SHA.
+3. Check the production certificate page: click `الرئيسية` and confirm the URL remains on `dzagent.app/`; visually inspect the floating menu on desktop and phone-width viewports.
+4. Update this entry with the exact commit SHA, run ID, deployed SHA, and observed smoke-test results. If any check fails, record the failure and do not claim production success.
+
+---
+
 ## 2026-10-20 — User decision: keep image generation free
 
 - The user declined Flaq's billable GPT Image 2 API and chose to keep the existing free image models. Do not add Flaq/OpenAI paid routes, request a paid-provider key, or incur third-party image costs without a new explicit approval.

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "build": "node tests/image-prompt-translation.test.js && node tests/generate-build-info.test.js && node scripts/generate-build-info.js && tsc -b && vite build",
+    "build": "node tests/image-prompt-translation.test.js && node tests/image-loading-phase.test.js && node tests/build-announcement.test.js && node tests/generate-build-info.test.js && node scripts/generate-build-info.js && tsc -b && vite build",
     "start": "NODE_ENV=production node server.js",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -15,7 +15,9 @@
     "test:tool-redirect-intents": "node tests/tool-redirect-intents.test.js",
     "test:build-info": "node tests/generate-build-info.test.js",
     "test:version-check-state": "node tests/version-check-state.test.js",
-    "test:image-prompt-translation": "node tests/image-prompt-translation.test.js"
+    "test:image-prompt-translation": "node tests/image-prompt-translation.test.js",
+    "test:image-loading-phase": "node tests/image-loading-phase.test.js",
+    "test:build-announcement": "node tests/build-announcement.test.js"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",

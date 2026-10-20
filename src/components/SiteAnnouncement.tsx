@@ -1,3 +1,4 @@
+import { createBuildAnnouncement } from '../lib/build-announcement.js'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, Megaphone, ExternalLink, Sparkles, Clock3 } from 'lucide-react'
@@ -21,13 +22,13 @@ const POLL_INTERVAL = 30_000  // 30s — احتياطي فقط، SSE هو الم
 // visible at the top until the visitor dismisses it; live admin broadcasts
 // can still replace it through the existing SSE/API paths.
 const DEFAULT_ANNOUNCEMENT: Announcement = {
-  id: 'dzagent-update-20260920-keyless-router',
-  text: 'تم تحديث DZ Agent: تحسين الاتصال بـ GitHub، توحيد موجّه الذكاء الاصطناعي، وإضافة تدوير تلقائي لمزودات مجانية بلا تسجيل.',
+  id: 'dzagent-update-image-generation-fallback',
+  text: 'تم تحسين توليد الصور في DZ Agent وDZ Media ليعتمد على وصف المستخدم فقط.',
   link: null,
   linkText: null,
   timestamp: Date.now(),
   from: 'DZ Agent',
-  title: 'تحديث جديد في DZ Agent',
+  title: 'توليد الصور',
   badge: 'NEW',
   type: 'update',
 }
@@ -43,7 +44,7 @@ function formatAge(ms: number) {
 }
 
 export default function SiteAnnouncement() {
-  const [ann, setAnn]         = useState<Announcement | null>(DEFAULT_ANNOUNCEMENT)
+  const [ann, setAnn]         = useState<Announcement | null>(null)
   const [visible, setVisible] = useState(true)
   const [entering, setEntering] = useState(true)
   const [now, setNow] = useState(Date.now())
@@ -72,12 +73,25 @@ export default function SiteAnnouncement() {
   const fetchAnn = useCallback(async () => {
     try {
       const res = await fetch('/api/site-announcement', { cache: 'no-store' })
-      if (!res.ok) return
-      const data = await res.json()
-      const a: Announcement | null = data.announcement
-       if (!a) return
-      showAnn(a)
+      if (res.ok) {
+        const data = await res.json()
+        const a: Announcement | null = data.announcement
+        if (a) { showAnn(a); return }
+      }
     } catch {}
+
+    try {
+      const res = await fetch('/version.json', { cache: 'no-store' })
+      if (res.ok) {
+        const version = await res.json()
+        if (version?.commit || version?.commitShort) {
+          showAnn(createBuildAnnouncement(version))
+          return
+        }
+      }
+    } catch {}
+
+    showAnn(DEFAULT_ANNOUNCEMENT)
   }, [showAnn])
 
   // ── Polling احتياطي ────────────────────────────────────────────────────────

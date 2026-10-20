@@ -765,3 +765,18 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 - Live verification after deploy (~2026-10-11 08:31 UTC): `/api/version` and `/version.json` both returned HTTP 200 and exact commit `3e8ad383a6ba6841c5363d5d0cdcb0d018d6dda4`; `/tools?tool=qrcode` and `/tools?tool=cv` returned HTTP 200.
 - No Cloudflare control-plane, DNS, Worker settings, secrets, or unrelated source were changed. Real-browser submission of `كود qr في جيبه` and card click-through remains unverified; verify the card appears and opens QR Code selected.
 - Next action: in a real browser at `/dz-agent`, submit `كود qr في جيبه`, click the tool card, and confirm the QR generator opens selected. If it still answers with a definition, capture the exact response and browser console/network error.
+
+
+## 2026-10-20 — Image-generation loading and deployment announcement
+
+- Target: `Nadirinfograph23/DZ-GPT`, branch `devin/1774405518-init-dz-gpt`. Branch HEAD before this task: `460f59ef0913717ce1c4d0e1bc1499609740601e`; public production `/api/version` and `/version.json` both reported application SHA `25f77d7d989cc737d263a82e22e1a385247aa16e`.
+- Diagnosis: `src/components/DZChatBox.tsx` selected prayer-time loading phases before considering image-generation intent. Image prompts mentioning prayer/location terms could display unrelated status. The existing DZ Media generator sends the user's prompt, selected model and dimensions to the image-generation endpoint; keep that payload and all free image models/providers unchanged.
+- Planned fix: make image intent win in a shared, tested loading-phase helper; scope both image loaders to the user description. Generate the built-in site announcement from `/version.json` commit metadata, with task-specific wording, no link, and no GitHub mention. Preserve admin announcements.
+- Production `/api/site-announcement` returned `announcement: null`, so the old fixed banner is the client fallback. `.github/workflows/deploy-cloudflare-worker.yml` deploys to production on pushes to this branch; stage this change with `[skip ci]` and do not dispatch the production workflow without explicit confirmation.
+- The connected Cloudflare API credential returned HTTP 401/403 (invalid API token/access token); no Cloudflare control-plane settings were changed. Use the existing GitHub Actions release workflow only after approval.
+
+### Ordered continuation
+1. Run `npm run build`, including the new image-loading and announcement regression tests; do not add paid image providers or undocumented endpoints.
+2. Obtain explicit production-deployment confirmation, then run the existing `Deploy Cloudflare Worker` workflow for the exact approved commit.
+3. Require a successful run, verify `/api/version` and `/version.json` report the exact SHA, and smoke-test an image request mentioning prayer/location terms plus a normal prayer question.
+4. Record the exact code SHA, Actions run, deployed SHA, and smoke outcomes here; do not claim visual image quality without inspecting the returned image.

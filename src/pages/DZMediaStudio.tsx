@@ -149,7 +149,7 @@ export default function DZMediaStudio() {
 
     const mDef    = DEFAULT_MODELS.find(m => m.id === model) || DEFAULT_MODELS[0]
     const waitSec = mDef.waitSecs ?? 12
-    setProgress(`🎨 جاري التوليد بـ ${mDef.label} (~${waitSec} ثانية)...`)
+    setProgress(`🎨 جاري توليد الصورة وفق وصفك بـ ${mDef.label} (~${waitSec} ثانية)...`)
 
     const isExternal = EXTERNAL_PROVIDERS.has(model)
     const endpoint   = isExternal ? '/api/dz-media/providers/generate' : '/api/chatimg/generate'

@@ -782,3 +782,22 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 4. Record the exact code SHA, Actions run, deployed SHA, and smoke outcomes here; do not claim visual image quality without inspecting the returned image.
 
 - Validation follow-up: the first build confirmed the prompt-translation tests pass, then the new loading test failed because its weather example also matched the existing broader news rule. The example is being made unambiguous; no production code change to weather/news classification is intended. The deploy step was skipped after build failure, and production still serves the previous SHA.
+
+
+## 2026-10-20 — DZ home AMOLED launcher (draft PR #62)
+
+- Target: `Nadirinfograph23/DZ-GPT` / base branch `devin/1774405518-init-dz-gpt`; review branch: `ui/dz-home-amoled`. Review PR: https://github.com/Nadirinfograph23/DZ-GPT/pull/62 (draft; do not merge without the user's release approval).
+- Base SHA when the review branch was created: `8ac0d4046cab000eb45786205abb90987d5c3414`. Visual commit: `8ca938688d0d12e9bc9e46a75a21bc5c50a530d2`.
+- The root route `/` renders `src/pages/DZHome.tsx`; the launcher theme lives in `src/styles/dz-home.css`. Only the stylesheet is changed. Keep every existing SVG, app/icon label, path, button handler, and navigation behavior unchanged.
+- Visual direction: near-black AMOLED background, graphite glass/beveled icon tiles, white labels, restrained green accent, four-column phone grid with a three-column fallback below 360px, safe-area spacing, and reduced-motion support.
+- Static verification passed: CSS comments/strings/braces/parentheses are balanced, and `src/pages/DZHome.tsx` has the same Git blob SHA on the review branch and base. A full `npm run build` and real-browser visual QA were not run in this GitHub-API-only session; complete both before merge.
+- No production deployment was run for this change. The production workflow is configured for pushes to `devin/1774405518-init-dz-gpt` and `main`; this review branch is outside those triggers. Merging to the base branch will trigger production deployment, so get explicit approval before merge or manual dispatch, then verify the exact SHA in the workflow and both live version endpoints.
+- Cloudflare API connection returned HTTP 403 / code 9109 (invalid access token). Account/zone access and permissions are not verified; no Cloudflare resources were changed. Update the token in the existing Replit Cloudflare connection before account-level work; never paste it into chat.
+- Security follow-up: `replit.md` contains an inline deployment-hook credential. Treat it as exposed, rotate/revoke it, then remove the inline value and use a secret-managed reference. Do not copy the credential into logs, chatgpt.md, commits, or PR text.
+
+### Ordered continuation
+1. Rotate/revoke the inline deploy-hook credential in `replit.md` and remove its inline value before reuse.
+2. Run `npm run build` in the project environment; review the launcher at phone and desktop widths. Confirm the Arabic/English labels remain readable and every original card still navigates correctly.
+3. Update this note with the exact test/browser outcomes and any final CSS commit; keep PR #62 in draft until those checks pass.
+4. Obtain explicit production approval before merging PR #62 or manually dispatching deployment. After approval, confirm a successful exact-SHA workflow run and verify `/api/version` plus `/version.json` report that SHA.
+5. For Cloudflare account-level verification, first update the existing Replit API credential, then make only the user-requested read/write operations; do not claim full access until the actual permission checks succeed.

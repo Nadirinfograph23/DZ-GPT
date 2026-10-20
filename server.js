@@ -35974,6 +35974,10 @@ async function huggingFaceFlux(prompt, negativePrompt, { timeoutMs = 40000 } = {
 // ── Translate Arabic/French image prompt → English for Pollinations FLUX ────────
 const IMG_TRANSLATE_CACHE = new Map()
 const IMG_AR_EN_MAP = [
+  // Exact user-reported example and common Algerian-capital variants first.
+  ['سيارة سوداء تتجول في العاصمة الجزائرية','a black car driving through the streets of Algiers, Algeria'],
+  ['تتجول في العاصمة الجزائرية','driving through the streets of Algiers, Algeria'],
+  ['العاصمة الجزائرية','Algiers, the capital of Algeria'],
   // Algeria
   ['الجزائر العاصمة','Algiers capital city Algeria'],['الجزائر','Algeria'],['جزائرية','Algerian'],['جزائري','Algerian'],['جزائر','Algeria'],
   ['وهران','Oran Algeria'],['قسنطينة','Constantine Algeria'],['عنابة','Annaba Algeria'],
@@ -36061,51 +36065,71 @@ const IMG_AR_EN_MAP = [
   ['خلف','behind'],['بين','between'],
 ]
 
+function sourceLanguageForImage(text) {
+  if (/[\u0600-\u06FF\u0750-\u077F]/.test(text)) return 'ar'
+  if (/[àâçéèêëîïôùûüÀÂÇÉÈÊËÎÏÔÙÛÜ]/.test(text)
+      || /\b(le|la|les|un|une|des|du|de|je|tu|il|nous|vous|ils|est|sont|avec|dans|sur|pour|au|aux)\b/i.test(text)) return 'fr'
+  return null
+}
+
 async function translateImgPrompt(rawPrompt) {
-  const normalizedPrompt = rawPrompt.trim()
+  const normalizedPrompt = String(rawPrompt || '').trim()
+  const sourceLanguage = sourceLanguageForImage(normalizedPrompt)
+  if (!sourceLanguage) return normalizedPrompt
   const cacheKey = crypto.createHash('sha256').update(normalizedPrompt).digest('hex')
   if (IMG_TRANSLATE_CACHE.has(cacheKey)) return IMG_TRANSLATE_CACHE.get(cacheKey)
 
-  const hasArabic = /[\u0600-\u06FF]/.test(normalizedPrompt)
-  const hasFrench = /[àâçéèêëîïôùûüÀÂÇÉÈÊËÎÏÔÙÛÜ]/.test(normalizedPrompt)
-    || /\b(le|la|les|un|une|des|du|de|dans|sur|avec|pour|est|sont)\b/i.test(normalizedPrompt)
-  if (!hasArabic && !hasFrench) return normalizedPrompt
-
-  // Apply the Arabic phrase map first, then translate anything still outside English.
   let translated = normalizedPrompt
-  if (hasArabic) {
-    for (const [ar, en] of IMG_AR_EN_MAP) {
-      translated = translated.split(ar).join(en)
-    }
+  if (sourceLanguage === 'ar') {
+    for (const [ar, en] of IMG_AR_EN_MAP) translated = translated.split(ar).join(en)
   }
 
-  if (/[\u0600-\u06FF]/.test(translated) || hasFrench) {
+  // Keep every concrete visual detail; use AI only when the static map is insufficient.
+  if (sourceLanguageForImage(translated)) {
     try {
       const { content } = await callGroqWithFallback({
         model: 'llama-3.1-8b-instant',
         messages: [
-          { role: 'system', content: 'Translate this Arabic/French image description to a concise English image-generation prompt. Preserve the exact subject, actions, location, colors, and composition. Do not invent or replace objects. Output ONLY the English prompt, no explanation. IMPORTANT: جميلة means beautiful (adjective), NOT the archaeological site Djemila. واقعي/واقعية = photorealistic. أسود/سوداء = black. أبيض/بيضاء = white.' },
+          { role: 'system', content: 'Translate this Arabic/French image description to concise English. Preserve its exact subject, action, location, colors, and composition. Do not invent or replace objects. Output ONLY the English prompt. جميلة means beautiful, not Djemila. أسود/سوداء means black.' },
           { role: 'user', content: normalizedPrompt },
         ],
-        max_tokens: 150,
-        temperature: 0.2,
+        max_tokens: 200,
+        temperature: 0.1,
       })
-      if (content && !/[\u0600-\u06FF]/.test(content) && content.trim().length < 400) {
-        translated = content.trim()
-      }
+      if (content && !sourceLanguageForImage(content) && content.trim().length < 1200) translated = content.trim()
     } catch (_) {}
   }
 
-  if (!/4k|high quality|detailed/i.test(translated)) {
-    translated = translated.trim() + ', high quality, detailed, sharp focus'
+  // External translation is a fallback when the in-app model is unavailable.
+  if (sourceLanguageForImage(translated)) {
+    const queryText = normalizedPrompt.slice(0, 500)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 7_000)
+    try {
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(queryText)}&langpair=${sourceLanguage}|en`
+      const response = await fetch(url, { signal: controller.signal })
+      if (response.ok) {
+        const data = await response.json()
+        const candidate = String(data?.responseData?.translatedText || '').trim()
+        if (candidate.length > 3 && !sourceLanguageForImage(candidate)) {
+          const remainder = normalizedPrompt.slice(queryText.length).trim()
+          translated = remainder ? `${candidate} ${remainder}` : candidate
+        }
+      }
+    } catch (_) {} finally {
+      clearTimeout(timeout)
+    }
   }
 
-  // Hash the full prompt to avoid prefix collisions and bound cache memory.
-  if (IMG_TRANSLATE_CACHE.size >= 300) {
-    const firstKey = IMG_TRANSLATE_CACHE.keys().next().value
-    if (firstKey) IMG_TRANSLATE_CACHE.delete(firstKey)
+  // Cache only complete translations; do not cache an untranslated fallback.
+  if (!sourceLanguageForImage(translated)) {
+    if (IMG_TRANSLATE_CACHE.size >= 300) {
+      const firstKey = IMG_TRANSLATE_CACHE.keys().next().value
+      if (firstKey) IMG_TRANSLATE_CACHE.delete(firstKey)
+    }
+    if (!/4k|high quality|detailed/i.test(translated)) translated += ', high quality, detailed, sharp focus'
+    IMG_TRANSLATE_CACHE.set(cacheKey, translated)
   }
-  IMG_TRANSLATE_CACHE.set(cacheKey, translated)
   return translated
 }
 
@@ -36153,7 +36177,10 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
       translatedFlag = true
     }
   } catch (_) {}
-  console.log(`[img-gen] prompt: "${prompt.slice(0,50)}" → "${englishPrompt.slice(0,60)}" translated=${translatedFlag}`)
+  if (sourceLanguageForImage(englishPrompt)) {
+    return res.status(503).json({ error: 'تعذّر ترجمة وصف الصورة بدقة؛ أعد صياغته بالإنجليزية وحاول مجدداً.', code: 'IMAGE_PROMPT_TRANSLATION_FAILED' })
+  }
+  console.log(`[img-gen] translated=${translatedFlag} | promptLength=${englishPrompt.length}`)
 
   // ── Priority 1: Pollinations AI — المزود الأساسي (مجاني، سريع، بدون مفتاح) ──
   // ملاحظة: Pollinations تستخدم نماذج FLUX عالية الجودة مجاناً — الأسرع والأكثر موثوقية
@@ -36873,6 +36900,7 @@ app.post('/api/chatimg/generate', express.json({ limit: '2mb' }), async (req, re
       height: Math.min(Math.max(Number(height) || 768, 256), 1536),
       preferredModel: String(model || 'auto'),
       ip,
+      translatePrompt: translateImgPrompt,
     })
     res.json(result)
   } catch (e) {
@@ -36917,6 +36945,7 @@ app.post('/api/dz-media/providers/generate', express.json({ limit: '2mb' }), asy
       preferredProvider: String(provider || 'auto'),
       negativePrompt:    negativePrompt ? String(negativePrompt).slice(0, 300) : undefined,
       useCache:          true,
+      translatePrompt:   translateImgPrompt,
     })
 
     if (result.blocked) return res.status(451).json({ ok: false, error: result.error, blocked: true })

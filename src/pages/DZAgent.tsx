@@ -6,6 +6,7 @@ import BugReportModal from '../components/BugReportModal'
 import BreakingNewsBanner from '../components/BreakingNewsBanner'
 import type { AgentModeState } from '../components/AgentModeBar'
 import '../styles/dz-agent.css'
+import '../styles/dz-agent-ios.css'
 import '../styles/dzc-youtube.css'
 
 function playCheerfulSound() {

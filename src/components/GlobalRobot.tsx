@@ -78,15 +78,13 @@ export default function GlobalRobot() {
   // Only show on the homepage
   const isHome = pathname === '/'
 
-  // Reset visibility every time the user enters the homepage
-  const [showRobot, setShowRobot] = useState(true)
+  // Keep the floating robot closed until the user opens it from the restore icon.
+  const [showRobot, setShowRobot] = useState(false)
   const [holiday] = useState<HolidayInfo | null>(() => detectHoliday())
 
+  // Returning to the homepage closes it again; the bottom-left icon remains available.
   useEffect(() => {
-    if (isHome) {
-      // Always reset to visible when landing on the homepage
-      setShowRobot(true)
-    }
+    if (isHome) setShowRobot(false)
   }, [isHome])
 
   if (!isHome) return null

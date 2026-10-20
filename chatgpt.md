@@ -1,3 +1,20 @@
+## 2026-10-21 — DZ Agent iOS glass theme handoff
+
+- Target: Nadirinfograph23/DZ-GPT, branch devin/1774405518-init-dz-gpt. Baseline HEAD before this task: 0a98dcc707331d281f734f9fdb657b49c955f5f2.
+- Added a route-scoped iOS glass visual layer in src/styles/dz-agent-ios.css and imported it from src/pages/DZAgent.tsx. The style follows the homepage palette (dark slate, blue/indigo highlights), adds translucent surfaces, larger touch targets, safe-area spacing, visible keyboard focus and reduced-motion handling. Existing six accent choices still map to their own colors.
+- No chat handlers, API calls, control logic, button behavior, routes, or links were changed. Direct source comparison confirms src/pages/DZAgent.tsx differs from baseline only by the new stylesheet import. CSS brace/comment/string balance passed, and every selector is scoped under .dza-layout.
+- Source commits: 5e3cc233fc4a32759b8384857b91b22f3e7b414d (CSS) and 2fae6c3c5608ae8e97ae5afe3ab5f0c47630aef4 (page import). Both messages include [skip ci]. Exact-SHA Actions queries returned no runs for either commit; no build or browser visual check has been run for these changes.
+- Production path: .github/workflows/deploy-cloudflare-worker.yml deploys the Worker on pushes to this branch or main. The current live /api/version still reports b182ccd8f9fde0144814e6f433ad4902dbe0d75e; this UI change is not deployed. Do not dispatch a production workflow without explicit user approval.
+- Cloudflare REST check: the zone listing succeeded and returned the dzagent.app zone permission metadata, but GET /v4/user/tokens/verify returned HTTP 401 / Invalid API Token. Full API credential validity is therefore not confirmed. No DNS, Worker, cache, secret, or zone setting was changed. Update the Cloudflare API token/permissions in the existing Replit connection before direct control-plane changes; never paste the key into chat.
+
+### Ordered continuation
+1. Ask for explicit approval before releasing to production; this branch’s push workflow deploys the Worker.
+2. If approved, run npm run build for the exact branch head and inspect the resulting Actions run. Fix any build failure before deployment.
+3. After a successful approved deployment, verify /api/version and /version.json against the exact deployed SHA, then visually check /dz-agent on desktop and mobile. Do not claim visual verification until a browser rendering is inspected.
+4. If direct Cloudflare account/zone changes become necessary, update the existing Cloudflare API connection and verify the token before writing.
+
+---
+
 ## 2026-10-20 — Restore iOS theme and manual robot launcher
 
 - Root cause confirmed: production before the direct release served `ui/dz-home-amoled` (`7f63e04`). The released `devin/1774405518-init-dz-gpt` source was still at the older `8ac0d404` base and did not include the draft PR #62 visual changes, replacing the homepage, announcement and PWA styling.

@@ -1,3 +1,20 @@
+## 2026-10-20 — General multilingual image-translation fallback (verification pending)
+
+- Reproduced on production: a generic Arabic prompt outside the static phrase map returned HTTP 503 with code IMAGE_PROMPT_TRANSLATION_FAILED before an image provider was called. The earlier black-car/Algiers smoke prompt was covered by a static mapping and did not exercise general translation.
+- Root cause in the active routes: the shared translator tried one Groq model and then MyMemory; it did not use the existing application-wide multilingual model fallback chain. Language detection also missed Franco-Darija and many non-Latin scripts.
+- Change in this commit: add lib/image-prompt-translator.js; use the current Groq model, then safeGenerateAI(taskHint=multilingual), then MyMemory; detect Arabic, Franco-Darija, French, several Latin languages and common non-Latin scripts; do not append generic visual details; cache only complete translations; keep failing closed if translated text is still non-English.
+- Regression coverage: English pass-through; exact Arabic mapping; generic Arabic; mixed-output recovery through the existing model chain; Franco-Darija; French; Spanish; Russian; Japanese; language-specific MyMemory pair; unresolved translation remains rejected; English café loanword does not trigger translation. The focused test is now included in npm run build.
+- Cloudflare connector read returned HTTP 403 / code 9109 (Invalid access token). The user reports the account key has full permissions, but the connected credential is still rejected. No Cloudflare control-plane settings were changed. Direct account verification remains blocked until the active API token is updated in the existing Replit connection; never paste it into chat.
+- Verification pending: GitHub Actions build/deploy for the exact source SHA, production /api/version and /version.json checks, plus fresh Arabic/French/Darija smoke prompts. Do not claim this commit is live until the exact SHA is observed.
+
+### Ordered continuation
+1. Confirm the new translation test and full application build pass in GitHub Actions.
+2. Confirm production /api/version and /version.json return the exact app SHA on devin/1774405518-init-dz-gpt.
+3. Smoke-test a generic Arabic prompt not covered by the static map, a Franco-Darija prompt, and a French prompt; verify each returns a complete English prompt and an image URL/job.
+4. If any prompt still returns IMAGE_PROMPT_TRANSLATION_FAILED, capture its exact prompt and inspect translation-provider/runtime logs; update the Cloudflare API key in the existing Replit connection before direct account-level log checks.
+
+---
+
 ## 2026-10-20 — Image generation prompt fidelity (production verified)
 
 - Target: `Nadirinfograph23/DZ-GPT`, branch `devin/1774405518-init-dz-gpt`.

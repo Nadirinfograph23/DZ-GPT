@@ -40,6 +40,7 @@
 // ║  ZONE-35  DZ Agent V4 Media               ~30107    وكيل V4 للوسائط     ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
+import { createImagePromptTranslator, sourceLanguageForImage } from './lib/image-prompt-translator.js'
 import express from 'express'
 import { fileURLToPath } from 'url'
 import path from 'path'
@@ -35972,7 +35973,6 @@ async function huggingFaceFlux(prompt, negativePrompt, { timeoutMs = 40000 } = {
 }
 
 // ── Translate Arabic/French image prompt → English for Pollinations FLUX ────────
-const IMG_TRANSLATE_CACHE = new Map()
 const IMG_AR_EN_MAP = [
   // Exact user-reported example and common Algerian-capital variants first.
   ['سيارة سوداء تتجول في العاصمة الجزائرية','a black car driving through the streets of Algiers, Algeria'],
@@ -36065,73 +36065,11 @@ const IMG_AR_EN_MAP = [
   ['خلف','behind'],['بين','between'],
 ]
 
-function sourceLanguageForImage(text) {
-  if (/[\u0600-\u06FF\u0750-\u077F]/.test(text)) return 'ar'
-  if (/[àâçéèêëîïôùûüÀÂÇÉÈÊËÎÏÔÙÛÜ]/.test(text)
-      || /\b(le|la|les|un|une|des|du|de|je|tu|il|nous|vous|ils|est|sont|avec|dans|sur|pour|au|aux)\b/i.test(text)) return 'fr'
-  return null
-}
-
-async function translateImgPrompt(rawPrompt) {
-  const normalizedPrompt = String(rawPrompt || '').trim()
-  const sourceLanguage = sourceLanguageForImage(normalizedPrompt)
-  if (!sourceLanguage) return normalizedPrompt
-  const cacheKey = crypto.createHash('sha256').update(normalizedPrompt).digest('hex')
-  if (IMG_TRANSLATE_CACHE.has(cacheKey)) return IMG_TRANSLATE_CACHE.get(cacheKey)
-
-  let translated = normalizedPrompt
-  if (sourceLanguage === 'ar') {
-    for (const [ar, en] of IMG_AR_EN_MAP) translated = translated.split(ar).join(en)
-  }
-
-  // Keep every concrete visual detail; use AI only when the static map is insufficient.
-  if (sourceLanguageForImage(translated)) {
-    try {
-      const { content } = await callGroqWithFallback({
-        model: 'llama-3.1-8b-instant',
-        messages: [
-          { role: 'system', content: 'Translate this Arabic/French image description to concise English. Preserve its exact subject, action, location, colors, and composition. Do not invent or replace objects. Output ONLY the English prompt. جميلة means beautiful, not Djemila. أسود/سوداء means black.' },
-          { role: 'user', content: normalizedPrompt },
-        ],
-        max_tokens: 200,
-        temperature: 0.1,
-      })
-      if (content && !sourceLanguageForImage(content) && content.trim().length < 1200) translated = content.trim()
-    } catch (_) {}
-  }
-
-  // External translation is a fallback when the in-app model is unavailable.
-  if (sourceLanguageForImage(translated)) {
-    const queryText = normalizedPrompt.slice(0, 500)
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 7_000)
-    try {
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(queryText)}&langpair=${sourceLanguage}|en`
-      const response = await fetch(url, { signal: controller.signal })
-      if (response.ok) {
-        const data = await response.json()
-        const candidate = String(data?.responseData?.translatedText || '').trim()
-        if (candidate.length > 3 && !sourceLanguageForImage(candidate)) {
-          const remainder = normalizedPrompt.slice(queryText.length).trim()
-          translated = remainder ? `${candidate} ${remainder}` : candidate
-        }
-      }
-    } catch (_) {} finally {
-      clearTimeout(timeout)
-    }
-  }
-
-  // Cache only complete translations; do not cache an untranslated fallback.
-  if (!sourceLanguageForImage(translated)) {
-    if (IMG_TRANSLATE_CACHE.size >= 300) {
-      const firstKey = IMG_TRANSLATE_CACHE.keys().next().value
-      if (firstKey) IMG_TRANSLATE_CACHE.delete(firstKey)
-    }
-    if (!/4k|high quality|detailed/i.test(translated)) translated += ', high quality, detailed, sharp focus'
-    IMG_TRANSLATE_CACHE.set(cacheKey, translated)
-  }
-  return translated
-}
+const translateImgPrompt = createImagePromptTranslator({
+  staticMap: IMG_AR_EN_MAP,
+  callGroqWithFallback,
+  safeGenerateAI,
+})
 
 // GET /api/tools/img-gen/status/:jobId — proxy Stable Horde job status
 app.get('/api/tools/img-gen/status/:jobId', async (req, res) => {

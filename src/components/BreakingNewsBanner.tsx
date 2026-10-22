@@ -1,5 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Radio } from 'lucide-react'
+import { Newspaper, X } from 'lucide-react'
+
+function safeNewsUrl(value: unknown): string {
+  if (typeof value !== 'string' || !value) return ''
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : ''
+  } catch {
+    return ''
+  }
+}
 
 interface BreakingItem {
   title: string
@@ -8,15 +18,12 @@ interface BreakingItem {
   pubDate?: string
 }
 
-type BannerType = 'breaking' | 'national'
-
 export default function BreakingNewsBanner() {
   const [items, setItems]           = useState<BreakingItem[]>([])
-  const [bannerType, setBannerType] = useState<BannerType>('breaking')
+  const seenNewsRef = useRef(new Set<string>())
   const [visible, setVisible]       = useState(false)
   const [dismissed, setDismissed]   = useState(false)
   const [tickerIdx, setTickerIdx] = useState(0)
-  const esRef   = useRef<EventSource | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -47,35 +54,64 @@ export default function BreakingNewsBanner() {
   }, [])
 
   useEffect(() => {
-    function connect() {
-      const es = new EventSource('/api/breaking-news/stream')
-      esRef.current = es
+    let disposed = false
+    let activeController: AbortController | null = null
 
-      es.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data)
-          if (data.type === 'breaking_news' && Array.isArray(data.items) && data.items.length > 0) {
-            setBannerType('breaking')
-            showBanner(data.items)
-          } else if (data.type === 'national_team_news' && Array.isArray(data.items) && data.items.length > 0) {
-            setBannerType('national')
-            showBanner(data.items)
-          }
-        } catch {}
-      }
+    async function fetchLatestNews() {
+      activeController?.abort()
+      const controller = new AbortController()
+      activeController = controller
+      const timeout = window.setTimeout(() => controller.abort(), 10_000)
+      try {
+        const response = await fetch('/api/dz-agent/news?limit=8', {
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        })
+        if (!response.ok) return
+        const payload = await response.json()
+        if (disposed) return
 
-      es.onerror = () => {
-        es.close()
-        // إعادة الاتصال بعد 30 ثانية
-        setTimeout(connect, 30_000)
+        const feedItems = Array.isArray(payload?.items) ? payload.items : []
+        const seen = seenNewsRef.current
+        const fresh: BreakingItem[] = []
+
+        for (const item of feedItems) {
+          const title = typeof item?.title === 'string' ? item.title.trim() : ''
+          const key = title.toLowerCase().replace(/\s+/g, ' ')
+          if (!title || seen.has(key)) continue
+          seen.add(key)
+          const pubDate = typeof item.pubDate === 'string' && Number.isFinite(Date.parse(item.pubDate))
+            ? item.pubDate
+            : undefined
+          fresh.push({
+            title,
+            link: safeNewsUrl(item.link || item.url),
+            source: String(item.source || item.feedName || 'مصدر RSS'),
+            pubDate,
+          })
+        }
+
+        while (seen.size > 100) {
+          const oldest = seen.values().next().value
+          if (!oldest) break
+          seen.delete(oldest)
+        }
+
+        if (fresh.length) showBanner(fresh.slice(0, 8))
+      } catch {
+        // RSS fetch failures are transient; retry on the next polling interval.
+      } finally {
+        window.clearTimeout(timeout)
       }
     }
 
-    connect()
-
+    void fetchLatestNews()
+    const interval = window.setInterval(() => { void fetchLatestNews() }, 5 * 60 * 1000)
     return () => {
-      esRef.current?.close()
-      if (timerRef.current)  clearTimeout(timerRef.current)
+      disposed = true
+      activeController?.abort()
+      window.clearInterval(interval)
+      if (timerRef.current) clearTimeout(timerRef.current)
       if (tickerRef.current) clearInterval(tickerRef.current)
     }
   }, [showBanner])
@@ -93,17 +129,13 @@ export default function BreakingNewsBanner() {
         left:       0,
         right:      0,
         zIndex:     99999,
-        background: bannerType === 'national'
-          ? 'linear-gradient(90deg, #14532d 0%, #16a34a 40%, #15803d 100%)'
-          : 'linear-gradient(90deg, #b91c1c 0%, #dc2626 40%, #7f1d1d 100%)',
+        background: 'linear-gradient(90deg, #1e3a8a 0%, #2563eb 45%, #1e40af 100%)',
         color:      '#fff',
         display:    'flex',
         alignItems: 'center',
         gap:        12,
         padding:    '10px 16px',
-        boxShadow:  bannerType === 'national'
-          ? '0 3px 16px rgba(22,163,74,.5)'
-          : '0 3px 16px rgba(180,0,0,.5)',
+        boxShadow:  '0 3px 16px rgba(37,99,235,.38)',
         fontFamily: 'inherit',
         animation:  'bzSlideDown .35s ease',
       }}
@@ -120,23 +152,23 @@ export default function BreakingNewsBanner() {
         .bz-dot { animation: bzPulse 1.1s ease-in-out infinite; }
       `}</style>
 
-      {/* أيقونة البث */}
+      {/* أيقونة الأخبار */}
       <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
-        <span className="bz-dot" style={{ color:'#fca5a5', display:'flex' }}>
-          <Radio size={16} />
+        <span className="bz-dot" style={{ color:'#bfdbfe', display:'flex' }}>
+          <Newspaper size={16} />
         </span>
         <span style={{
-          background: bannerType === 'national' ? '#bbf7d0' : '#fca5a5',
-          color:      bannerType === 'national' ? '#14532d' : '#7f1d1d',
+          background: '#dbeafe',
+          color:      '#1e3a8a',
           fontSize:11, fontWeight:800, padding:'2px 7px', borderRadius:4, letterSpacing:1, flexShrink:0
         }}>
-          {bannerType === 'national' ? '🇩🇿 المنتخب' : 'عاجل'}
+          📰 أخبار الجزائر
         </span>
       </div>
 
       {/* مؤشر تعدد الأخبار */}
       {items.length > 1 && (
-        <span style={{ fontSize:11, color:'#fca5a5', flexShrink:0, fontWeight:600 }}>
+        <span style={{ fontSize:11, color:'#dbeafe', flexShrink:0, fontWeight:600 }}>
           {tickerIdx + 1}/{items.length}
         </span>
       )}
@@ -157,7 +189,7 @@ export default function BreakingNewsBanner() {
             {current.title}
           </span>
         )}
-        <span style={{ fontSize:11, color:'#fca5a5', marginTop:2, display:'block' }}>
+        <span style={{ fontSize:11, color:'#dbeafe', marginTop:2, display:'block' }}>
           📡 {current.source}
           {current.pubDate ? ` · ${new Date(current.pubDate).toLocaleTimeString('ar-DZ', { hour:'2-digit', minute:'2-digit' })}` : ''}
         </span>

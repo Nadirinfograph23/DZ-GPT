@@ -1,3 +1,26 @@
+## 2026-10-22 — إصلاح بطاقة أخبار DZ Agent وعرض المصادر
+
+- **النطاق:** `Nadirinfograph23/DZ-GPT`، الفرع `devin/1774405518-init-dz-gpt`؛ HEAD قبل الإصلاح `34bdb7acb284cb8d3143a194f54743a5aa867e89`.
+- **ما تحقق مباشرة:** `/api/dz-agent/news?limit=8` على الإنتاج أعاد HTTP 200 وعناوين RSS جزائرية حديثة. لذلك لم يكن تعطل البطاقة بسبب توقف مصادر RSS نفسها.
+- **سبب تعطل بطاقة الصفحة:** `src/components/BreakingNewsBanner.tsx` كان يعتمد حصريًا على `/api/breaking-news/stream` (SSE). مسار Cloudflare Worker يمر عبر `handleWithExpress` الذي يجمع chunks ولا ينشئ `Response` إلا عند `res.end()`، بينما SSE اتصال مفتوح لا ينتهي؛ كما أن `flushHeaders()` في الجسر لا يرسل الرؤوس. طلب الإنتاج لم يُرجع استجابة البث خلال مهلة التحقق. الحل المعتمد: polling دوري لواجهة الأخبار القائمة بدل SSE، مع منع تكرار العناوين.
+- **مصادر خارجية:** `Nadirinfograph23/dz-news` يحتوي README فقط، و`Nadirinfograph23/news-algeria` يحتوي README و`index.html` فقط؛ لا يوجد في أي منهما جامع RSS إنتاجي. لا تضفهما اعتمادًا.
+- **سبب ظهور الروابط داخل الإجابة:** `/api/dz-agent-chat` كان يبني كل عنوان بصيغة Markdown `[العنوان](الرابط)` ويضيف اسم المصدر بجانب كل خبر، ولم يمرر `newsItems`. الواجهة `DZChatBox` تملك بالفعل دعم `newsItems` وشريط أيقونات المصادر أسفل الرسالة.
+- **التعديل:** البطاقة تجلب `/api/dz-agent/news?limit=8` كل 5 دقائق وتعرض آخر العناوين أولًا ثم الجديد فقط. `lib/news-answer.js` ينظف العناوين من الروابط والترميز وMarkdown، ويعيد نصًا مرتبًا مع `newsItems` metadata لتوليد favicon chips أسفل الرد. المساران المباشر والاحتياطي في Worker يستخدمان formatter نفسه. أضيفت regression tests إلى `npm run build`.
+- **Cloudflare:** قراءة zone وWorker نجحت عبر التكامل، لكن `GET /v4/user/tokens/verify` أعاد HTTP 401 `Invalid API Token`؛ لا تُجرِ تغييرات يدوية على Cloudflare بهذا الاتصال. مسار الإنتاج المصرح به هو GitHub Actions في `.github/workflows/deploy-cloudflare-worker.yml`.
+- **التفويض:** وافق المستخدم في 2026-10-22 على مواصلة هذه المهمة حتى الإنتاج؛ الدفع إلى هذا الفرع يشغّل النشر تلقائيًا.
+
+### الاستمرار بالترتيب
+1. اقرأ هذا القسم، ثم تحقق من HEAD الفرع و`/api/version` قبل أي تعديل.
+2. لإصلاح/توسيع بطاقة الأخبار، استخدم polling إلى `/api/dz-agent/news?limit=8`؛ لا تعد SSE من خلال جسر Worker الحالي. غيّر RSS engine فقط إذا فشل endpoint نفسه.
+3. لردود الأخبار، استخدم `buildNewsAnswer()` وأرسل `newsItems`; لا تضع روابط المقالات أو أسماء المصادر داخل نص العناوين. الواجهة تعرض الأيقونات من metadata.
+4. شغّل `npm run test:news-answer` و`npm run build`، ثم راقب GitHub Actions للـSHA الذي دفعته. لا تدّع النشر قبل نجاح الـworkflow وتطابق `/api/version`.
+5. بعد النشر، افحص `/api/dz-agent/news?limit=8` واطلب خبرًا عبر `/api/dz-agent-chat`; يجب أن يخلو `content` من روابط Markdown/HTTP وأن يحتوي `newsItems`. التحقق البرمجي لا يثبت شكل الأيقونات بصريًا؛ افحص صفحة `/dz-agent` بمتصفح حقيقي عند توفره.
+6. إذا احتجت تغييرات مباشرة في إعدادات Cloudflare، أصلح/حدّث مفتاح التكامل من Replit أولًا ثم أعد التحقق؛ لا تطلب المفتاح في المحادثة.
+
+**حالة هذه التذكرة:** الكود والاختبار والتوثيق قيد التحديث؛ لم يُتحقق بعد من نتيجة نشر هذا الـSHA.
+
+---
+
 ## 2026-10-21 — DZ Agent iOS glass theme handoff
 
 - Target: Nadirinfograph23/DZ-GPT, branch devin/1774405518-init-dz-gpt. Baseline HEAD before this task: 0a98dcc707331d281f734f9fdb657b49c955f5f2.

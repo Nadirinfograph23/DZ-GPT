@@ -13,6 +13,7 @@
 import { Readable } from 'node:stream'
 import { lookupStaticFact } from '../lib/static-facts.js'
 import workerBuildInfoText from '../data/build-info.json'
+import { buildNewsAnswer } from '../lib/news-answer.js'
 
 // Use the CI-generated metadata inside the Worker so reusable static /version.json cache
 // entries cannot make the API report a previous deployment.
@@ -463,9 +464,8 @@ async function fetchChatDirect(request, env = {}) {
         const newsResult = await fetchNewsDirect(new Request('https://dzagent.app/api/dz-agent/news'))
         const newsData = await newsResult.json()
         if (newsData.items?.length) {
-          const items = newsData.items.slice(0, 10).map(item => `- [${item.title}](${item.link}) — *${item.source}*`).join('\n')
-          const content = `## 📰 آخر الأخبار الجزائرية\n\n${items}\n\n> ℹ️ المصدر: RSS مباشر`
-          return new Response(JSON.stringify({ content, model: 'news-api' }), {
+          const answer = buildNewsAnswer(newsData.items, 10)
+          return new Response(JSON.stringify({ ...answer, model: 'news-api' }), {
             headers: {
         'content-type': 'application/json',
         'Access-Control-Allow-Origin': '*',
@@ -1285,27 +1285,11 @@ async function fetchWorkerNewsFallback(request) {
 
   if (!items.length) return null
 
-  const date = new Date().toLocaleDateString('ar-DZ', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-  const content = [
-    `## 📰 آخر أخبار الجزائر — ${date}`,
-    '',
-    ...items.map(item => {
-      const link = item.link ? ` [عرض الخبر](${item.link})` : ''
-      return `- **${item.title}** — *${item.source}*${link}`
-    }),
-    '',
-    '---',
-    '> ℹ️ تم جلب العناوين مباشرة من RSS عبر Cloudflare Worker.',
-  ].join('\n')
-
+  const answer = buildNewsAnswer(items, 10)
   return new Response(JSON.stringify({
-    content,
+    ...answer,
     status: 'rss_worker_direct',
+    model: 'news-api',
   }), {
     status: 200,
     headers: {

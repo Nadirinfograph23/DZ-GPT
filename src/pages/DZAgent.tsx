@@ -3,7 +3,6 @@ import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, AlertTr
 import DZChatBox from '../components/DZChatBox'
 import DZNotifications from '../components/DZNotifications'
 import BugReportModal from '../components/BugReportModal'
-import BreakingNewsBanner from '../components/BreakingNewsBanner'
 import type { AgentModeState } from '../components/AgentModeBar'
 import '../styles/dz-agent.css'
 import '../styles/dz-agent-ios.css'
@@ -314,7 +313,6 @@ export default function DZAgent() {
         <BugReportModal theme={theme} onClose={() => setBugReportOpen(false)} />
       )}
 
-      <BreakingNewsBanner />
     </>
   )
 }

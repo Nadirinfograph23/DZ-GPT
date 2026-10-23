@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { buildNewsAnswer } from '../lib/news-answer.js'
+import { buildNewsAnswer, isAdvertisementHeadline } from '../lib/news-answer.js'
 
 const answer = buildNewsAnswer([
   { title: 'تنبيه: [تفاصيل](https://story.example/item) &amp; &#8221; في الجزائر', link: 'https://www.echoroukonline.com/story', source: 'الشروق أونلاين', pubDate: '2026-10-22T07:18:58Z' },
@@ -18,4 +18,15 @@ assert.match(answer.content, /\\\*\\\*مهم\\\*\\\*/, 'formatting markup in a h
 assert.equal(buildNewsAnswer([], 8).newsItems.length, 0)
 assert.equal(buildNewsAnswer([{ title: 'عنوان', link: 'javascript:alert(1)', source: '' }]).newsItems[0].url, '')
 assert.equal(buildNewsAnswer(Array.from({ length: 12 }, (_, i) => ({ title: 'خبر ' + i })), 30).newsItems.length, 10)
+const filteredPromos = buildNewsAnswer([
+  { title: 'إعلان ممول: تخفيضات على الأجهزة', source: 'النهار' },
+  { title: 'Sponsored: special offer', source: 'News' },
+  { title: 'إعلان رسمي عن موعد فتح التسجيل', source: 'وكالة الأنباء الجزائرية' },
+  ], 8)
+assert.equal(filteredPromos.newsItems.length, 1, 'explicitly promotional headlines are filtered while neutral official announcements remain')
+assert.equal(filteredPromos.newsItems[0].title, 'إعلان رسمي عن موعد فتح التسجيل')
+assert.equal(isAdvertisementHeadline('محتوى إعلاني', 'مصدر'), true)
+assert.equal(isAdvertisementHeadline('ممول: عرض خاص', 'مصدر'), true)
+assert.equal(isAdvertisementHeadline('خبر عن تنظيم الإشهار التجاري', 'مصدر'), true)
+assert.equal(isAdvertisementHeadline('إعلان رسمي عن موعد التسجيل', 'مصدر'), false)
 console.log('news-answer regression tests passed')

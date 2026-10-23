@@ -9,10 +9,11 @@ import {
 } from 'lucide-react'
 import '../styles/dz-dashboard.css'
 import { withRetry } from '../utils/dzMemory'
+import { isAdvertisementHeadline } from '../../lib/news-answer.js'
 
 // ═══════════════════════════════════════════════════════════════════════
-// Browser-side RSS parser & free API fetchers
-// These run directly in the browser to bypass broken Express/Worker bridge
+// Browser-side RSS parser for dashboard sections that still use independent sports and tech feeds.
+// DZ Agent main news uses the shared server-side news endpoint.
 // ═══════════════════════════════════════════════════════════════════════
 
 function decodeXmlText(value = ''): string {
@@ -58,21 +59,6 @@ function parseRssItems(xml: string, sourceName: string): NewsItem[] {
   }
   return items
 }
-
-const ALGERIA_NEWS_FEEDS = [
-  // ── Algerian-specific news (highest priority) ──────────────────────────
-  { name: '🇩🇿 أحداث نت', url: 'https://news.google.com/rss/search?q=%D8%A3%D8%AD%D8%AF%D8%A7%D8%AB+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: '🇩🇿 جزاير توداي', url: 'https://news.google.com/rss/search?q=%D8%AC%D8%B2%D8%A7%D8%A6%D9%8A%D8%B1+%D8%AA%D9%88%D8%AF%D8%A7%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: '🇩🇿 النهار', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D9%86%D9%87%D8%A7%D8%B1+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: '🇩🇿 الشروق', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B4%D8%B1%D9%88%D9%82+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  // ── General Algeria news ──────────────────────────────────────────────
-  { name: '🇩🇿 أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: '🇩🇿 وطن أخبار', url: 'https://news.google.com/rss/search?q=%D9%88%D8%B7%D9%86+%D8%A2%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  // ── International Arabic news (secondary) ──────────────────────────────
-  { name: 'عربية: سكاي', url: 'https://news.google.com/rss/search?q=%D8%B3%D9%83%D8%A7%D9%8A+%D9%86%D9%8A%D8%B8%D8%A7%D9%84&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'عربية: العربية', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9+%D9%86%D9%8A%D9%88%D8%B2&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'عربية: الجزيرة', url: 'https://news.google.com/rss/search?q+%D8%A7%D9%84%D8%AC%D8%B2%D9%8A%D8%B1%D8%A9+%D9%86%D9%8A%D9%88%D8%B2&hl=ar&gl=DZ&ceid=DZ:ar' },
-]
 
 const TECH_NEWS_FEEDS = [
   // ── Arabic tech news (priority) ───────────────────────────────────────
@@ -162,6 +148,41 @@ async function fetchAllRss(feeds: { name: string; url: string }[]): Promise<News
     .slice(0, 30)
 }
 
+async function fetchDzAgentNews(): Promise<NewsItem[]> {
+  try {
+    const response = await fetch('/api/dz-agent/news?limit=8', {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!response.ok) return []
+
+    const payload = await response.json() as { items?: unknown }
+    const items: unknown[] = Array.isArray(payload.items) ? payload.items : []
+    const seen = new Set<string>()
+    return items.flatMap((value): NewsItem[] => {
+      if (!value || typeof value !== 'object') return []
+      const item = value as Record<string, unknown>
+      const title = typeof item.title === 'string' ? item.title.trim() : ''
+      const source = typeof item.source === 'string' ? item.source.trim() : typeof item.feedName === 'string' ? item.feedName.trim() : ''
+      if (!title || isAdvertisementHeadline(title, source)) return []
+
+      const key = title.toLowerCase().replace(/\s+/g, ' ')
+      if (seen.has(key)) return []
+      seen.add(key)
+      return [{
+        title,
+        link: typeof item.link === 'string' ? item.link : '',
+        description: typeof item.description === 'string' ? item.description : '',
+        pubDate: typeof item.pubDate === 'string' ? item.pubDate : '',
+        source: source || 'أخبار الجزائر',
+        feedName: source || 'أخبار الجزائر',
+      }]
+    }).slice(0, 8)
+  } catch (error) {
+    console.error('[DZDashboard] shared news fetch failed:', error)
+    return []
+  }
+}
 // ═══════════════════════════════════════════════════════════════════════
 // Free currency API (fawazahmed0 — CORS-enabled, no key needed)
 // ═══════════════════════════════════════════════════════════════════════
@@ -818,10 +839,10 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const loadDashboard = async (opts: { force?: boolean } = {}) => {
     setLoading(true)
     try {
-      // Fetch news, sports, tech, and LFP data directly from free RSS APIs
-      // This bypasses the broken Express/Worker bridge for dashboard data
+      // Main DZ Agent news shares the same server-side RSS source as its API and chat.
+      // Sports, tech, and league data keep their existing independent feeds.
       const [newsItems, sportsItems, techItems, leagueData] = await Promise.allSettled([
-        fetchAllRss(ALGERIA_NEWS_FEEDS),
+        fetchDzAgentNews(),
         fetchAllRss(SPORTS_NEWS_FEEDS),
         fetchAllRss(TECH_NEWS_FEEDS),
         fetchLfpFree(),

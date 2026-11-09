@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 import { warmTrackUrl } from '../utils/playerEnhancements'
+import { shouldAttemptCobaltFallback } from '../lib/dz-tube-download-fallback.js'
 import '../styles/dz-tube.css'
 
 interface SearchResult {
@@ -417,6 +418,46 @@ export default function DZTube() {
         ...prev,
         [dlKey]: { key: dlKey, videoId: r.id, title: r.title, thumbnail: r.thumbnail, format, quality, loaded: 0, total: 0, status: 'downloading', xhr },
       }))
+      const completeCobaltFallback = async (): Promise<boolean> => {
+        try {
+          if (!opts?.silent) showToast('جاري التحميل عبر خدمة بديلة...')
+          const { blob, ext } = await downloadBlobWithProgress(
+            (await getCobaltDownloadUrl(r.url, format, quality)).url,
+            (loaded, total) => {
+              setActiveDownloads(prev => {
+                const cur = prev[dlKey]; if (!cur) return prev
+                return { ...prev, [dlKey]: { ...cur, loaded, total } }
+              })
+            }
+          )
+          const safeTitle = r.title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim() || 'video'
+          const filename = `${safeTitle}.${ext}`
+          const blobUrl = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = blobUrl; a.download = filename
+          document.body.appendChild(a); a.click(); document.body.removeChild(a)
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+          if (!opts?.silent) showToast('✅ تم التحميل بنجاح')
+          notifyDone('DZ Tube — اكتمل التحميل', filename, r.thumbnail)
+          setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n })
+          setHistory(prev => {
+            const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+            return [{ id, url: r.url, title: r.title, thumbnail: r.thumbnail, format, quality, timestamp: Date.now() }, ...prev.filter(h => !(h.url === r.url && h.format === format && h.quality === quality))].slice(0, HISTORY_MAX)
+          })
+          return true
+        } catch (cobaltErr) {
+          console.warn('[DZTube:Cobalt:fallback:fail]', cobaltErr)
+          return false
+        }
+      }
+      const failDownload = (message: string) => {
+        setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
+        setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)
+        setError(message)
+        if (!opts?.silent) showToast(message, 'err')
+        setDownloadingId(null)
+        resolve(false)
+      }
       xhr.onprogress = (e) => {
         setActiveDownloads(prev => {
           const cur = prev[dlKey]; if (!cur) return prev
@@ -430,50 +471,25 @@ export default function DZTube() {
         setDownloadingId(null)
         resolve(false)
       }
-      xhr.onerror = () => {
-        setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
-        setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)
-        setError('فشل التحميل')
-        if (!opts?.silent) showToast('فشل التحميل', 'err')
-        setDownloadingId(null)
-        resolve(false)
+      xhr.onerror = async () => {
+        // A network/CORS failure has status 0; try the same Cobalt fallback
+        // used for server failures instead of ending the download immediately.
+        if (shouldAttemptCobaltFallback(xhr.status) && await completeCobaltFallback()) {
+          setDownloadingId(null)
+          resolve(true)
+          return
+        }
+        failDownload('فشل الاتصال بخادم التحميل')
       }
       xhr.onload = async () => {
         try {
           if (xhr.status < 200 || xhr.status >= 300) {
-            // 🔄 Try Cobalt fallback when server fails (e.g., Cloudflare Worker error)
-            if (xhr.status === 500 || xhr.status === 503) {
-              try {
-                showToast('جاري التحميل عبر خدمة بديلة...')
-                const { blob: cobaltBlob, ext: cobaltExt } = await downloadBlobWithProgress(
-                  (await getCobaltDownloadUrl(r.url, format, quality)).url,
-                  (loaded, total) => {
-                    setActiveDownloads(prev => {
-                      const cur = prev[dlKey]; if (!cur) return prev
-                      return { ...prev, [dlKey]: { ...cur, loaded, total } }
-                    })
-                  }
-                )
-                const safeTitle = r.title.replace(/[^\w؀-ۿ\s.-]/g, '').slice(0, 80).trim() || 'video'
-                const filename = `${safeTitle}.${cobaltExt}`
-                const url = URL.createObjectURL(cobaltBlob)
-                const a = document.createElement('a')
-                a.href = url; a.download = filename
-                document.body.appendChild(a); a.click(); document.body.removeChild(a)
-                setTimeout(() => URL.revokeObjectURL(url), 1000)
-                if (!opts?.silent) showToast('✅ تم التحميل بنجاح')
-                notifyDone('DZ Tube — اكتمل التحميل', filename, r.thumbnail)
-                setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n })
-                setHistory(prev => {
-                  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-                  return [{ id, url: r.url, title: r.title, thumbnail: r.thumbnail, format, quality, timestamp: Date.now() }, ...prev.filter(h => !(h.url === r.url && h.format === format && h.quality === quality))].slice(0, HISTORY_MAX)
-                })
+            // Retry transient server failures, but do not route client errors
+            // (including 403/404/429) around their intended response.
+            if (shouldAttemptCobaltFallback(xhr.status) && await completeCobaltFallback()) {
+              setDownloadingId(null)
                 resolve(true)
                 return
-              } catch (cobaltErr) {
-                console.warn('[DZTube:Cobalt:fallback:fail]', cobaltErr)
-                // Continue to original error handling
-              }
             }
             setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
             setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)

@@ -866,3 +866,20 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 
 - Validation follow-up: the first build confirmed the prompt-translation tests pass, then the new loading test failed because its weather example also matched the existing broader news rule. The example is being made unambiguous; no production code change to weather/news classification is intended. The deploy step was skipped after build failure, and production still serves the previous SHA.
 \n## Task 1792542962938 — 2026-10-21T00:36:03.816Z\n- **Status:** started\n- **Task:** أنشئ موقع مطعم جزائري احترافي\n- **Rule:** This task was persisted automatically by DZ Agent.\n
+
+## 2026-11-09 — DZ Tube download fallback recovery
+
+- Target: `Nadirinfograph23/DZ-GPT`, branch `devin/1774405518-init-dz-gpt`; baseline HEAD `698fe60d9e1b7f28c3ff6c0f30f911a617de304b`. The latest observed GitHub Actions deployment for that baseline succeeded (run `39971163383`).
+- Seal reference checked: Seal is an Android downloader built around yt-dlp, not a hosted download API. This repository already includes `bin/yt-dlp` version `2026.07.04` and its own server download pipelines; no Seal Android code was copied.
+- Confirmed frontend gap in `src/pages/DZTube.tsx`: Cobalt fallback ran only for HTTP 500/503; XHR network errors stopped immediately. The page now tries the existing fallback for network status 0 and HTTP 5xx, while leaving 4xx (including 403/404/429) untouched. Added `src/lib/dz-tube-download-fallback.js`, its declaration and regression tests; the new test is included in `npm run build`.
+- Verification: the new fallback tests passed (12 assertions), the existing build tests before TypeScript passed, and a targeted TypeScript check of `DZTube.tsx` passed. Full `npm run build` and a standalone Vite build each exceeded this session's local execution limit; do not report a complete build.
+- Production checks: `/api/version` and `/version.json` both served baseline SHA `698fe60d9e1b7f28c3ff6c0f30f911a617de304b`. A curl request to `/api/dz-tube/info` returned 403 because the repository's anti-bot middleware blocks curl User-Agents on `/api/*`; do not spoof a browser or bypass this protection. A real-browser download remains unverified.
+- Cloudflare API integration can read the account/zone, but returned zone permissions are read-only; full write access was not verified. No Cloudflare settings, DNS, Worker, cache or secrets were changed.
+- This branch is the production source and its push workflow deploys Cloudflare. Stage source changes with `[skip ci]`; do not dispatch or otherwise release a production deployment without the user's explicit approval. No production deployment was performed for this task.
+
+### Ordered continuation
+1. Check the current branch SHA and local diff; preserve newer work.
+2. Commit the scoped source/test/handoff changes with `[skip ci]` only if the working tree still matches this task; then run CI/build checks without deploying.
+3. Ask for explicit approval before running `Deploy Cloudflare Worker` for the exact code SHA.
+4. After approval, require a successful workflow, verify `/api/version` and `/version.json` match the approved SHA, and test a real browser download from `/dz-tube`.
+5. If browser download still fails, capture its status/error and trace the exact backend route; do not bypass the anti-bot middleware or use Cloudflare writes without the required permission.

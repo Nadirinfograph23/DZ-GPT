@@ -869,17 +869,17 @@ Make DZ Agent understand and speak natural Algerian Darija, including Arabic-scr
 
 ## 2026-11-09 — DZ Tube download fallback recovery
 
-- Target: `Nadirinfograph23/DZ-GPT`, branch `devin/1774405518-init-dz-gpt`; baseline HEAD `698fe60d9e1b7f28c3ff6c0f30f911a617de304b`. The latest observed GitHub Actions deployment for that baseline succeeded (run `39971163383`).
+- Target: `Nadirinfograph23/DZ-GPT`, branch `devin/1774405518-init-dz-gpt`; baseline HEAD `698fe60d9e1b7f28c3ff6c0f30f911a617de304b`. The code/test change is committed as `4643aa9d6e89456fcb9b64f2cf6f786ecf3507a6` (`fix: recover DZ Tube downloads on transient failures [skip ci]`).
 - Seal reference checked: Seal is an Android downloader built around yt-dlp, not a hosted download API. This repository already includes `bin/yt-dlp` version `2026.07.04` and its own server download pipelines; no Seal Android code was copied.
 - Confirmed frontend gap in `src/pages/DZTube.tsx`: Cobalt fallback ran only for HTTP 500/503; XHR network errors stopped immediately. The page now tries the existing fallback for network status 0 and HTTP 5xx, while leaving 4xx (including 403/404/429) untouched. Added `src/lib/dz-tube-download-fallback.js`, its declaration and regression tests; the new test is included in `npm run build`.
 - Verification: the new fallback tests passed (12 assertions), the existing build tests before TypeScript passed, and a targeted TypeScript check of `DZTube.tsx` passed. Full `npm run build` and a standalone Vite build each exceeded this session's local execution limit; do not report a complete build.
-- Production checks: `/api/version` and `/version.json` both served baseline SHA `698fe60d9e1b7f28c3ff6c0f30f911a617de304b`. A curl request to `/api/dz-tube/info` returned 403 because the repository's anti-bot middleware blocks curl User-Agents on `/api/*`; do not spoof a browser or bypass this protection. A real-browser download remains unverified.
+- Production checks: `/api/version` and `/version.json` both still serve baseline SHA `698fe60d9e1b7f28c3ff6c0f30f911a617de304b`. The latest successful deployment is Actions run `39971163383` for that baseline; there is no Actions run for commit `4643aa9` because it uses `[skip ci]`. A curl request to `/api/dz-tube/info` returned 403 because the repository's anti-bot middleware blocks curl User-Agents on `/api/*`; do not spoof a browser or bypass this protection. A real-browser download remains unverified.
 - Cloudflare API integration can read the account/zone, but returned zone permissions are read-only; full write access was not verified. No Cloudflare settings, DNS, Worker, cache or secrets were changed.
 - This branch is the production source and its push workflow deploys Cloudflare. Stage source changes with `[skip ci]`; do not dispatch or otherwise release a production deployment without the user's explicit approval. No production deployment was performed for this task.
 
 ### Ordered continuation
-1. Check the current branch SHA and local diff; preserve newer work.
-2. Commit the scoped source/test/handoff changes with `[skip ci]` only if the working tree still matches this task; then run CI/build checks without deploying.
-3. Ask for explicit approval before running `Deploy Cloudflare Worker` for the exact code SHA.
-4. After approval, require a successful workflow, verify `/api/version` and `/version.json` match the approved SHA, and test a real browser download from `/dz-tube`.
+1. Recheck branch HEAD and preserve any newer commits; the source fix is already included in `4643aa9`.
+2. Obtain explicit user approval before dispatching the production workflow. The full local build did not complete; the approved workflow runs the build before deploying.
+3. After approval, run `Deploy Cloudflare Worker` on the current branch HEAD; stop if its build fails.
+4. If deployment succeeds, verify `/api/version` and `/version.json` against the deployed SHA and test a real browser download from `/dz-tube`.
 5. If browser download still fails, capture its status/error and trace the exact backend route; do not bypass the anti-bot middleware or use Cloudflare writes without the required permission.
